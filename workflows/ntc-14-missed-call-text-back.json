@@ -17,65 +17,65 @@
     {
       "parameters": {
         "content": "## Receive and validate call\n\nWebhook intake and normalization. Receives call events from Twilio or CallRail, extracts the caller details, and checks whether this is a genuine missed call or an answered call that should be ignored.",
-        "width": 580,
-        "height": 260,
+        "width": 808,
+        "height": 290,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-52, -160],
+      "position": [-80, -140],
       "id": "1400aa00-0001-4000-a000-000000000002",
       "name": "Sticky Note1"
     },
     {
       "parameters": {
         "content": "## Handle non-missed calls\n\nSilently ends the run for answered calls and events with no caller number. Nothing is sent.",
-        "width": 240,
-        "height": 200,
+        "width": 360,
+        "height": 290,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [624, 32],
+      "position": [592, -28],
       "id": "1400aa00-0001-4000-a000-000000000003",
       "name": "Sticky Note2"
     },
     {
       "parameters": {
         "content": "## Compose and screen message\n\nChecks after-hours status to tailor the message tone, writes the text-back, and routes it through the Bar-Compliance Guardrail to verify opt-out status and attach the required TCPA disclaimer.",
-        "width": 640,
-        "height": 260,
+        "width": 808,
+        "height": 290,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [624, -192],
+      "position": [592, -172],
       "id": "1400aa00-0001-4000-a000-000000000004",
       "name": "Sticky Note3"
     },
     {
       "parameters": {
         "content": "## Send text-back\n\nRoutes approved messages to Twilio and stops suppressed messages at a labelled skip node. Opted-out callers are never texted.",
-        "width": 416,
-        "height": 320,
+        "width": 584,
+        "height": 442,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1296, -192],
+      "position": [1264, -172],
       "id": "1400aa00-0001-4000-a000-000000000005",
       "name": "Sticky Note4"
     },
     {
       "parameters": {
         "content": "## Notify firm\n\nAlways emails your firm after a missed call — whether the text was delivered, failed, or was suppressed — so no inquiry slips through.",
-        "width": 480,
-        "height": 200,
+        "width": 584,
+        "height": 290,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1744, -192],
+      "position": [1712, -172],
       "id": "1400aa00-0001-4000-a000-000000000006",
       "name": "Sticky Note5"
     },

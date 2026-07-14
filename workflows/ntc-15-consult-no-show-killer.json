@@ -18,92 +18,92 @@
       "parameters": {
         "content": "**Receive and validate booking**\nAccepts new bookings from Calendly or any scheduling tool. Normalises the payload and filters out cancellations and rescheduled events before any messages are sent.",
         "height": 290,
-        "width": 640,
+        "width": 808,
         "color": 7
       },
       "id": "1500bb00-0002-4000-b000-00000000000a",
       "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-60, -200]
+      "position": [-80, -140]
     },
     {
       "parameters": {
         "content": "**Reject invalid bookings**\nCancellations, reschedule confirmations, and events missing contact details all exit here silently — no messages sent.",
         "height": 290,
-        "width": 240,
+        "width": 360,
         "color": 7
       },
       "id": "1500bb00-0002-4000-b000-00000000000b",
       "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [590, -200]
+      "position": [592, 10]
     },
     {
       "parameters": {
         "content": "**Set up messages**\nBuilds all four message texts and calculates the exact fire time for each reminder from n8n Variables.",
         "height": 290,
-        "width": 240,
+        "width": 360,
         "color": 7
       },
       "id": "1500bb00-0002-4000-b000-00000000000c",
       "name": "Sticky Note3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [815, -200]
+      "position": [816, -140]
     },
     {
       "parameters": {
         "content": "**Confirmation**\nCompliance check → if approved, sends confirmation SMS and email. If opted out, suppression is logged and the reminder sequence is stopped.",
-        "height": 290,
-        "width": 870,
+        "height": 440,
+        "width": 1032,
         "color": 7
       },
       "id": "1500bb00-0002-4000-b000-00000000000d",
       "name": "Sticky Note4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1055, -200]
+      "position": [1040, -140]
     },
     {
       "parameters": {
         "content": "**24-hour reminder**\nWorkflow pauses until 24 hours before the appointment, then runs a compliance check and sends the 24h reminder by SMS and email.",
-        "height": 290,
-        "width": 1085,
+        "height": 440,
+        "width": 1256,
         "color": 7
       },
       "id": "1500bb00-0002-4000-b000-00000000000e",
       "name": "Sticky Note5",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1950, -200]
+      "position": [1936, -140]
     },
     {
       "parameters": {
         "content": "**1-hour reminder**\nWorkflow pauses until 1 hour before the appointment, then runs a compliance check and sends the final pre-consult reminder with the reschedule link.",
-        "height": 290,
-        "width": 1085,
+        "height": 440,
+        "width": 1256,
         "color": 7
       },
       "id": "1500bb00-0002-4000-b000-00000000000f",
       "name": "Sticky Note6",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [3065, -200]
+      "position": [3056, -140]
     },
     {
       "parameters": {
         "content": "**No-show follow-up**\nWorkflow pauses until 15 minutes after the scheduled start, then runs a compliance check and sends a neutral reschedule nudge by SMS and email.",
-        "height": 290,
-        "width": 1085,
+        "height": 440,
+        "width": 1256,
         "color": 7
       },
       "id": "1500bb00-0002-4000-b000-00000000000g",
       "name": "Sticky Note7",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [4185, -200]
+      "position": [4176, -140]
     },
     {
       "id": "1500bb00-0002-4000-b000-000000000001",
