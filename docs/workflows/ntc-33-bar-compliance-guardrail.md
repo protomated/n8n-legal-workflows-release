@@ -155,7 +155,7 @@ Set Up Review Request → Call Compliance Guardrail → Approved to Send? → [Y
 
 1. Open the guardrail workflow. Click **Receive Compliance Request** → **Test step**.
 2. The pinned payload fires (channel: sms, recipient: +14155551234, message: NTC-17 rating request).
-3. The Opt-Outs tab is empty — the guardrail should route to the **No** branch of `Opted Out?`.
+3. The Opt-Outs tab is empty — the guardrail should route to the **No** branch of **If Opted Out**.
 4. Confirm `Result — Approved` outputs `{ approved: true, message_out: "...Reply STOP to opt out.", suppression_reason: null }`.
 5. Check the Audit Log tab in your Google Sheet — one new row should appear with status `approved`.
 
@@ -163,7 +163,7 @@ Set Up Review Request → Call Compliance Guardrail → Approved to Send? → [Y
 
 1. In the `Opt-Outs` tab, add a row: phone = `+14155551234`, email = (leave blank), opted_out_at = today's date, source = `manual`.
 2. Re-run the pinned test payload.
-3. The guardrail should route to the **Yes** branch of `Opted Out?`.
+3. The guardrail should route to the **Yes** branch of **If Opted Out**.
 4. Confirm `Result — Suppressed` outputs `{ approved: false, message_out: "", suppression_reason: "opted_out" }`.
 5. Check the Audit Log — a new row should appear with status `suppressed`.
 6. Remove the test row from Opt-Outs before going live.

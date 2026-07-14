@@ -75,7 +75,7 @@ In n8n, open your project and click the **Variables** tab, then add the followin
 
 ## Step 4 — Verify n8n Variables are live (1 min)
 
-No code nodes need editing — firm settings are read from the project **Variables** tab (set in Step 2). Both Path A (Set Up Review Request) and Path B (Read Client Reply) read the same variables automatically.
+No code nodes need editing — firm settings are read from the project **Variables** tab (set in Step 2). Both Path A (Set Up Review Request) and Path B (Parse Rating Reply) read the same variables automatically.
 
 To verify, open the **Set Up Review Request** node and confirm the code reads `$vars.FIRM_NAME` (not a hardcoded string). If you see a hardcoded string, you are running an older version of the workflow — re-import from the latest JSON.
 
@@ -91,11 +91,11 @@ Configure your practice management system to POST to the **Path A webhook URL** 
 
 1. In Clio: **Settings → Webhooks → New Webhook**.
 2. Topic: **Matter**.
-3. Paste the **Matter Closed Webhook** Production URL.
+3. Paste the **When Matter Closed** Production URL.
 4. Subscribe to **matter.updated** events.
 5. Save.
 
-Clio fires `matter.updated` on any matter status change. The **Read Matter Details** node checks `status === 'Closed'` and skips all other updates automatically.
+Clio fires `matter.updated` on any matter status change. The **Normalize and Validate Closure** node checks `status === 'Closed'` and skips all other updates automatically.
 
 ### Generic / other systems
 
@@ -119,7 +119,7 @@ Send a POST request to the Path A URL with this JSON body when a matter closes:
 This tells Twilio where to send a client's reply when they text your firm's number.
 
 1. **Activate the workflow** in n8n (toggle the Active switch) — the URL must be live before Twilio can reach it.
-2. Copy the **Review Reply Webhook** Production URL (`/webhook/review-reply`).
+2. Copy the **When Rating Reply Received** Production URL (`/webhook/review-reply`).
 3. In the Twilio Console: **Phone Numbers → Manage → Active Numbers** → click your firm's number.
 4. Under **Messaging Configuration**, find **"When a message comes in"**.
 5. Select **Webhook** and paste the Path B URL.
@@ -136,10 +136,10 @@ This tells Twilio where to send a client's reply when they text your firm's numb
 
 ### Test Path A (matter close → 48h wait → SMS)
 
-The workflow ships with a pinned Clio `matter.updated` payload on the **Matter Closed Webhook** node.
+The workflow ships with a pinned Clio `matter.updated` payload on the **When Matter Closed** node.
 
-1. Click **Matter Closed Webhook** → **Test step**.
-2. n8n runs the pinned payload through Read Matter Details and Valid matter closure?.
+1. Click **When Matter Closed** → **Test step**.
+2. n8n runs the pinned payload through Normalize and Validate Closure and If Valid Matter Closure.
 3. Confirm `is_valid_closure = true` and the data parses correctly.
 4. Confirm the Set Up Review Request node outputs `send_at` (48 hours from now) and a well-formed `rating_sms`.
 
@@ -156,17 +156,17 @@ Send a POST with a non-closure status to confirm the guard works:
 }
 ```
 
-The execution should route to **Skip — not a matter closure** with no text sent.
+The execution should route to **Ignore Non-Closure Event** with no text sent.
 
 ---
 
 ### Test Path B (client reply → routing)
 
-The workflow ships with a pinned Twilio inbound SMS payload (`Body: "5"`) on the **Review Reply Webhook** node.
+The workflow ships with a pinned Twilio inbound SMS payload (`Body: "5"`) on the **When Rating Reply Received** node.
 
-1. Click **Review Reply Webhook** → **Test step**.
+1. Click **When Rating Reply Received** → **Test step**.
 2. Confirm `rating = 5`, `is_happy = true`, `is_valid_rating = true`.
-3. Confirm the **Happy or Unhappy?** node routes to the Yes branch → **Send Google Reviews Link**.
+3. Confirm the **Determine Rating Path** node routes to the Yes branch → **Send Google Reviews Link**.
 
 **Test the unhappy path:**
 
@@ -177,7 +177,7 @@ Change the pinned `Body` value to `"2"` and re-run. Confirm:
 
 **Test the guard:**
 
-Change `Body` to `"hello"` and confirm it routes to **Skip — not a rating reply**.
+Change `Body` to `"hello"` and confirm it routes to **Ignore Non-Rating Reply**.
 
 ---
 
@@ -186,14 +186,14 @@ Change `Body` to `"hello"` and confirm it routes to **Skip — not a rating repl
 | Scenario | What happens |
 |---|---|
 | Matter closes in Clio with client phone | 48 hours later: compliance check runs → rating request SMS sent (TCPA disclaimer confirmed) |
-| Matter updated (not to Closed) | Event skipped — **Skip — not a matter closure** |
-| Matter closed but no client phone | Event skipped — **Skip — not a matter closure** |
+| Matter updated (not to Closed) | Event skipped — **Ignore Non-Closure Event** |
+| Matter closed but no client phone | Event skipped — **Ignore Non-Closure Event** |
 | Client is on the opt-out list at the 48h mark | Rating request suppressed — **Skip — contact opted out**; suppression logged to audit sheet |
 | Client replies 4 or 5 | Compliance check runs → Google Reviews link sent via SMS |
 | Client replies 1, 2, or 3 | Compliance check runs → private feedback form link sent + firm gets alert email |
 | Client replies with a rating but is on the opt-out list | Message suppressed — **Skip — opted out (4–5 stars)** or **Skip — opted out (1–3 stars)**; suppression logged; firm alert is not triggered |
-| Client replies STOP | Twilio handles opt-out; workflow routes to **Skip — not a rating reply** — add them to your opt-out sheet too |
-| Client replies with text, not a number | Routes to **Skip — not a rating reply** — no Google link sent |
+| Client replies STOP | Twilio handles opt-out; workflow routes to **Ignore Non-Rating Reply** — add them to your opt-out sheet too |
+| Client replies with text, not a number | Routes to **Ignore Non-Rating Reply** — no Google link sent |
 | Twilio send error (wrong credentials, invalid number) | Workflow continues to firm notification email (Path A only) |
 | Bar-Compliance Guardrail audit log write fails | Approval/suppression result still returned — send decision is unaffected; logging failure does not block the message |
 

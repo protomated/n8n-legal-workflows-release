@@ -1,62 +1,149 @@
 {
   "name": "Consult No-Show Killer",
-  "description": "Sends confirmation, 24-hour, and 1-hour reminders (SMS + email) for every booked consult, plus a reschedule nudge 15 minutes after the scheduled start. Replaces Lawmatics sequences and paid Calendly reminder tiers. Trigger: Calendly v2 invitee.created webhook or generic booking webhook.",
+  "tags": [],
   "nodes": [
     {
       "parameters": {
-        "content": "## Consult No-Show Killer\n\n**Trigger:** New booking from Calendly or any booking tool (Acuity, Cal.com, Fluent Forms, etc.)\n\n**Webhook URL:** `POST https://<your-n8n>/webhook/consult-booking`\n\n**What it does:**\n1. Receives a new booking event from your scheduling tool\n2. Reads and standardises the booking details from Calendly or any other provider\n3. Skips cancelled or rescheduled events — only acts on new bookings\n4. Sets up all message text and calculates the exact times for each reminder\n5. Checks opt-out list and attaches TCPA disclaimer via the Bar-Compliance Guardrail before each SMS\n6. Sends an instant confirmation by SMS and email\n7. Waits until 24 hours before the consult → compliance check → sends SMS + email reminder\n8. Waits until 1 hour before the consult → compliance check → sends SMS + email reminder with reschedule link\n9. Waits until 15 minutes after the consult start → compliance check → sends a gentle reschedule nudge\n\n**Replaces:** Lawmatics reminder sequences ($0–$149/mo) · Paid Calendly reminder tiers ($12/seat/mo)\n\n**Step 1 — Set n8n Variables (project → Variables tab):**\n| Variable | Example value |\n|---|---|\n| `FIRM_NAME` | Smith Law Firm |\n| `FIRM_EMAIL` | intake@your-firm.com |\n| `FIRM_FROM_EMAIL` | noreply@your-firm.com |\n| `FIRM_TWILIO_NUMBER` | +15550001234 |\n| `FIRM_TIMEZONE` | America/New_York |\n| `FIRM_BOOKING_URL` | https://your-firm.com/book |\n| `GUARDRAIL_WORKFLOW_ID` | (ID from the Bar-Compliance Guardrail workflow URL) |\n\n**Step 2 — Wire credentials:** Twilio account · Email account (SMTP) (project → Credentials tab)\n\n**Calendly wiring:** Calendly requires registering the webhook via API — the UI does not have a paste-URL field. See the deploy guide for the exact command.\n\n**Other booking tools:** Paste this webhook URL into your tool's webhook or notification settings and select 'new booking created' events.\n\n**Important — database requirement:** The reminder waits can be 24+ hours long. Self-hosted n8n must use Postgres as the database — not the default SQLite — for these waits to survive a restart. n8n Cloud handles this automatically.\n\n**If a booking is cancelled:** Find the running execution in n8n → Executions and stop it manually. Automatic cancellation handling is coming later.\n\n**What sends what:** Twilio (outbound texts) · Email (confirmations and reminders)\n\n**Prerequisite:** Set up the Bar-Compliance Guardrail first and add its workflow ID to `GUARDRAIL_WORKFLOW_ID`.",
-        "height": 700,
-        "width": 760,
-        "color": 5
+        "content": "## Consult No-Show Killer\n\n### How it works\nReceives every new booking from Calendly or any scheduling tool. Validates that the event is a new booking (not a cancellation), builds all four message texts, and calculates the exact send times. Before each SMS, the Bar-Compliance Guardrail checks the opt-out list and appends the TCPA disclaimer. Sends an instant confirmation by SMS and email — then waits and sends a 24-hour reminder, a 1-hour reminder, and finally a gentle reschedule nudge 15 minutes after the scheduled start.\n\n### Setup steps\n1. **n8n Variables** (project → Variables tab): `FIRM_NAME`, `FIRM_EMAIL`, `FIRM_FROM_EMAIL`, `FIRM_TWILIO_NUMBER`, `FIRM_TIMEZONE` (e.g. `America/New_York`), `FIRM_BOOKING_URL`, `GUARDRAIL_WORKFLOW_ID` (numeric ID from the Bar-Compliance Guardrail workflow URL)\n2. **Credentials**: wire `Twilio account` and `Email account (SMTP)` in project → Credentials tab\n3. **Booking tool webhook**: paste the Production URL from When Booking Received into your scheduling tool — select new-booking events. Calendly requires API registration; see the deploy guide for the exact `curl` command.\n4. **Bar-Compliance Guardrail**: deploy it first and paste its workflow ID into `GUARDRAIL_WORKFLOW_ID`\n5. **Database** (self-hosted only): must use Postgres — not SQLite — so long waits survive restarts. n8n Cloud handles this automatically.\n\n### Customization\n- **Message text**: edit the four SMS strings in Set Up Messages\n- **Timing**: adjust `MS_24H`, `MS_1H`, `MS_15M` constants in Set Up Messages\n- **Cancellations**: stop the running execution manually in n8n → Executions (automatic cancellation detection is a paid upgrade)\n\n**Replaces:** Lawmatics reminder sequences ($0–$149/mo) · Paid Calendly reminder tiers ($12/seat/mo)",
+        "height": 580,
+        "width": 480
       },
-      "id": "doc",
-      "name": "📖 Workflow doc",
+      "id": "1500bb00-0002-4000-b000-000000000000",
+      "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        -800,
-        -580
-      ]
+      "position": [-700, -500]
     },
     {
+      "parameters": {
+        "content": "**Receive and validate booking**\nAccepts new bookings from Calendly or any scheduling tool. Normalises the payload and filters out cancellations and rescheduled events before any messages are sent.",
+        "height": 290,
+        "width": 640,
+        "color": 7
+      },
+      "id": "1500bb00-0002-4000-b000-00000000000a",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-60, -200]
+    },
+    {
+      "parameters": {
+        "content": "**Reject invalid bookings**\nCancellations, reschedule confirmations, and events missing contact details all exit here silently — no messages sent.",
+        "height": 290,
+        "width": 240,
+        "color": 7
+      },
+      "id": "1500bb00-0002-4000-b000-00000000000b",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [590, -200]
+    },
+    {
+      "parameters": {
+        "content": "**Set up messages**\nBuilds all four message texts and calculates the exact fire time for each reminder from n8n Variables.",
+        "height": 290,
+        "width": 240,
+        "color": 7
+      },
+      "id": "1500bb00-0002-4000-b000-00000000000c",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [815, -200]
+    },
+    {
+      "parameters": {
+        "content": "**Confirmation**\nCompliance check → if approved, sends confirmation SMS and email. If opted out, suppression is logged and the reminder sequence is stopped.",
+        "height": 290,
+        "width": 870,
+        "color": 7
+      },
+      "id": "1500bb00-0002-4000-b000-00000000000d",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1055, -200]
+    },
+    {
+      "parameters": {
+        "content": "**24-hour reminder**\nWorkflow pauses until 24 hours before the appointment, then runs a compliance check and sends the 24h reminder by SMS and email.",
+        "height": 290,
+        "width": 1085,
+        "color": 7
+      },
+      "id": "1500bb00-0002-4000-b000-00000000000e",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1950, -200]
+    },
+    {
+      "parameters": {
+        "content": "**1-hour reminder**\nWorkflow pauses until 1 hour before the appointment, then runs a compliance check and sends the final pre-consult reminder with the reschedule link.",
+        "height": 290,
+        "width": 1085,
+        "color": 7
+      },
+      "id": "1500bb00-0002-4000-b000-00000000000f",
+      "name": "Sticky Note6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3065, -200]
+    },
+    {
+      "parameters": {
+        "content": "**No-show follow-up**\nWorkflow pauses until 15 minutes after the scheduled start, then runs a compliance check and sends a neutral reschedule nudge by SMS and email.",
+        "height": 290,
+        "width": 1085,
+        "color": 7
+      },
+      "id": "1500bb00-0002-4000-b000-00000000000g",
+      "name": "Sticky Note7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [4185, -200]
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000001",
+      "name": "When Booking Received",
+      "type": "n8n-nodes-base.webhook",
+      "notes": "Receives the booking event from your scheduling tool.\n\nThis URL is the address your booking tool will notify whenever someone books a consult. Copy the Production URL from this node (visible after you activate the workflow) and register it with your booking tool.\n\nCalendly: Calendly v2 requires registering the webhook via API — you cannot paste a URL through the Calendly interface. See the deploy guide for the exact registration command. Activate the workflow first so the URL is live before registering.\n\nOther tools (Acuity, Cal.com, Fluent Forms, practice management systems): paste the Production URL into your tool's webhook or notification settings and select the 'new booking created' event. The exact label varies by tool.\n\nThe next step (Normalize and Validate Booking) automatically detects whether the event came from Calendly or another tool and pulls the right fields from each.",
+      "position": [0, 0],
+      "webhookId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
       "parameters": {
         "httpMethod": "POST",
         "path": "consult-booking",
         "options": {}
       },
-      "id": "trigger",
-      "name": "Booking Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [
-        0,
-        0
-      ],
-      "webhookId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-      "notes": "Receives the booking event from your scheduling tool.\n\nThis URL is the address your booking tool will notify whenever someone books a consult. Copy the Production URL from this node (visible after you activate the workflow) and register it with your booking tool.\n\nCalendly: Calendly v2 requires registering the webhook via API — you cannot paste a URL through the Calendly interface. See the deploy guide for the exact registration command. Activate the workflow first so the URL is live before registering.\n\nOther tools (Acuity, Cal.com, Fluent Forms, practice management systems): paste the Production URL into your tool's webhook or notification settings and select the 'new booking created' event. The exact label varies by tool.\n\nThe next step (Read Booking Details) automatically detects whether the event came from Calendly or another tool and pulls the right fields from each."
+      "typeVersion": 2.1
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000002",
+      "name": "Normalize and Validate Booking",
+      "type": "n8n-nodes-base.code",
+      "notes": "Reads the incoming booking event and extracts everything the workflow needs: the prospect's name, email, phone number, appointment time, consult type, and whether this is a new booking or a cancellation.\n\nThis step works with both Calendly and other booking tools — it detects which one sent the event and pulls the right fields from each.\n\nPhone number for Calendly: the workflow looks first for Calendly's built-in text reminder number field, then for any question-and-answer field whose label contains the word 'phone'. If neither is present, the SMS steps will skip gracefully and email still sends.\n\nValidity check: only new bookings proceed. Cancellations and reschedule confirmations are filtered out at the next step so no reminders are sent for a booking that has already been cancelled.\n\nOutput available to all later steps: contact_name, contact_email, contact_phone, appointment_time, consult_type, reschedule_url, booking_event, source, is_valid_booking, timestamp.",
+      "position": [224, 0],
       "parameters": {
         "jsCode": "// Handles both Calendly v2 (invitee.created / invitee.canceled) and generic\n// booking webhook formats. Sets is_valid_booking = true only for new-booking\n// events — guards against cancellation and reschedule events on the same endpoint.\n\nconst raw  = $input.first().json;\nconst body = raw.body || raw; // n8n webhook configs may nest the payload inside .body\n\nlet normalized;\n\n// Calendly v2 real webhook: invitee data sits directly on body.payload (not body.payload.invitee).\n// The scheduled event details are at body.payload.scheduled_event.\nif (body.payload && body.payload.scheduled_event) {\n  // ── Calendly v2 shape ──────────────────────────────────────────────────────\n  const p   = body.payload;\n  const evt = p.scheduled_event || {};\n\n  // Phone: prefer text_reminder_number; fall back to a custom Q&A 'phone' field.\n  // text_reminder_number is opt-in in Calendly — it may be absent or null.\n  let phone = p.text_reminder_number || '';\n  if (!phone && Array.isArray(p.questions_and_answers)) {\n    const phoneQ = p.questions_and_answers.find(\n      q => /phone/i.test(q.question) && q.answer\n    );\n    if (phoneQ) phone = phoneQ.answer;\n  }\n\n  normalized = {\n    contact_name:     p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),\n    contact_email:    p.email || '',\n    contact_phone:    phone,\n    appointment_time: evt.start_time || '',\n    consult_type:     evt.name || 'consultation',\n    reschedule_url:   p.reschedule_url || '',\n    booking_event:    body.event || 'invitee.created',\n    source:           'calendly',\n    is_valid_booking: body.event === 'invitee.created'\n                      && !!(p.email || phone)\n                      && !!evt.start_time,\n  };\n} else {\n  // ── Generic booking webhook (Acuity, Cal.com, Fluent Forms, PM systems, etc.) ─\n  const evtType = body.event_type || '';\n  normalized = {\n    contact_name:     body.contact_name || body.name || '',\n    contact_email:    body.contact_email || body.email || '',\n    contact_phone:    body.contact_phone || body.phone || '',\n    appointment_time: body.appointment_time || body.start_time || '',\n    consult_type:     body.consult_type || body.appointment_type || 'consultation',\n    reschedule_url:   body.reschedule_url || '',\n    booking_event:    evtType,\n    source:           'generic',\n    // Reject explicit cancel/reschedule events; require contact info and a time\n    is_valid_booking: !/cancel|reschedul/i.test(evtType)\n                      && !!(body.contact_email || body.email\n                            || body.contact_phone || body.phone)\n                      && !!(body.appointment_time || body.start_time),\n  };\n}\n\nreturn [{ json: { ...normalized, timestamp: new Date().toISOString() } }];"
       },
-      "id": "normalize",
-      "name": "Read Booking Details",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        224,
-        0
-      ],
-      "notes": "Reads the incoming booking event and extracts everything the workflow needs: the prospect's name, email, phone number, appointment time, consult type, and whether this is a new booking or a cancellation.\n\nThis step works with both Calendly and other booking tools — it detects which one sent the event and pulls the right fields from each.\n\nPhone number for Calendly: the workflow looks first for Calendly's built-in text reminder number field, then for any question-and-answer field whose label contains the word 'phone'. If neither is present, the SMS steps will skip gracefully and email still sends.\n\nValidity check: only new bookings proceed. Cancellations and reschedule confirmations are filtered out at the next step so no reminders are sent for a booking that has already been cancelled.\n\nOutput available to all later steps: contact_name, contact_email, contact_phone, appointment_time, consult_type, reschedule_url, booking_event, source, is_valid_booking, timestamp."
+      "typeVersion": 2
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000003",
+      "name": "If Valid Booking",
+      "type": "n8n-nodes-base.if",
+      "notes": "Decides whether to proceed or stop — only genuine new bookings trigger the reminder sequence.\n\nCalendly sends notifications for cancellations and reschedule confirmations on the same webhook endpoint. Without this check, a cancelled booking could kick off a confirmation message and a full reminder sequence for an appointment that will never happen.\n\nYes (new booking with contact details and appointment time) → proceed to opt-out check and messages.\nNo (cancellation, reschedule confirmation, or missing contact details) → stop here, nothing sent.",
+      "onError": "continueErrorOutput",
+      "position": [448, 0],
       "parameters": {
         "conditions": {
           "options": {
-            "caseSensitive": true,
+            "version": 2,
             "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
+            "caseSensitive": true,
+            "typeValidation": "loose"
           },
           "combinator": "and",
           "conditions": [
@@ -74,284 +161,34 @@
         },
         "options": {}
       },
-      "id": "is_valid",
-      "name": "Valid booking?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        448,
-        0
-      ],
-      "onError": "continueErrorOutput",
-      "notes": "Decides whether to proceed or stop — only genuine new bookings trigger the reminder sequence.\n\nCalendly sends notifications for cancellations and reschedule confirmations on the same webhook endpoint. Without this check, a cancelled booking could kick off a confirmation message and a full reminder sequence for an appointment that will never happen.\n\nYes (new booking with contact details and appointment time) → proceed to opt-out check and messages.\nNo (cancellation, reschedule confirmation, or missing contact details) → stop here, nothing sent."
+      "typeVersion": 2.3
     },
     {
-      "parameters": {},
-      "id": "skip_invalid",
-      "name": "Skip — invalid booking",
+      "id": "1500bb00-0002-4000-b000-000000000004",
+      "name": "Ignore Invalid Booking",
       "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        672,
-        150
-      ],
-      "notes": "Safely ends the workflow for cancellations, reschedule confirmations, and events with missing contact details. No messages are sent. This endpoint is visible in the execution history so you can confirm the filter is working correctly."
+      "notes": "Safely ends the workflow for cancellations, reschedule confirmations, and events with missing contact details. No messages are sent. This endpoint is visible in the execution history so you can confirm the filter is working correctly.",
+      "position": [672, 150],
+      "parameters": {},
+      "typeVersion": 1
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000005",
+      "name": "Set Up Messages",
+      "type": "n8n-nodes-base.code",
+      "notes": "Writes all four message texts and calculates the exact times each reminder should fire.\n\nReads from n8n Variables (project → Variables tab):\n  FIRM_NAME — your law firm's name as it should appear in messages\n  FIRM_EMAIL — your intake email address (used for firm-side copies of reminders)\n  FIRM_FROM_EMAIL — the email address reminder emails are sent from; must match an address your SMTP account is authorised to send from\n  FIRM_TWILIO_NUMBER — your Twilio number in +1XXXXXXXXXX format\n  FIRM_BOOKING_URL — your scheduling link, used as the reschedule link if your booking tool doesn't include one per booking\n  FIRM_TIMEZONE — your state's timezone (e.g. 'America/Chicago', 'America/Los_Angeles')\n\nAll four text messages are personalised with the prospect's first name when available. All include 'Reply STOP to opt out' as required by TCPA law.\n\nTiming notes: if a booking comes in less than 24 hours before the appointment (same-day booking), the 24-hour reminder fires within 90 seconds of confirmation. The reschedule nudge always fires 15 minutes after the scheduled start regardless of whether the prospect attended.\n\nAll later steps in this workflow read their data from this node — not from their own immediate input — because Twilio and email responses have a different shape than the booking data.",
+      "position": [896, 0],
       "parameters": {
         "jsCode": "// Reads firm details from n8n Variables (project → Variables tab).\n// Set: FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, FIRM_TWILIO_NUMBER, FIRM_BOOKING_URL, FIRM_TIMEZONE\nconst FIRM_NAME          = $vars.FIRM_NAME;\nconst FIRM_EMAIL         = $vars.FIRM_EMAIL;            // where firm copies of reminders go\nconst FROM_EMAIL         = $vars.FIRM_FROM_EMAIL;       // the address reminder emails come from (must be authorised by your SMTP account)\nconst FIRM_TWILIO_NUMBER = $vars.FIRM_TWILIO_NUMBER;    // your Twilio SMS number (E.164)\nconst BOOKING_URL        = $vars.FIRM_BOOKING_URL;      // fallback if no per-booking reschedule URL\nconst TIMEZONE           = $vars.FIRM_TIMEZONE;         // e.g. 'America/Chicago', 'America/Los_Angeles'\n\nconst item    = $input.first().json;\nconst now     = new Date();\nconst aptTime = new Date(item.appointment_time);\n\n// Calculate ISO timestamps for each Wait node.\n// If a booking arrives less than 24 h before the appointment, the 24 h reminder\n// fires almost immediately (floors to now + 90 s). Same for the 1 h reminder.\nconst MIN_WAIT = 90_000; // 90-second floor so Wait never fires before prior steps finish\nconst MS_24H   = 24 * 60 * 60 * 1000;\nconst MS_1H    =      60 * 60 * 1000;\nconst MS_15M   =      15 * 60 * 1000;\n\nconst reminder_24h_at = new Date(\n  Math.max(aptTime.getTime() - MS_24H, now.getTime() + MIN_WAIT)\n).toISOString();\nconst reminder_1h_at = new Date(\n  Math.max(aptTime.getTime() - MS_1H, now.getTime() + MIN_WAIT * 2)\n).toISOString();\nconst noshow_check_at = new Date(aptTime.getTime() + MS_15M).toISOString();\n\nconst aptDateStr = aptTime.toLocaleDateString('en-US', {\n  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: TIMEZONE,\n});\nconst aptTimeStr = aptTime.toLocaleTimeString('en-US', {\n  hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone: TIMEZONE,\n});\n\nconst rescheduleUrl = item.reschedule_url || BOOKING_URL;\nconst firstName     = (item.contact_name || '').split(' ')[0] || '';\nconst greeting      = firstName ? `Hi ${firstName}` : 'Hello';\nconst consultType   = item.consult_type || 'consultation';\n\n// Pre-build all four SMS bodies in one place — all include TCPA opt-out instruction.\nconst confirmSms  = `${greeting}, your ${consultType} with ${FIRM_NAME} is confirmed for ${aptDateStr} at ${aptTimeStr}. We look forward to speaking with you! Reply STOP to opt out.`;\nconst remind24Sms = `${greeting}, a friendly reminder: your ${consultType} with ${FIRM_NAME} is tomorrow at ${aptTimeStr}. See you then! Reply STOP to opt out.`;\nconst remind1hSms = `${greeting}, your ${consultType} with ${FIRM_NAME} starts in 1 hour at ${aptTimeStr}. Can't make it? Reschedule: ${rescheduleUrl} — Reply STOP to opt out.`;\nconst noshowSms   = `${greeting}, we had your ${consultType} scheduled today at ${aptTimeStr} with ${FIRM_NAME}. If anything came up, no worries — reschedule here: ${rescheduleUrl} — Reply STOP to opt out.`;\n\nreturn [{ json: {\n  ...item,\n  firm_name:            FIRM_NAME,\n  firm_email:           FIRM_EMAIL,\n  from_email:           FROM_EMAIL,\n  firm_twilio_number:   FIRM_TWILIO_NUMBER,\n  booking_url:          BOOKING_URL,\n  reschedule_url_final: rescheduleUrl,\n  apt_date_str:         aptDateStr,\n  apt_time_str:         aptTimeStr,\n  greeting,\n  first_name:           firstName,\n  consult_type:         consultType,\n  reminder_24h_at,\n  reminder_1h_at,\n  noshow_check_at,\n  confirm_sms:          confirmSms,\n  remind_24h_sms:       remind24Sms,\n  remind_1h_sms:        remind1hSms,\n  noshow_sms:           noshowSms,\n} }];"
       },
-      "id": "build_config",
-      "name": "Set Up Messages",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        896,
-        0
-      ],
-      "notes": "Writes all four message texts and calculates the exact times each reminder should fire.\n\nReads from n8n Variables (project → Variables tab):\n  FIRM_NAME — your law firm's name as it should appear in messages\n  FIRM_EMAIL — your intake email address (used for firm-side copies of reminders)\n  FIRM_FROM_EMAIL — the email address reminder emails are sent from; must match an address your SMTP account is authorised to send from\n  FIRM_TWILIO_NUMBER — your Twilio number in +1XXXXXXXXXX format\n  FIRM_BOOKING_URL — your scheduling link, used as the reschedule link if your booking tool doesn't include one per booking\n  FIRM_TIMEZONE — your state's timezone (e.g. 'America/Chicago', 'America/Los_Angeles')\n\nAll four text messages are personalised with the prospect's first name when available. All include 'Reply STOP to opt out' as required by TCPA law.\n\nTiming notes: if a booking comes in less than 24 hours before the appointment (same-day booking), the 24-hour reminder fires within 90 seconds of confirmation. The reschedule nudge always fires 15 minutes after the scheduled start regardless of whether the prospect attended.\n\nAll later steps in this workflow read their data from this node — not from their own immediate input — because Twilio and email responses have a different shape than the booking data."
+      "typeVersion": 2
     },
     {
-      "parameters": {
-        "operation": "send",
-        "from": "={{ $('Set Up Messages').item.json.firm_twilio_number }}",
-        "to": "={{ $json.recipient }}",
-        "message": "={{ $json.message_out }}"
-      },
-      "id": "confirm_sms",
-      "name": "Send Confirmation Text",
-      "type": "n8n-nodes-base.twilio",
-      "typeVersion": 1,
-      "position": [
-        1568,
-        0
-      ],
-      "onError": "continueRegularOutput",
-      "credentials": {
-        "twilioApi": {
-          "id": "1",
-          "name": "Twilio account"
-        }
-      },
-      "notes": "Sends the instant booking confirmation text to the prospect — so they know the appointment is locked in before they even close the booking page.\n\nCredential to wire: In n8n go to project → Credentials tab → New, search for Twilio, and enter your Account SID and Auth Token from the Twilio Console. Save it as 'Twilio account'.\n\nIf the prospect did not provide a phone number, Twilio will return an error. The workflow handles this gracefully — it continues to the confirmation email rather than stopping. Both the text and the email are always attempted."
-    },
-    {
-      "parameters": {
-        "fromEmail": "={{ $('Set Up Messages').item.json.from_email }}",
-        "toEmail": "={{ $('Set Up Messages').item.json.contact_email }}",
-        "subject": "=Your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} is Confirmed",
-        "emailType": "text",
-        "text": "=Hi {{ $('Set Up Messages').item.json.first_name || 'there' }},\n\nYour {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} is confirmed.\n\nDate: {{ $('Set Up Messages').item.json.apt_date_str }}\nTime: {{ $('Set Up Messages').item.json.apt_time_str }}\n\nWe look forward to speaking with you. If you need to reschedule, use this link:\n{{ $('Set Up Messages').item.json.reschedule_url_final }}\n\nQuestions before your consult? Reply to this email and we'll be happy to help.\n\n— {{ $('Set Up Messages').item.json.firm_name }}\n\n---\nTo stop receiving text reminders, reply STOP to any of our text messages."
-      },
-      "id": "confirm_email",
-      "name": "Send Confirmation Email",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2,
-      "position": [
-        1792,
-        0
-      ],
-      "credentials": {
-        "smtp": {
-          "id": "2",
-          "name": "Email account (SMTP)"
-        }
-      },
-      "notes": "Sends the booking confirmation email to the prospect.\n\nCredential to wire: In n8n go to project → Credentials tab → New, search for SMTP, and enter your email provider's settings. This works with Gmail, Outlook 365, Zoho Mail, or any SMTP-capable email service. Save it as 'Email account (SMTP)'.\n\nThe FROM_EMAIL you set in Set Up Messages must be an address your SMTP account is authorised to send from. For most firms this will be the same as FIRM_EMAIL (e.g. intake@smithlaw.com).\n\nAll contact and firm details are read from the Set Up Messages node — not from the immediate input — because the Twilio response (from the previous step) has a different data shape than the booking details."
-    },
-    {
-      "parameters": {
-        "resume": "specificTime",
-        "dateTime": "={{ $('Set Up Messages').item.json.reminder_24h_at }}"
-      },
-      "id": "wait_24h",
-      "name": "Wait — 24h Reminder",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        2016,
-        0
-      ],
-      "webhookId": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-      "notes": "Pauses the workflow until 24 hours before the appointment, then automatically continues to send the reminder.\n\nThe workflow execution sits suspended in your n8n database during this wait — it does not consume server resources. When the scheduled time arrives, n8n wakes it up and continues from this point.\n\nFor same-day bookings (less than 24 hours until the appointment), this wait fires within 90 seconds so the '24-hour reminder' effectively acts as a second confirmation.\n\nImportant: self-hosted n8n must use Postgres as its database for these long waits to survive a restart. n8n Cloud handles this automatically. If you are self-hosted and see executions disappearing after restarts, check your database configuration."
-    },
-    {
-      "parameters": {
-        "operation": "send",
-        "from": "={{ $('Set Up Messages').item.json.firm_twilio_number }}",
-        "to": "={{ $json.recipient }}",
-        "message": "={{ $json.message_out }}"
-      },
-      "id": "remind_24h_sms",
-      "name": "Send 24h Reminder Text",
-      "type": "n8n-nodes-base.twilio",
-      "typeVersion": 1,
-      "position": [
-        2688,
-        0
-      ],
-      "onError": "continueRegularOutput",
-      "credentials": {
-        "twilioApi": {
-          "id": "1",
-          "name": "Twilio account"
-        }
-      },
-      "notes": "Sends the 24-hour reminder text to the prospect — the single most effective touchpoint for reducing no-shows.\n\nIf the text fails (e.g. the prospect's number is invalid), the workflow continues to the 24-hour reminder email rather than stopping.\n\nAll message data is read from the Set Up Messages node — not from the immediate input — because the Wait node's resume data has a different shape than the booking details."
-    },
-    {
-      "parameters": {
-        "fromEmail": "={{ $('Set Up Messages').item.json.from_email }}",
-        "toEmail": "={{ $('Set Up Messages').item.json.contact_email }}",
-        "subject": "=Reminder: Your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} is Tomorrow",
-        "emailType": "text",
-        "text": "=Hi {{ $('Set Up Messages').item.json.first_name || 'there' }},\n\nJust a friendly reminder that your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} is tomorrow.\n\nTime: {{ $('Set Up Messages').item.json.apt_time_str }}\n\nWe're looking forward to speaking with you. If you need to reschedule, please do so at least 1 hour in advance:\n{{ $('Set Up Messages').item.json.reschedule_url_final }}\n\n— {{ $('Set Up Messages').item.json.firm_name }}"
-      },
-      "id": "remind_24h_email",
-      "name": "Send 24h Reminder Email",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2,
-      "position": [
-        2912,
-        0
-      ],
-      "credentials": {
-        "smtp": {
-          "id": "2",
-          "name": "Email account (SMTP)"
-        }
-      },
-      "notes": "Sends the 24-hour reminder email to the prospect.\n\nAll contact and firm details are read from the Set Up Messages node — not from the immediate input — because the Twilio response (from the previous step) has a different data shape than the booking details."
-    },
-    {
-      "parameters": {
-        "resume": "specificTime",
-        "dateTime": "={{ $('Set Up Messages').item.json.reminder_1h_at }}"
-      },
-      "id": "wait_1h",
-      "name": "Wait — 1h Reminder",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        3136,
-        0
-      ],
-      "webhookId": "d4e5f6a7-b8c9-0123-defa-234567890123",
-      "notes": "Pauses the workflow until 1 hour before the appointment, then continues to send the final pre-consult reminder.\n\nFor bookings made less than 1 hour before the appointment, this fires within 3 minutes of the previous step so the prospect still gets a final nudge."
-    },
-    {
-      "parameters": {
-        "operation": "send",
-        "from": "={{ $('Set Up Messages').item.json.firm_twilio_number }}",
-        "to": "={{ $json.recipient }}",
-        "message": "={{ $json.message_out }}"
-      },
-      "id": "remind_1h_sms",
-      "name": "Send 1h Reminder Text",
-      "type": "n8n-nodes-base.twilio",
-      "typeVersion": 1,
-      "position": [
-        3808,
-        0
-      ],
-      "onError": "continueRegularOutput",
-      "credentials": {
-        "twilioApi": {
-          "id": "1",
-          "name": "Twilio account"
-        }
-      },
-      "notes": "Sends the 1-hour reminder text. This message includes the reschedule link so the prospect has a clear, easy option if they can't make it — reducing last-minute no-shows where the prospect simply doesn't show up because they didn't know how to cancel.\n\nIf the text fails, the workflow continues to the 1-hour reminder email rather than stopping."
-    },
-    {
-      "parameters": {
-        "fromEmail": "={{ $('Set Up Messages').item.json.from_email }}",
-        "toEmail": "={{ $('Set Up Messages').item.json.contact_email }}",
-        "subject": "=Your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} Starts in 1 Hour",
-        "emailType": "text",
-        "text": "=Hi {{ $('Set Up Messages').item.json.first_name || 'there' }},\n\nYour {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} starts in 1 hour at {{ $('Set Up Messages').item.json.apt_time_str }}.\n\nIf you need to reschedule, please do so now:\n{{ $('Set Up Messages').item.json.reschedule_url_final }}\n\nOtherwise, we'll talk soon!\n\n— {{ $('Set Up Messages').item.json.firm_name }}"
-      },
-      "id": "remind_1h_email",
-      "name": "Send 1h Reminder Email",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2,
-      "position": [
-        4032,
-        0
-      ],
-      "credentials": {
-        "smtp": {
-          "id": "2",
-          "name": "Email account (SMTP)"
-        }
-      },
-      "notes": "Sends the 1-hour reminder email with the reschedule link. All contact and firm details are read from the Set Up Messages node."
-    },
-    {
-      "parameters": {
-        "resume": "specificTime",
-        "dateTime": "={{ $('Set Up Messages').item.json.noshow_check_at }}"
-      },
-      "id": "wait_noshow",
-      "name": "Wait — No-Show Check",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        4256,
-        0
-      ],
-      "webhookId": "e5f6a7b8-c9d0-1234-efab-345678901234",
-      "notes": "Pauses the workflow until 15 minutes after the appointment was scheduled to start, then sends the reschedule nudge.\n\nThis step fires for all bookings — the free template does not connect to your practice management system to check whether the prospect actually attended. The message is written neutrally ('if anything came up') rather than assuming a no-show, so prospects who did attend are not alienated by an accusatory message.\n\nThe done-for-you upgrade adds Clio or MyCase integration to check attendance status before this step, and only sends the reschedule message for genuine no-shows."
-    },
-    {
-      "parameters": {
-        "operation": "send",
-        "from": "={{ $('Set Up Messages').item.json.firm_twilio_number }}",
-        "to": "={{ $json.recipient }}",
-        "message": "={{ $json.message_out }}"
-      },
-      "id": "noshow_sms",
-      "name": "Send Reschedule Text",
-      "type": "n8n-nodes-base.twilio",
-      "typeVersion": 1,
-      "position": [
-        4928,
-        0
-      ],
-      "onError": "continueRegularOutput",
-      "credentials": {
-        "twilioApi": {
-          "id": "1",
-          "name": "Twilio account"
-        }
-      },
-      "notes": "Sends a gentle reschedule nudge 15 minutes after the scheduled consult.\n\nThe message reads: 'If anything came up, no worries — reschedule here: [link]'. The neutral phrasing is deliberate — this fires regardless of whether the prospect attended, so a firm tone would damage the firm's relationship with clients who did show up."
-    },
-    {
-      "parameters": {
-        "fromEmail": "={{ $('Set Up Messages').item.json.from_email }}",
-        "toEmail": "={{ $('Set Up Messages').item.json.contact_email }}",
-        "subject": "=We Missed You — Reschedule Your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }}",
-        "emailType": "text",
-        "text": "=Hi {{ $('Set Up Messages').item.json.first_name || 'there' }},\n\nWe had your {{ $('Set Up Messages').item.json.consult_type }} scheduled today at {{ $('Set Up Messages').item.json.apt_time_str }} with {{ $('Set Up Messages').item.json.firm_name }}. If anything came up, no worries — life happens!\n\nYou can easily book a new time here:\n{{ $('Set Up Messages').item.json.reschedule_url_final }}\n\nWe're still here to help whenever you're ready.\n\n— {{ $('Set Up Messages').item.json.firm_name }}\n\n---\nTo stop receiving text reminders, reply STOP to any of our text messages."
-      },
-      "id": "noshow_email",
-      "name": "Send Reschedule Email",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2,
-      "position": [
-        5152,
-        0
-      ],
-      "credentials": {
-        "smtp": {
-          "id": "2",
-          "name": "Email account (SMTP)"
-        }
-      },
-      "notes": "Sends the reschedule follow-up email 15 minutes after the scheduled consult.\n\nThe subject 'We Missed You' is accurate for genuine no-shows. For prospects who did attend, it reads as a minor curiosity rather than an accusation — acceptable for the free template. The done-for-you upgrade checks attendance status before sending so this only goes to actual no-shows."
-    },
-    {
+      "id": "1500bb00-0002-4000-b000-000000000006",
+      "name": "Compliance Check — Confirmation Text",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "notes": "Calls the Bar-Compliance Guardrail before sending the SMS.\n\nChecks whether the client has opted out. If not, confirms the TCPA opt-out instruction is present in the message and logs the send attempt to your audit sheet.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (project → Variables tab). Set it to the numeric ID from the Bar-Compliance Guardrail workflow URL: .../workflow/WORKFLOW_ID.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields.",
+      "position": [1120, 0],
       "parameters": {
         "workflowId": {
           "__rl": true,
@@ -374,24 +211,22 @@
         },
         "options": {}
       },
-      "id": "guardrail_confirm",
-      "name": "Compliance Check — Confirmation Text",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        1120,
-        0
-      ],
-      "notes": "Calls the Bar-Compliance Guardrail before sending the SMS.\n\nChecks whether the client has opted out. If not, confirms the TCPA opt-out instruction is present in the message and logs the send attempt to your audit sheet.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (project → Variables tab). Set it to the numeric ID from the Bar-Compliance Guardrail workflow URL: .../workflow/WORKFLOW_ID.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields."
+      "typeVersion": 1.3
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000007",
+      "name": "If Approved to Send Confirmation",
+      "type": "n8n-nodes-base.if",
+      "notes": "Routes based on the compliance guardrail's decision.\n\nYes (approved) → sends the SMS.\nNo (opted out) → message suppressed; guardrail has logged the suppression.",
+      "onError": "continueErrorOutput",
+      "position": [1344, 0],
       "parameters": {
         "conditions": {
           "options": {
-            "caseSensitive": true,
+            "version": 2,
             "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
+            "caseSensitive": true,
+            "typeValidation": "loose"
           },
           "combinator": "and",
           "conditions": [
@@ -409,30 +244,78 @@
         },
         "options": {}
       },
-      "id": "approved_confirm",
-      "name": "Approved to Send — Confirmation?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        1344,
-        0
-      ],
-      "onError": "continueErrorOutput",
-      "notes": "Routes based on the compliance guardrail's decision.\n\nYes (approved) → sends the SMS.\nNo (opted out) → message suppressed; guardrail has logged the suppression."
+      "typeVersion": 2.3
     },
     {
-      "parameters": {},
-      "id": "skip_confirm",
+      "id": "1500bb00-0002-4000-b000-000000000008",
       "name": "Skip — opted out (confirmation)",
       "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        1568,
-        150
-      ],
-      "notes": "Client is on the opt-out list — confirmation text not sent and the full reminder sequence is stopped. The Bar-Compliance Guardrail has logged the suppression."
+      "notes": "Client is on the opt-out list — confirmation text not sent and the full reminder sequence is stopped. The Bar-Compliance Guardrail has logged the suppression.",
+      "position": [1568, 150],
+      "parameters": {},
+      "typeVersion": 1
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000009",
+      "name": "Send Confirmation Text",
+      "type": "n8n-nodes-base.twilio",
+      "notes": "Sends the instant booking confirmation text to the prospect — so they know the appointment is locked in before they even close the booking page.\n\nCredential to wire: In n8n go to project → Credentials tab → New, search for Twilio, and enter your Account SID and Auth Token from the Twilio Console. Save it as 'Twilio account'.\n\nIf the prospect did not provide a phone number, Twilio will return an error. The workflow handles this gracefully — it continues to the confirmation email rather than stopping. Both the text and the email are always attempted.",
+      "onError": "continueRegularOutput",
+      "position": [1568, 0],
+      "credentials": {
+        "twilioApi": {
+          "id": "1",
+          "name": "Twilio account"
+        }
+      },
+      "parameters": {
+        "operation": "send",
+        "from": "={{ $('Set Up Messages').item.json.firm_twilio_number }}",
+        "to": "={{ $json.recipient }}",
+        "message": "={{ $json.message_out }}"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000010",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "notes": "Sends the booking confirmation email to the prospect.\n\nCredential to wire: In n8n go to project → Credentials tab → New, search for SMTP, and enter your email provider's settings. This works with Gmail, Outlook 365, Zoho Mail, or any SMTP-capable email service. Save it as 'Email account (SMTP)'.\n\nThe FROM_EMAIL you set in Set Up Messages must be an address your SMTP account is authorised to send from. For most firms this will be the same as FIRM_EMAIL (e.g. intake@smithlaw.com).\n\nAll contact and firm details are read from the Set Up Messages node — not from the immediate input — because the Twilio response (from the previous step) has a different data shape than the booking details.",
+      "position": [1792, 0],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "parameters": {
+        "fromEmail": "={{ $('Set Up Messages').item.json.from_email }}",
+        "toEmail": "={{ $('Set Up Messages').item.json.contact_email }}",
+        "subject": "=Your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} is Confirmed",
+        "emailType": "text",
+        "text": "=Hi {{ $('Set Up Messages').item.json.first_name || 'there' }},\n\nYour {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} is confirmed.\n\nDate: {{ $('Set Up Messages').item.json.apt_date_str }}\nTime: {{ $('Set Up Messages').item.json.apt_time_str }}\n\nWe look forward to speaking with you. If you need to reschedule, use this link:\n{{ $('Set Up Messages').item.json.reschedule_url_final }}\n\nQuestions before your consult? Reply to this email and we'll be happy to help.\n\n— {{ $('Set Up Messages').item.json.firm_name }}\n\n---\nTo stop receiving text reminders, reply STOP to any of our text messages."
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000011",
+      "name": "Wait — 24h Reminder",
+      "type": "n8n-nodes-base.wait",
+      "notes": "Pauses the workflow until 24 hours before the appointment, then automatically continues to send the reminder.\n\nThe workflow execution sits suspended in your n8n database during this wait — it does not consume server resources. When the scheduled time arrives, n8n wakes it up and continues from this point.\n\nFor same-day bookings (less than 24 hours until the appointment), this wait fires within 90 seconds so the '24-hour reminder' effectively acts as a second confirmation.\n\nImportant: self-hosted n8n must use Postgres as its database for these long waits to survive a restart. n8n Cloud handles this automatically. If you are self-hosted and see executions disappearing after restarts, check your database configuration.",
+      "position": [2016, 0],
+      "webhookId": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Set Up Messages').item.json.reminder_24h_at }}"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000012",
+      "name": "Compliance Check — 24h Reminder",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "notes": "Calls the Bar-Compliance Guardrail before sending the SMS.\n\nChecks whether the client has opted out. If not, confirms the TCPA opt-out instruction is present in the message and logs the send attempt to your audit sheet.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (project → Variables tab). Set it to the numeric ID from the Bar-Compliance Guardrail workflow URL: .../workflow/WORKFLOW_ID.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields.",
+      "position": [2240, 0],
       "parameters": {
         "workflowId": {
           "__rl": true,
@@ -455,24 +338,22 @@
         },
         "options": {}
       },
-      "id": "guardrail_24h",
-      "name": "Compliance Check — 24h Reminder",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        2240,
-        0
-      ],
-      "notes": "Calls the Bar-Compliance Guardrail before sending the SMS.\n\nChecks whether the client has opted out. If not, confirms the TCPA opt-out instruction is present in the message and logs the send attempt to your audit sheet.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (project → Variables tab). Set it to the numeric ID from the Bar-Compliance Guardrail workflow URL: .../workflow/WORKFLOW_ID.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields."
+      "typeVersion": 1.3
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000013",
+      "name": "If Approved for 24h Reminder",
+      "type": "n8n-nodes-base.if",
+      "notes": "Routes based on the compliance guardrail's decision.\n\nYes (approved) → sends the SMS.\nNo (opted out) → message suppressed; guardrail has logged the suppression.",
+      "onError": "continueErrorOutput",
+      "position": [2464, 0],
       "parameters": {
         "conditions": {
           "options": {
-            "caseSensitive": true,
+            "version": 2,
             "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
+            "caseSensitive": true,
+            "typeValidation": "loose"
           },
           "combinator": "and",
           "conditions": [
@@ -490,30 +371,78 @@
         },
         "options": {}
       },
-      "id": "approved_24h",
-      "name": "Approved to Send — 24h Reminder?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        2464,
-        0
-      ],
-      "onError": "continueErrorOutput",
-      "notes": "Routes based on the compliance guardrail's decision.\n\nYes (approved) → sends the SMS.\nNo (opted out) → message suppressed; guardrail has logged the suppression."
+      "typeVersion": 2.3
     },
     {
-      "parameters": {},
-      "id": "skip_24h",
+      "id": "1500bb00-0002-4000-b000-000000000014",
       "name": "Skip — opted out (24h reminder)",
       "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        2688,
-        150
-      ],
-      "notes": "Client has opted out — 24h reminder suppressed and the remaining reminders are stopped."
+      "notes": "Client has opted out — 24h reminder suppressed and the remaining reminders are stopped.",
+      "position": [2688, 150],
+      "parameters": {},
+      "typeVersion": 1
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000015",
+      "name": "Send 24h Reminder Text",
+      "type": "n8n-nodes-base.twilio",
+      "notes": "Sends the 24-hour reminder text to the prospect — the single most effective touchpoint for reducing no-shows.\n\nIf the text fails (e.g. the prospect's number is invalid), the workflow continues to the 24-hour reminder email rather than stopping.\n\nAll message data is read from the Set Up Messages node — not from the immediate input — because the Wait node's resume data has a different shape than the booking details.",
+      "onError": "continueRegularOutput",
+      "position": [2688, 0],
+      "credentials": {
+        "twilioApi": {
+          "id": "1",
+          "name": "Twilio account"
+        }
+      },
+      "parameters": {
+        "operation": "send",
+        "from": "={{ $('Set Up Messages').item.json.firm_twilio_number }}",
+        "to": "={{ $json.recipient }}",
+        "message": "={{ $json.message_out }}"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000016",
+      "name": "Send 24h Reminder Email",
+      "type": "n8n-nodes-base.emailSend",
+      "notes": "Sends the 24-hour reminder email to the prospect.\n\nAll contact and firm details are read from the Set Up Messages node — not from the immediate input — because the Twilio response (from the previous step) has a different data shape than the booking details.",
+      "position": [2912, 0],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "parameters": {
+        "fromEmail": "={{ $('Set Up Messages').item.json.from_email }}",
+        "toEmail": "={{ $('Set Up Messages').item.json.contact_email }}",
+        "subject": "=Reminder: Your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} is Tomorrow",
+        "emailType": "text",
+        "text": "=Hi {{ $('Set Up Messages').item.json.first_name || 'there' }},\n\nJust a friendly reminder that your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} is tomorrow.\n\nTime: {{ $('Set Up Messages').item.json.apt_time_str }}\n\nWe're looking forward to speaking with you. If you need to reschedule, please do so at least 1 hour in advance:\n{{ $('Set Up Messages').item.json.reschedule_url_final }}\n\n— {{ $('Set Up Messages').item.json.firm_name }}"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000017",
+      "name": "Wait — 1h Reminder",
+      "type": "n8n-nodes-base.wait",
+      "notes": "Pauses the workflow until 1 hour before the appointment, then continues to send the final pre-consult reminder.\n\nFor bookings made less than 1 hour before the appointment, this fires within 3 minutes of the previous step so the prospect still gets a final nudge.",
+      "position": [3136, 0],
+      "webhookId": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Set Up Messages').item.json.reminder_1h_at }}"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000018",
+      "name": "Compliance Check — 1h Reminder",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "notes": "Calls the Bar-Compliance Guardrail before sending the SMS.\n\nChecks whether the client has opted out. If not, confirms the TCPA opt-out instruction is present in the message and logs the send attempt to your audit sheet.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (project → Variables tab). Set it to the numeric ID from the Bar-Compliance Guardrail workflow URL: .../workflow/WORKFLOW_ID.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields.",
+      "position": [3360, 0],
       "parameters": {
         "workflowId": {
           "__rl": true,
@@ -536,24 +465,22 @@
         },
         "options": {}
       },
-      "id": "guardrail_1h",
-      "name": "Compliance Check — 1h Reminder",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        3360,
-        0
-      ],
-      "notes": "Calls the Bar-Compliance Guardrail before sending the SMS.\n\nChecks whether the client has opted out. If not, confirms the TCPA opt-out instruction is present in the message and logs the send attempt to your audit sheet.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (project → Variables tab). Set it to the numeric ID from the Bar-Compliance Guardrail workflow URL: .../workflow/WORKFLOW_ID.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields."
+      "typeVersion": 1.3
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000019",
+      "name": "If Approved for 1h Reminder",
+      "type": "n8n-nodes-base.if",
+      "notes": "Routes based on the compliance guardrail's decision.\n\nYes (approved) → sends the SMS.\nNo (opted out) → message suppressed; guardrail has logged the suppression.",
+      "onError": "continueErrorOutput",
+      "position": [3584, 0],
       "parameters": {
         "conditions": {
           "options": {
-            "caseSensitive": true,
+            "version": 2,
             "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
+            "caseSensitive": true,
+            "typeValidation": "loose"
           },
           "combinator": "and",
           "conditions": [
@@ -571,30 +498,78 @@
         },
         "options": {}
       },
-      "id": "approved_1h",
-      "name": "Approved to Send — 1h Reminder?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        3584,
-        0
-      ],
-      "onError": "continueErrorOutput",
-      "notes": "Routes based on the compliance guardrail's decision.\n\nYes (approved) → sends the SMS.\nNo (opted out) → message suppressed; guardrail has logged the suppression."
+      "typeVersion": 2.3
     },
     {
-      "parameters": {},
-      "id": "skip_1h",
+      "id": "1500bb00-0002-4000-b000-000000000020",
       "name": "Skip — opted out (1h reminder)",
       "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        3808,
-        150
-      ],
-      "notes": "Client has opted out — 1h reminder suppressed and the no-show check is stopped."
+      "notes": "Client has opted out — 1h reminder suppressed and the no-show check is stopped.",
+      "position": [3808, 150],
+      "parameters": {},
+      "typeVersion": 1
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000021",
+      "name": "Send 1h Reminder Text",
+      "type": "n8n-nodes-base.twilio",
+      "notes": "Sends the 1-hour reminder text. This message includes the reschedule link so the prospect has a clear, easy option if they can't make it — reducing last-minute no-shows where the prospect simply doesn't show up because they didn't know how to cancel.\n\nIf the text fails, the workflow continues to the 1-hour reminder email rather than stopping.",
+      "onError": "continueRegularOutput",
+      "position": [3808, 0],
+      "credentials": {
+        "twilioApi": {
+          "id": "1",
+          "name": "Twilio account"
+        }
+      },
+      "parameters": {
+        "operation": "send",
+        "from": "={{ $('Set Up Messages').item.json.firm_twilio_number }}",
+        "to": "={{ $json.recipient }}",
+        "message": "={{ $json.message_out }}"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000022",
+      "name": "Send 1h Reminder Email",
+      "type": "n8n-nodes-base.emailSend",
+      "notes": "Sends the 1-hour reminder email with the reschedule link. All contact and firm details are read from the Set Up Messages node.",
+      "position": [4032, 0],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "parameters": {
+        "fromEmail": "={{ $('Set Up Messages').item.json.from_email }}",
+        "toEmail": "={{ $('Set Up Messages').item.json.contact_email }}",
+        "subject": "=Your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} Starts in 1 Hour",
+        "emailType": "text",
+        "text": "=Hi {{ $('Set Up Messages').item.json.first_name || 'there' }},\n\nYour {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }} starts in 1 hour at {{ $('Set Up Messages').item.json.apt_time_str }}.\n\nIf you need to reschedule, please do so now:\n{{ $('Set Up Messages').item.json.reschedule_url_final }}\n\nOtherwise, we'll talk soon!\n\n— {{ $('Set Up Messages').item.json.firm_name }}"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000023",
+      "name": "Wait — No-Show Check",
+      "type": "n8n-nodes-base.wait",
+      "notes": "Pauses the workflow until 15 minutes after the appointment was scheduled to start, then sends the reschedule nudge.\n\nThis step fires for all bookings — the free template does not connect to your practice management system to check whether the prospect actually attended. The message is written neutrally ('if anything came up') rather than assuming a no-show, so prospects who did attend are not alienated by an accusatory message.\n\nThe done-for-you upgrade adds Clio or MyCase integration to check attendance status before this step, and only sends the reschedule message for genuine no-shows.",
+      "position": [4256, 0],
+      "webhookId": "e5f6a7b8-c9d0-1234-efab-345678901234",
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Set Up Messages').item.json.noshow_check_at }}"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000024",
+      "name": "Compliance Check — No-Show Text",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "notes": "Calls the Bar-Compliance Guardrail before sending the SMS.\n\nChecks whether the client has opted out. If not, confirms the TCPA opt-out instruction is present in the message and logs the send attempt to your audit sheet.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (project → Variables tab). Set it to the numeric ID from the Bar-Compliance Guardrail workflow URL: .../workflow/WORKFLOW_ID.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields.",
+      "position": [4480, 0],
       "parameters": {
         "workflowId": {
           "__rl": true,
@@ -617,24 +592,22 @@
         },
         "options": {}
       },
-      "id": "guardrail_noshow",
-      "name": "Compliance Check — No-Show Text",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        4480,
-        0
-      ],
-      "notes": "Calls the Bar-Compliance Guardrail before sending the SMS.\n\nChecks whether the client has opted out. If not, confirms the TCPA opt-out instruction is present in the message and logs the send attempt to your audit sheet.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (project → Variables tab). Set it to the numeric ID from the Bar-Compliance Guardrail workflow URL: .../workflow/WORKFLOW_ID.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields."
+      "typeVersion": 1.3
     },
     {
+      "id": "1500bb00-0002-4000-b000-000000000025",
+      "name": "If Approved for No-Show Text",
+      "type": "n8n-nodes-base.if",
+      "notes": "Routes based on the compliance guardrail's decision.\n\nYes (approved) → sends the SMS.\nNo (opted out) → message suppressed; guardrail has logged the suppression.",
+      "onError": "continueErrorOutput",
+      "position": [4704, 0],
       "parameters": {
         "conditions": {
           "options": {
-            "caseSensitive": true,
+            "version": 2,
             "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
+            "caseSensitive": true,
+            "typeValidation": "loose"
           },
           "combinator": "and",
           "conditions": [
@@ -652,32 +625,63 @@
         },
         "options": {}
       },
-      "id": "approved_noshow",
-      "name": "Approved to Send — No-Show Text?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        4704,
-        0
-      ],
-      "onError": "continueErrorOutput",
-      "notes": "Routes based on the compliance guardrail's decision.\n\nYes (approved) → sends the SMS.\nNo (opted out) → message suppressed; guardrail has logged the suppression."
+      "typeVersion": 2.3
     },
     {
-      "parameters": {},
-      "id": "skip_noshow",
+      "id": "1500bb00-0002-4000-b000-000000000026",
       "name": "Skip — opted out (no-show)",
       "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        4928,
-        150
-      ],
-      "notes": "Client has opted out — no-show reschedule text not sent."
+      "notes": "Client has opted out — no-show reschedule text not sent.",
+      "position": [4928, 150],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000027",
+      "name": "Send Reschedule Text",
+      "type": "n8n-nodes-base.twilio",
+      "notes": "Sends a gentle reschedule nudge 15 minutes after the scheduled consult.\n\nThe message reads: 'If anything came up, no worries — reschedule here: [link]'. The neutral phrasing is deliberate — this fires regardless of whether the prospect attended, so a firm tone would damage the firm's relationship with clients who did show up.",
+      "onError": "continueRegularOutput",
+      "position": [4928, 0],
+      "credentials": {
+        "twilioApi": {
+          "id": "1",
+          "name": "Twilio account"
+        }
+      },
+      "parameters": {
+        "operation": "send",
+        "from": "={{ $('Set Up Messages').item.json.firm_twilio_number }}",
+        "to": "={{ $json.recipient }}",
+        "message": "={{ $json.message_out }}"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "1500bb00-0002-4000-b000-000000000028",
+      "name": "Send Reschedule Email",
+      "type": "n8n-nodes-base.emailSend",
+      "notes": "Sends the reschedule follow-up email 15 minutes after the scheduled consult.\n\nThe subject 'We Missed You' is accurate for genuine no-shows. For prospects who did attend, it reads as a minor curiosity rather than an accusation — acceptable for the free template. The done-for-you upgrade checks attendance status before sending so this only goes to actual no-shows.",
+      "position": [5152, 0],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "parameters": {
+        "fromEmail": "={{ $('Set Up Messages').item.json.from_email }}",
+        "toEmail": "={{ $('Set Up Messages').item.json.contact_email }}",
+        "subject": "=We Missed You — Reschedule Your {{ $('Set Up Messages').item.json.consult_type }} with {{ $('Set Up Messages').item.json.firm_name }}",
+        "emailType": "text",
+        "text": "=Hi {{ $('Set Up Messages').item.json.first_name || 'there' }},\n\nWe had your {{ $('Set Up Messages').item.json.consult_type }} scheduled today at {{ $('Set Up Messages').item.json.apt_time_str }} with {{ $('Set Up Messages').item.json.firm_name }}. If anything came up, no worries — life happens!\n\nYou can easily book a new time here:\n{{ $('Set Up Messages').item.json.reschedule_url_final }}\n\nWe're still here to help whenever you're ready.\n\n— {{ $('Set Up Messages').item.json.firm_name }}\n\n---\nTo stop receiving text reminders, reply STOP to any of our text messages."
+      },
+      "typeVersion": 2
     }
   ],
+  "active": false,
   "pinData": {
-    "Booking Webhook": [
+    "When Booking Received": [
       {
         "json": {
           "headers": {
@@ -738,30 +742,40 @@
       }
     ]
   },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "executionTimeout": -1,
+    "availableInMCP": false
+  },
+  "nodeGroups": [],
+  "staticData": null,
   "connections": {
-    "Booking Webhook": {
+    "When Booking Received": {
       "main": [
         [
           {
-            "node": "Read Booking Details",
+            "node": "Normalize and Validate Booking",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Booking Details": {
+    "Normalize and Validate Booking": {
       "main": [
         [
           {
-            "node": "Valid booking?",
+            "node": "If Valid Booking",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Valid booking?": {
+    "If Valid Booking": {
       "main": [
         [
           {
@@ -772,7 +786,7 @@
         ],
         [
           {
-            "node": "Skip — invalid booking",
+            "node": "Ignore Invalid Booking",
             "type": "main",
             "index": 0
           }
@@ -784,6 +798,35 @@
         [
           {
             "node": "Compliance Check — Confirmation Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compliance Check — Confirmation Text": {
+      "main": [
+        [
+          {
+            "node": "If Approved to Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Approved to Send Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — opted out (confirmation)",
             "type": "main",
             "index": 0
           }
@@ -823,6 +866,35 @@
         ]
       ]
     },
+    "Compliance Check — 24h Reminder": {
+      "main": [
+        [
+          {
+            "node": "If Approved for 24h Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Approved for 24h Reminder": {
+      "main": [
+        [
+          {
+            "node": "Send 24h Reminder Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — opted out (24h reminder)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Send 24h Reminder Text": {
       "main": [
         [
@@ -850,6 +922,35 @@
         [
           {
             "node": "Compliance Check — 1h Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compliance Check — 1h Reminder": {
+      "main": [
+        [
+          {
+            "node": "If Approved for 1h Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Approved for 1h Reminder": {
+      "main": [
+        [
+          {
+            "node": "Send 1h Reminder Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — opted out (1h reminder)",
             "type": "main",
             "index": 0
           }
@@ -889,116 +990,18 @@
         ]
       ]
     },
-    "Send Reschedule Text": {
-      "main": [
-        [
-          {
-            "node": "Send Reschedule Email",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Compliance Check — Confirmation Text": {
-      "main": [
-        [
-          {
-            "node": "Approved to Send — Confirmation?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Approved to Send — Confirmation?": {
-      "main": [
-        [
-          {
-            "node": "Send Confirmation Text",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Skip — opted out (confirmation)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Compliance Check — 24h Reminder": {
-      "main": [
-        [
-          {
-            "node": "Approved to Send — 24h Reminder?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Approved to Send — 24h Reminder?": {
-      "main": [
-        [
-          {
-            "node": "Send 24h Reminder Text",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Skip — opted out (24h reminder)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Compliance Check — 1h Reminder": {
-      "main": [
-        [
-          {
-            "node": "Approved to Send — 1h Reminder?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Approved to Send — 1h Reminder?": {
-      "main": [
-        [
-          {
-            "node": "Send 1h Reminder Text",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Skip — opted out (1h reminder)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Compliance Check — No-Show Text": {
       "main": [
         [
           {
-            "node": "Approved to Send — No-Show Text?",
+            "node": "If Approved for No-Show Text",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Approved to Send — No-Show Text?": {
+    "If Approved for No-Show Text": {
       "main": [
         [
           {
@@ -1015,18 +1018,18 @@
           }
         ]
       ]
+    },
+    "Send Reschedule Text": {
+      "main": [
+        [
+          {
+            "node": "Send Reschedule Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "staticData": null,
-  "active": false,
-  "settings": {
-    "executionOrder": "v1",
-    "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all",
-    "saveManualExecutions": true,
-    "executionTimeout": -1,
-    "availableInMCP": false
-  },
-  "nodeGroups": [],
-  "tags": []
+  "description": "Sends confirmation, 24-hour, and 1-hour reminders (SMS + email) for every booked consult, plus a reschedule nudge 15 minutes after the scheduled start. Replaces Lawmatics sequences and paid Calendly reminder tiers. Trigger: Calendly v2 invitee.created webhook or generic booking webhook."
 }
