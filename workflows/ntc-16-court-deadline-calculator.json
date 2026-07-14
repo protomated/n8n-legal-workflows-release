@@ -17,65 +17,65 @@
     {
       "parameters": {
         "content": "## Receive and validate request\n\nWebhook intake and initial payload preparation. This cluster receives the deadline request, normalizes the incoming data, and checks whether the request has the minimum required fields.",
-        "width": 740,
-        "height": 250,
+        "width": 714,
+        "height": 350,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-80, -120],
+      "position": [-60, -200],
       "id": "122feca5-af35-4336-817f-5c5c18eaa5eb",
       "name": "Sticky Note1"
     },
     {
       "parameters": {
         "content": "## Handle invalid requests\n\nLower branch for requests that fail validation. The no-op node stops the invalid path without creating deadlines or external records.",
-        "width": 472,
-        "height": 250,
+        "width": 236,
+        "height": 350,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [660, 80],
+      "position": [666, 0],
       "id": "77202e37-ba3e-4e5c-9661-0e19361a4e3b",
       "name": "Sticky Note2"
     },
     {
       "parameters": {
         "content": "## Calculate and route deadlines\n\nValid requests continue through deadline computation, using firm details from n8n Variables, then branch according to the selected calendar platform.",
-        "width": 516,
-        "height": 250,
+        "width": 490,
+        "height": 350,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [592, -328],
+      "position": [612, -408],
       "id": "a3a17526-7d44-48c3-b247-97a706e76675",
       "name": "Sticky Note3"
     },
     {
       "parameters": {
         "content": "## Create calendar events\n\nParallel calendar output cluster. Depending on the platform decision, the workflow posts the calculated deadline to either Google Calendar or Outlook/Microsoft Graph.",
-        "width": 292,
-        "height": 570,
+        "width": 266,
+        "height": 670,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1108, -280],
+      "position": [1114, -360],
       "id": "2a5d66b3-dd82-43c7-a255-3cdb7b17b02d",
       "name": "Sticky Note4"
     },
     {
       "parameters": {
         "content": "## Update matter and audit\n\nFinal recording cluster. After a calendar event is created, the workflow updates the matter in Clio and logs the completed operation to Google Sheets for auditing.",
-        "width": 764,
-        "height": 250,
+        "width": 914,
+        "height": 350,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1132, -120],
+      "position": [962, -200],
       "id": "c0c92d00-a8fd-46a4-a3a0-6413afb8364d",
       "name": "Sticky Note5"
     },

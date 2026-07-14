@@ -17,93 +17,93 @@
     {
       "parameters": {
         "content": "**Validate and screen message**\nPath A entry. Loads firm config, validates required fields from the calling template, reads the opt-out list, checks the recipient, and routes to suppress or approve.",
-        "height": 250,
-        "width": 1412,
+        "height": 350,
+        "width": 1386,
         "color": 7
       },
       "id": "3300aa00-0007-4000-a000-00000000000a",
       "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-80, -120]
+      "position": [-60, -200]
     },
     {
       "parameters": {
         "content": "**Suppress opted-out contacts**\nLogs the suppression to the Audit Log tab and returns `{ approved: false }` to the calling template — message is never sent.",
-        "height": 250,
-        "width": 292,
+        "height": 350,
+        "width": 266,
         "color": 7
       },
       "id": "3300aa00-0007-4000-a000-00000000000b",
       "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1556, 30]
+      "position": [1562, -50]
     },
     {
       "parameters": {
         "content": "**Approve and log message**\nAppends the TCPA opt-out instruction, logs the approved send to the Audit Log tab, and returns `{ approved: true, message_out }` to the calling template.",
-        "height": 250,
-        "width": 740,
+        "height": 350,
+        "width": 714,
         "color": 7
       },
       "id": "3300aa00-0007-4000-a000-00000000000c",
       "name": "Sticky Note3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1332, -270]
+      "position": [1338, -350]
     },
     {
       "parameters": {
         "content": "**Receive inbound SMS**\nPath B entry. Parses the Twilio inbound message and classifies it as a STOP, UNSTOP, or unrelated reply.",
-        "height": 250,
-        "width": 740,
+        "height": 350,
+        "width": 714,
         "color": 7
       },
       "id": "3300aa00-0007-4000-a000-00000000000d",
       "name": "Sticky Note4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-80, 440]
+      "position": [-60, 360]
     },
     {
       "parameters": {
         "content": "**Process STOP request**\nReads the Opt-Outs tab, deduplicates, and appends a new row for the sender. Prevents the same number being entered twice.",
-        "height": 410,
-        "width": 448,
+        "height": 510,
+        "width": 436,
         "color": 7
       },
       "id": "3300aa00-0007-4000-a000-00000000000e",
       "name": "Sticky Note5",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [660, 240]
+      "position": [666, 160]
     },
     {
       "parameters": {
         "content": "**Process UNSTOP request**\nReads the Opt-Outs tab, finds the matching row, and deletes it — re-enabling future messages to this number.",
-        "height": 430,
-        "width": 448,
+        "height": 530,
+        "width": 436,
         "color": 7
       },
       "id": "3300aa00-0007-4000-a000-00000000000f",
       "name": "Sticky Note6",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1108, 400]
+      "position": [1114, 320]
     },
     {
       "parameters": {
         "content": "**Unrecognized message**\nInbound SMS is not a STOP or UNSTOP keyword — no action taken. Twilio receives HTTP 200.",
-        "height": 250,
-        "width": 360,
+        "height": 350,
+        "width": 320,
         "color": 7
       },
       "id": "3300aa00-0007-4000-a000-00000000000g",
       "name": "Sticky Note7",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [816, 700]
+      "position": [836, 620]
     },
     {
       "id": "3300aa00-0007-4000-a000-000000000001",

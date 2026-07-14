@@ -17,52 +17,52 @@
     {
       "parameters": {
         "content": "## Receive and validate lead\n\nWebhook intake and normalization. Accepts submissions from Fluent Forms, CallRail, or any JSON/form-encoded POST. Rejects developer test submissions and payloads with no identifiable contact.",
-        "width": 770,
-        "height": 250,
+        "width": 744,
+        "height": 350,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-80, -120],
+      "position": [-60, -200],
       "id": "3200ee00-0005-4000-e000-000000000002",
       "name": "Sticky Note1"
     },
     {
       "parameters": {
         "content": "## Tag and record lead\n\nMaps source signals to a canonical channel name, creates the contact in Salesmate tagged with the channel, and logs the lead to your Google Sheets ROI dashboard.",
-        "width": 950,
-        "height": 430,
+        "width": 938,
+        "height": 530,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [690, -140],
+      "position": [696, -220],
       "id": "3200ee00-0005-4000-e000-000000000003",
       "name": "Sticky Note2"
     },
     {
       "parameters": {
         "content": "## Acknowledge prospect\n\nSends the prospect a brief acknowledgment email (opt-out compliant) when an email address is available. Skips gracefully for phone-only leads like CallRail calls.",
-        "width": 960,
-        "height": 490,
+        "width": 948,
+        "height": 590,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1640, -380],
+      "position": [1646, -460],
       "id": "3200ee00-0005-4000-e000-000000000004",
       "name": "Sticky Note3"
     },
     {
       "parameters": {
         "content": "## Notify firm\n\nAlways emails your intake team the full lead summary — name, contact details, source channel, Salesmate link, and acknowledgment status — regardless of which path above was taken.",
-        "width": 540,
-        "height": 250,
+        "width": 514,
+        "height": 350,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [2600, -260],
+      "position": [2606, -340],
       "id": "3200ee00-0005-4000-e000-000000000005",
       "name": "Sticky Note4"
     },
