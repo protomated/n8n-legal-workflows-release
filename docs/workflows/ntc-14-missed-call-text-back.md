@@ -85,16 +85,16 @@ No code nodes need editing — firm settings are read from the project **Variabl
 
 ### If you use Twilio
 
-1. Click **When Call Received** and copy the **Production URL** (shown after you activate the workflow).
+1. Click **Missed Call Webhook** and copy the **Production URL** (shown after you activate the workflow).
 2. In the Twilio Console, go to your phone number's settings.
 3. Under **Voice & Fax → A call comes in**, set the webhook to the copied URL.
 4. Under **Call Status Changes**, paste the same URL.
-5. Twilio will POST to your workflow on every status change, including answered calls. The **If Valid Missed Call** node automatically filters those out — only `no-answer`, `busy`, `failed`, and `canceled` statuses proceed to the text-back.
+5. Twilio will POST to your workflow on every status change, including answered calls. The **Valid missed call?** node automatically filters those out — only `no-answer`, `busy`, `failed`, and `canceled` statuses proceed to the text-back.
 
 ### If you use CallRail
 
 1. In CallRail go to **Settings → Notifications → Webhooks**.
-2. Add a new webhook and paste the **Production URL** from the **When Call Received** node.
+2. Add a new webhook and paste the **Production URL** from the **Missed Call Webhook** node.
 3. Select the **Missed Call** event type.
 4. Save.
 
@@ -103,10 +103,10 @@ No code nodes need editing — firm settings are read from the project **Variabl
 ## Step 6 — Activate and test
 
 1. Toggle the workflow **Active** in n8n.
-2. **Pinned test (fastest):** The workflow ships with a pinned Twilio `no-answer` payload on the **When Call Received** node. Click the node, then **Test step** — n8n will run the pinned data through the full flow without waiting for a real call.
+2. **Pinned test (fastest):** The workflow ships with a pinned Twilio `no-answer` payload on the **Missed Call Webhook** node. Click the node, then **Test step** — n8n will run the pinned data through the full flow without waiting for a real call.
 
 3. Confirm the golden path:
-   - **If Valid Missed Call** routes to the Yes branch (Check After Hours).
+   - **Valid missed call?** routes to the Yes branch (Check After Hours).
    - **Send Text Message** shows a successful execution with the correct message text.
    - **Text delivered?** routes to the Yes branch (confirmation ID present in Twilio response).
    - You receive the firm alert email with "Text-back: Sent ✓".
@@ -122,7 +122,7 @@ No code nodes need editing — firm settings are read from the project **Variabl
 }
 ```
 
-   Execution should route to **Ignore Non-Missed Call** with no text sent.
+   Execution should route to **Skip — not a missed call** with no text sent.
 
 5. **Quick test (CallRail):** Send a POST with:
 
@@ -144,7 +144,7 @@ No code nodes need editing — firm settings are read from the project **Variabl
 | Call missed after hours or weekend | Compliance check runs → text sent with after-hours copy |
 | Caller is on the opt-out list | Text suppressed — **Skip — contact opted out**; suppression logged to audit sheet; firm email still sends |
 | Twilio API error (wrong credentials, invalid number, etc.) | **Text not delivered.** The **Text delivered?** node routes No; firm receives: "Text-back: FAILED — please call this person back manually." |
-| Call answered (`completed`) via Twilio StatusCallback | **No text sent.** The **If Valid Missed Call** node routes to **Ignore Non-Missed Call**. |
+| Call answered (`completed`) via Twilio StatusCallback | **No text sent.** The **Valid missed call?** node routes to `Skip — not a missed call`. |
 | No caller number in payload | **No text sent.** Same guard — event is treated as invalid when the caller number is missing. |
 | Bar-Compliance Guardrail audit log write fails | Send decision still returned — failure does not block or unblock the message |
 
