@@ -127,7 +127,7 @@ Calendly validates the webhook URL before saving the subscription, so the
 workflow must be active before you register.
 
 1. In n8n toggle the workflow **Active**.
-2. Open the **Booking Webhook** node and copy the **Production URL**
+2. Open the **When Booking Received** node and copy the **Production URL**
    (e.g. `https://your-n8n.com/webhook/consult-booking`).
 
 **Step 5c — Register the webhook subscription**
@@ -154,14 +154,14 @@ A `201 Created` response confirms success.
 ### If you use Acuity, Cal.com, or another tool
 
 1. Toggle the workflow **Active** in n8n.
-2. Open **Booking Webhook** and copy the **Production URL**.
+2. Open **When Booking Received** and copy the **Production URL**.
 3. In your booking tool, find **Webhooks** or **Notifications** and paste the
    URL.
 4. Select the **new booking created** event. The exact label varies by tool:
    - Acuity: *New Appointment*
    - Cal.com: *booking.created*
    - Fluent Forms: *Form Submission*
-5. Map your tool's fields to what the **Read Booking Details** node expects
+5. Map your tool's fields to what the **Normalize and Validate Booking** node expects
    (see the node notes for the generic field names: `contact_name`,
    `contact_email`, `contact_phone`, `appointment_time`).
 
@@ -172,17 +172,17 @@ A `201 Created` response confirms success.
 ### Golden path test (pinned data)
 
 The workflow ships with a pinned Calendly `invitee.created` payload on the
-**Booking Webhook** node.
+**When Booking Received** node.
 
-1. Click **Booking Webhook**, then **Test step** — n8n runs the pinned data
+1. Click **When Booking Received**, then **Test step** — n8n runs the pinned data
    through the full chain without waiting for a real booking.
 2. Step through manually:
-   - **Read Booking Details** → `is_valid_booking: true`
-   - **Valid booking?** → Yes branch
+   - **Normalize and Validate Booking** → `is_valid_booking: true`
+   - **If Valid Booking** → Yes branch
    - **Set Up Messages** → inspect `confirm_sms`, `reminder_24h_at`,
      `reminder_1h_at`, `noshow_check_at`
    - **Compliance Check — Confirmation Text** → calls guardrail, returns `approved: true`
-   - **Approved to Send — Confirmation?** → Yes branch
+   - **If Approved to Send Confirmation** → Yes branch
    - **Send Confirmation Text** → Twilio returns a `sid`
    - **Send Confirmation Email** → email sends successfully
 3. The Wait nodes pause execution — you won't see the reminders fire during a
@@ -206,7 +206,7 @@ Send a POST to the webhook URL with a cancellation event:
 }
 ```
 
-Execution should route to **Skip — invalid booking** with no messages sent.
+Execution should route to **Ignore Invalid Booking** with no messages sent.
 
 ### Generic webhook test
 
@@ -236,7 +236,7 @@ Confirmation Email → Wait.
 | Prospect opts out between reminders | Next reminder's compliance check suppresses that text — remaining sequence stops |
 | Prospect books with no phone number | Text steps fail gracefully; confirmation and reminder emails still send |
 | Booking received less than 24h before appointment | 24h reminder fires almost immediately; 1h reminder and reschedule nudge fire on schedule |
-| Calendly cancellation event arrives | No messages sent — routes to `Skip — invalid booking`. Any running reminder sequences for this booking must be stopped manually in n8n → Executions. |
+| Calendly cancellation event arrives | No messages sent — routes to **Ignore Invalid Booking**. Any running reminder sequences for this booking must be stopped manually in n8n → Executions. |
 | n8n restarts while waiting | **Postgres:** execution resumes correctly. **SQLite:** execution may be lost — do not use SQLite for this workflow. |
 | Prospect replies STOP to any text | Twilio blocks all further texts to that number automatically. Add them to your opt-out sheet too so the guardrail catches them across all templates. |
 | Bar-Compliance Guardrail audit log write fails | Send decision still returned — failure does not block or unblock the message |

@@ -1,0 +1,455 @@
+{
+  "name": "Speed-to-Lead Router",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Speed-to-Lead Router\n\n### How it works\n\nThis workflow fires the moment a new lead submits a contact form. Within 60 seconds the lead receives a personalised SMS acknowledgment, a confirmation email with your booking link, and the duty attorney receives an internal alert with all the lead's details. Leads are distributed to attorneys in round-robin order so new business is shared fairly.\n\n### Setup steps\n\n- Set FIRM_NAME, FIRM_FROM_EMAIL, FIRM_EMAIL, FIRM_TWILIO_NUMBER, FIRM_BOOKING_URL, and GUARDRAIL_WORKFLOW_ID in n8n project Variables.\n- Set DUTY_ATTORNEYS in this format: Name|email|phone,Name2|email2|phone2\n  Example: Jane Smith|jane@firmname.com|+13125550101,Tom Lee|tom@firmname.com|+13125550102\n- Optionally set FIRM_SLACK_WEBHOOK_URL to a Slack Incoming Webhook URL (leave blank to skip Slack alerts).\n- Wire a Twilio credential and an SMTP email credential in project → Credentials tab.\n- Deploy the Bar-Compliance Guardrail workflow first and set its numeric ID in GUARDRAIL_WORKFLOW_ID.\n- Activate this workflow, then copy the Production URL from the webhook node and paste it into your form builder as the webhook endpoint.\n\n### Customization\n\nEdit the SMS wording in Build Lead SMS. Edit the email body in Send Confirmation Email to Lead. Add or remove attorneys in the DUTY_ATTORNEYS variable — the round-robin counter advances automatically each time a lead arrives.",
+        "width": 480,
+        "height": 620
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-720, -440],
+      "id": "1900bb00-0004-4000-b000-000000000001",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Receive and validate lead\n\nWebhook intake and normalization. Receives lead events from Fluent Forms, Gravity Forms, Typeform, or any form builder that supports webhook output. Extracts the lead's name, email, phone, and message into a standard shape. Discards submissions that include neither an email address nor a phone number.",
+        "width": 620,
+        "height": 480,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-60, -200],
+      "id": "1900bb00-0004-4000-b000-000000000002",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Assign duty attorney\n\nPicks the next attorney from your roster in round-robin order. The rotation counter persists automatically between executions — no database or extra sheet needed. Update DUTY_ATTORNEYS in project → Variables to add or remove attorneys.",
+        "width": 200,
+        "height": 480,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [640, -200],
+      "id": "1900bb00-0004-4000-b000-000000000003",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Notify lead by SMS\n\nComposes a personalised acknowledgment SMS, routes it through the Bar-Compliance Guardrail for TCPA opt-out checking and disclaimer appending, then sends it via Twilio. Opted-out numbers and leads with no phone number are suppressed at a labelled skip node.",
+        "width": 960,
+        "height": 380,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [880, -380],
+      "id": "1900bb00-0004-4000-b000-000000000004",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Confirm receipt and alert attorney\n\nRuns in parallel with the SMS branch. Sends the lead a confirmation email with your booking link (direct SMTP — inbound-request replies do not require the compliance guardrail). Then emails the assigned duty attorney with the full lead details. If FIRM_SLACK_WEBHOOK_URL is set, also posts a Slack alert to the attorney's channel.",
+        "width": 780,
+        "height": 540,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [880, -100],
+      "id": "1900bb00-0004-4000-b000-000000000005",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-lead",
+        "options": {}
+      },
+      "id": "1900bb00-0004-4000-b000-000000000006",
+      "name": "When Lead Form Submitted",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "c4d5e6f7-a8b9-0123-cdef-456789012345",
+      "notes": "Receives the lead submission from your form builder.\n\nCopy the Production URL from this node (visible after you activate the workflow) and paste it into your form builder as the webhook URL.\n\nFluent Forms: Settings → Integrations → Webhook → add new → paste the URL → map your fields → save.\nGravity Forms: Settings → Webhooks → Add New → Request URL → paste the URL.\nTypeform: Connect → Webhooks → Add a webhook → paste the URL.\n\nThis path — /new-lead — is part of the URL your form builder uses. Keep it stable once pasted."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handles Fluent Forms and generic flat JSON webhook payloads.\n// Fluent Forms wraps fields inside a 'data' object; generic providers use top-level keys.\n\nconst raw  = $input.first().json;\nconst body = raw.body || raw; // some n8n webhook configs nest the payload inside .body\n\nlet lead_name = '', lead_email = '', lead_phone = '', lead_message = '', lead_source = '';\n\nif (body.data && typeof body.data === 'object') {\n  // Fluent Forms shape\n  const d = body.data;\n  if (d.names && typeof d.names === 'object') {\n    lead_name = [d.names.first_name, d.names.last_name].filter(Boolean).join(' ').trim();\n  } else {\n    lead_name = (d.full_name || d.name || [d.first_name, d.last_name].filter(Boolean).join(' ') || '').trim();\n  }\n  lead_email   = (d.email || '').trim();\n  lead_phone   = (d.phone || d.phone_number || d.mobile || d.telephone || '').trim();\n  lead_message = (d.message || d.notes || d.how_can_we_help || d.comments || d.description || '').trim();\n  lead_source  = body.form_title ? 'Form: ' + body.form_title : (body.form_id ? 'Form ID ' + body.form_id : 'Fluent Forms');\n} else {\n  // Generic flat JSON — Typeform, Gravity Forms, Zapier-style webhooks, etc.\n  lead_name    = (body.full_name || body.name || [body.first_name, body.last_name].filter(Boolean).join(' ') || '').trim();\n  lead_email   = (body.email || '').trim();\n  lead_phone   = (body.phone || body.phone_number || body.mobile || body.telephone || '').trim();\n  lead_message = (body.message || body.notes || body.comments || body.how_can_we_help || body.description || '').trim();\n  lead_source  = (body.source || body.form_name || body.form_title || body.referrer || 'Website form').trim();\n}\n\nconst has_email = lead_email.includes('@');\nconst has_phone = lead_phone.replace(/\\D/g, '').length >= 7;\n\nreturn [{ json: {\n  lead_name:     lead_name || 'Prospect',\n  lead_email,\n  lead_phone,\n  lead_message,\n  lead_source,\n  is_valid_lead: has_email || has_phone,\n  received_at:   new Date().toISOString(),\n} }];"
+      },
+      "id": "1900bb00-0004-4000-b000-000000000007",
+      "name": "Normalize Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "notes": "Extracts the lead's contact details from the form submission into a consistent shape regardless of which form builder sent the event.\n\nSupports two payload shapes: Fluent Forms (fields inside a 'data' object with an optional nested 'names' component) and generic flat JSON (fields at the top level with common names like email, phone, full_name).\n\nOutput fields passed to all downstream nodes: lead_name, lead_email, lead_phone, lead_message, lead_source, is_valid_lead, received_at.\n\nis_valid_lead is true when the submission includes at least one of: a valid email address or a phone number with 7+ digits. Submissions missing both are discarded at the next gate."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_valid_lead",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_valid_lead }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "1900bb00-0004-4000-b000-000000000008",
+      "name": "If Valid Lead",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [480, 0],
+      "notes": "Only continues for leads that include at least one way to reach them.\n\nYes (has email or phone) → assign an attorney and send notifications.\nNo (neither email nor phone) → stop here. No message is sent. The run is recorded in execution history."
+    },
+    {
+      "parameters": {},
+      "id": "1900bb00-0004-4000-b000-000000000009",
+      "name": "Skip — No Contact Info",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [720, 200],
+      "notes": "Submission had no email address and no phone number — nothing to send. Visible in execution history for review."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Round-robin attorney assignment.\n// DUTY_ATTORNEYS variable format: Name|email|phone,Name2|email2|phone2\n// Each attorney entry uses pipe ( | ) as the field separator.\n// Multiple attorneys are separated by commas.\n//\n// staticData persists the rotation index across executions automatically.\n// It resets only if you re-save this workflow with a code change.\n\nconst raw = ($vars.DUTY_ATTORNEYS || '').trim();\nif (!raw) {\n  throw new Error('Speed-to-Lead Router: DUTY_ATTORNEYS variable is not set. Go to project → Variables tab and add at least one attorney in the format: Name|email|phone');\n}\n\nconst attorneys = raw.split(',').map(entry => {\n  const parts = entry.trim().split('|').map(p => p.trim());\n  return { name: parts[0] || '', email: parts[1] || '', phone: parts[2] || '' };\n}).filter(a => a.name || a.email);\n\nif (attorneys.length === 0) {\n  throw new Error('Speed-to-Lead Router: DUTY_ATTORNEYS is set but no valid entries were parsed. Expected format: Name|email|phone,Name2|email2|phone2');\n}\n\nconst data    = $getWorkflowStaticData('global');\nconst idx     = typeof data.round_robin_index === 'number' ? data.round_robin_index : 0;\nconst safeIdx = idx % attorneys.length;\nconst attorney = attorneys[safeIdx];\n\ndata.round_robin_index = (safeIdx + 1) % attorneys.length;\n\nconst item = $input.first().json;\nreturn [{ json: {\n  ...item,\n  attorney_name:  attorney.name,\n  attorney_email: attorney.email,\n  attorney_phone: attorney.phone,\n  attorney_index: safeIdx,\n} }];"
+      },
+      "id": "1900bb00-0004-4000-b000-00000000000a",
+      "name": "Pick Duty Attorney",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0],
+      "notes": "Picks the next attorney from your roster and advances the rotation counter so the next lead goes to the following attorney.\n\nSet DUTY_ATTORNEYS in project → Variables. Format each entry as Name|email|phone and separate multiple attorneys with commas. Example:\n  Jane Smith|jane@firmname.com|+13125550101,Tom Lee|tom@firmname.com|+13125550102\n\nThe rotation counter is stored in n8n workflow staticData — it persists across executions with no extra setup. If you add or remove attorneys, the counter resets on the next workflow save, which is fine.\n\nAll lead fields from the previous step are forwarded alongside: attorney_name, attorney_email, attorney_phone, attorney_index."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Composes the acknowledgment SMS to the new lead.\n// Personalises with first name when available.\n// The TCPA STOP instruction is included here; the Bar-Compliance Guardrail\n// detects it and will not append a duplicate.\n\nconst item        = $input.first().json;\nconst FIRM_NAME   = $vars.FIRM_NAME;\nconst BOOKING_URL = $vars.FIRM_BOOKING_URL;\n\nif (!item.lead_phone) {\n  // No phone number — SMS branch will skip gracefully at the compliance check.\n  // The email confirmation and attorney alert still fire on their parallel branches.\n  return [{ json: {\n    ...item,\n    channel:      'sms',\n    recipient:    '',\n    message:      '',\n    template_id:  'PAC-19',\n    matter_id:    '',\n    _skip_reason: 'no_phone',\n  } }];\n}\n\nconst rawFirst  = (item.lead_name || '').split(' ')[0];\nconst firstName = rawFirst && rawFirst !== 'Prospect' ? rawFirst : '';\nconst greeting  = firstName ? 'Hi ' + firstName : 'Hi';\n\nconst smsText = greeting + ', this is ' + FIRM_NAME + '. We received your inquiry and will be in touch shortly. Book a free consult: ' + BOOKING_URL + ' — Reply STOP to opt out.';\n\nreturn [{ json: {\n  ...item,\n  channel:     'sms',\n  recipient:   item.lead_phone,\n  message:     smsText,\n  template_id: 'PAC-19',\n  matter_id:   '',\n} }];"
+      },
+      "id": "1900bb00-0004-4000-b000-00000000000b",
+      "name": "Build Lead SMS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, -200],
+      "notes": "Writes the text message the lead will receive. Personalises with first name when available.\n\nIf the lead submitted the form without a phone number, this node sets recipient to empty and the compliance check below routes to Skip — the email confirmation and attorney alert still fire on their own parallel branches.\n\nEdit the message wording here to match your firm's tone. Keep the STOP instruction — it is required under TCPA for automated texts.\n\nReads FIRM_NAME and FIRM_BOOKING_URL from project → Variables."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "={{ $json.channel }}",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "={{ $json.template_id }}",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1900bb00-0004-4000-b000-00000000000c",
+      "name": "Compliance Check — Lead SMS",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [1200, -200],
+      "onError": "continueRegularOutput",
+      "notes": "Calls the Bar-Compliance Guardrail before sending the SMS.\n\nChecks whether the lead's phone number is on the opt-out list. If not, confirms the STOP instruction is present and logs the send attempt to your compliance audit sheet.\n\nIf the lead had no phone number (recipient is empty), the guardrail throws a validation error. With continueRegularOutput, the workflow continues — the If SMS Approved node below routes to Skip because approved is not set. The email confirmation and attorney alert are unaffected.\n\nSet GUARDRAIL_WORKFLOW_ID in project → Variables to the numeric ID from the guardrail workflow URL: .../workflow/WORKFLOW_ID.\n\nPrerequisite: Bar-Compliance Guardrail must be deployed and active."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_sms_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "1900bb00-0004-4000-b000-00000000000d",
+      "name": "If SMS Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1440, -200],
+      "notes": "Routes based on the compliance guardrail's decision.\n\nYes (approved: true) → sends the SMS to the lead.\nNo (approved: false or absent) → lead is on the opt-out list, had no phone number, or the guardrail errored. No SMS is sent. The suppression is logged by the guardrail when applicable."
+    },
+    {
+      "parameters": {},
+      "id": "1900bb00-0004-4000-b000-00000000000e",
+      "name": "Skip — Contact Opted Out",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1680, -40],
+      "notes": "SMS was not sent — either the lead's phone number is on the opt-out list, or no phone number was provided. The Bar-Compliance Guardrail has logged the suppression when applicable. The email confirmation and attorney alert still fire on their parallel branches."
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "from": "={{ $vars.FIRM_TWILIO_NUMBER }}",
+        "to": "={{ $json.recipient }}",
+        "message": "={{ $json.message_out }}"
+      },
+      "id": "1900bb00-0004-4000-b000-00000000000f",
+      "name": "Send Lead SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [1680, -200],
+      "credentials": {
+        "twilioApi": {
+          "id": "1",
+          "name": "Twilio account"
+        }
+      },
+      "notes": "Sends the compliance-approved acknowledgment SMS to the lead via Twilio.\n\nUses message_out from the Bar-Compliance Guardrail — this version carries the verified STOP disclaimer. Do not substitute the original smsText here.\n\nCredential: project → Credentials tab → New → search Twilio → enter your Account SID and Auth Token → save as 'Twilio account'.\n\nFIRM_TWILIO_NUMBER must be in E.164 format: +13125550100 for US numbers."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.lead_email }}",
+        "subject": "=We received your inquiry — {{ $vars.FIRM_NAME }}",
+        "emailType": "text",
+        "text": "=Hi {{ $json.lead_name }},\n\nThank you for reaching out to {{ $vars.FIRM_NAME }}. We've received your inquiry and a member of our team will be in touch shortly.\n\nReady to talk now? Book a free consultation here:\n{{ $vars.FIRM_BOOKING_URL }}\n\n{{ $vars.FIRM_NAME }}\n{{ $vars.FIRM_EMAIL }}",
+        "options": {}
+      },
+      "id": "1900bb00-0004-4000-b000-000000000010",
+      "name": "Send Confirmation Email to Lead",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [960, 0],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "notes": "Sends the lead a confirmation that their inquiry was received and includes your booking link.\n\nRuns in parallel with the SMS branch — the lead gets both the text and the email at the same time.\n\nIf the lead submitted without an email address, this node fails gracefully and the workflow continues. The SMS and attorney alert are unaffected.\n\nEdit the subject and body here to match your firm's tone. Keep the booking link — it is the fastest path to a scheduled consult.\n\nCredential: same SMTP account used throughout this workflow."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.attorney_email }}",
+        "subject": "=New lead assigned to you: {{ $json.lead_name }} ({{ $json.lead_phone || $json.lead_email }})",
+        "emailType": "text",
+        "text": "=A new lead has been routed to you.\n\nName:    {{ $json.lead_name }}\nPhone:   {{ $json.lead_phone || 'Not provided' }}\nEmail:   {{ $json.lead_email || 'Not provided' }}\nSource:  {{ $json.lead_source }}\nArrived: {{ $json.received_at }}\n\nMessage:\n{{ $json.lead_message || 'No message provided.' }}\n\nAn SMS acknowledgment has been sent to the lead (if they provided a phone number).\n\nBook their consult: {{ $vars.FIRM_BOOKING_URL }}\n\n— {{ $vars.FIRM_NAME }} lead routing",
+        "options": {}
+      },
+      "id": "1900bb00-0004-4000-b000-000000000011",
+      "name": "Alert Duty Attorney",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [960, 200],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "notes": "Emails the assigned duty attorney with the full lead details so they can follow up personally.\n\nThis is an internal firm communication — it does not go through the Bar-Compliance Guardrail.\n\nThe email includes the lead's name, phone, email, source, arrival time, and message. The attorney can use the booking link to send directly to the lead or call them.\n\nMake sure every entry in DUTY_ATTORNEYS includes a valid email address — if attorney_email is empty, this node will fail."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_slack_set",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ $vars.FIRM_SLACK_WEBHOOK_URL }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "1900bb00-0004-4000-b000-000000000012",
+      "name": "If Slack Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1200, 200],
+      "notes": "Checks whether the optional Slack alert is configured.\n\nYes (FIRM_SLACK_WEBHOOK_URL is set) → post the lead summary to Slack.\nNo (variable is blank) → skip silently. The attorney alert email still fires regardless.\n\nTo enable Slack alerts: Slack → your workspace → Apps → Incoming Webhooks → Add New Webhook → choose a channel → copy the URL → paste into FIRM_SLACK_WEBHOOK_URL in project → Variables."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.FIRM_SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({ text: 'New lead assigned to you: ' + $json.lead_name + ' (' + ($json.lead_phone || $json.lead_email || 'no contact info') + ')', blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '*New Lead Assigned to You*\\n*Name:* ' + $json.lead_name + '\\n*Phone:* ' + ($json.lead_phone || '_not provided_') + '\\n*Email:* ' + ($json.lead_email || '_not provided_') + '\\n*Source:* ' + $json.lead_source + '\\n*Message:* ' + ($json.lead_message || '_no message provided_') } }, { type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'Book Consult' }, url: $vars.FIRM_BOOKING_URL }] }] }) }}",
+        "options": {}
+      },
+      "id": "1900bb00-0004-4000-b000-000000000013",
+      "name": "Ping Attorney on Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1440, 200],
+      "onError": "continueRegularOutput",
+      "notes": "Posts a Slack alert to the channel connected to your Incoming Webhook URL.\n\nThe message includes the lead's name, phone, email, source, and message, plus a button that opens your booking link.\n\nSetup: Slack → your workspace → Apps → Incoming Webhooks → Add New Webhook → choose a channel → copy the webhook URL → paste into FIRM_SLACK_WEBHOOK_URL in project → Variables.\n\nIf Slack returns an error (e.g. the webhook URL was revoked), the workflow continues gracefully — the attorney email alert is unaffected."
+    },
+    {
+      "parameters": {},
+      "id": "1900bb00-0004-4000-b000-000000000014",
+      "name": "Skip — No Slack Configured",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1440, 360],
+      "notes": "FIRM_SLACK_WEBHOOK_URL is not set — Slack alert skipped. The attorney email alert has already been sent. Add FIRM_SLACK_WEBHOOK_URL to project → Variables to enable Slack pings."
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When Lead Form Submitted": [
+      {
+        "json": {
+          "headers": {
+            "content-type": "application/json",
+            "user-agent": "FluentForms/5.0"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "form_id": 12,
+            "form_title": "Free Consultation Request",
+            "source_url": "https://smithlawfirm.com/contact",
+            "data": {
+              "names": {
+                "first_name": "Maria",
+                "last_name": "Torres"
+              },
+              "email": "m.torres@example.com",
+              "phone": "+13125550178",
+              "message": "I was in a car accident last Friday and need to understand my options. The other driver was at fault.",
+              "how_did_you_find_us": "Google Search"
+            },
+            "entry_id": 2847,
+            "created_at": "2026-07-22 09:14:33"
+          },
+          "webhookUrl": "https://your-n8n.example.com/webhook/new-lead",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "settings": {
+    "availableInMCP": false,
+    "executionOrder": "v1",
+    "executionTimeout": 60,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When Lead Form Submitted": {
+      "main": [
+        [{ "node": "Normalize Lead Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Normalize Lead Data": {
+      "main": [
+        [{ "node": "If Valid Lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "If Valid Lead": {
+      "main": [
+        [{ "node": "Pick Duty Attorney", "type": "main", "index": 0 }],
+        [{ "node": "Skip — No Contact Info", "type": "main", "index": 0 }]
+      ]
+    },
+    "Pick Duty Attorney": {
+      "main": [
+        [
+          { "node": "Build Lead SMS", "type": "main", "index": 0 },
+          { "node": "Send Confirmation Email to Lead", "type": "main", "index": 0 },
+          { "node": "Alert Duty Attorney", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build Lead SMS": {
+      "main": [
+        [{ "node": "Compliance Check — Lead SMS", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compliance Check — Lead SMS": {
+      "main": [
+        [{ "node": "If SMS Approved", "type": "main", "index": 0 }]
+      ]
+    },
+    "If SMS Approved": {
+      "main": [
+        [{ "node": "Send Lead SMS", "type": "main", "index": 0 }],
+        [{ "node": "Skip — Contact Opted Out", "type": "main", "index": 0 }]
+      ]
+    },
+    "Alert Duty Attorney": {
+      "main": [
+        [{ "node": "If Slack Configured", "type": "main", "index": 0 }]
+      ]
+    },
+    "If Slack Configured": {
+      "main": [
+        [{ "node": "Ping Attorney on Slack", "type": "main", "index": 0 }],
+        [{ "node": "Skip — No Slack Configured", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "description": "Fires the moment a contact form is submitted and routes the new lead to the duty attorney in under 60 seconds: instant SMS to the lead via Twilio (through Bar-Compliance Guardrail), a confirmation email, and an internal attorney alert with round-robin assignment. Replaces Lawmatics and Lead Docket ($149–399/mo)."
+}
