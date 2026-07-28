@@ -6,7 +6,7 @@
       "parameters": {
         "content": "## Content Repurposer\n\n### How it works\n\nThis workflow receives a field note or anonymized case win via webhook, validates that the content does not contain privileged language, sends it to Claude (Anthropic) to generate four marketing assets (LinkedIn post, newsletter blurb, Google Business Profile post, FAQ entry), runs a post-hoc keyword safety scan on all outputs, logs the delivery event to the compliance audit sheet via the Bar-Compliance Guardrail, and emails the formatted content package to your marketing inbox.\n\n### Setup steps\n\n- Get an Anthropic API key from console.anthropic.com and create a Header Auth credential (Header Name: x-api-key, Header Value: your key) saved as 'Anthropic API key'.\n- Set FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, and GUARDRAIL_WORKFLOW_ID in n8n project Variables.\n- Wire an SMTP email credential in project → Credentials tab.\n- Deploy the Bar-Compliance Guardrail workflow first and set its ID in GUARDRAIL_WORKFLOW_ID.\n\n### Customization\n\nChange the Claude model in Build Content Prompt from claude-sonnet-4-6 to claude-haiku-4-5-20251001 to reduce cost. Add practice-area-specific prompt instructions to tailor copy style. Extend the output format by adding new asset types to the Claude prompt and parsing them in Extract & Safety-Check Content.",
         "width": 480,
-        "height": 560
+        "height": 800
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -368,9 +368,7 @@
       ]
     },
     "Normalize and Validate Input": {
-      "main": [
-        [{ "node": "If Valid Input", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "If Valid Input", "type": "main", "index": 0 }]]
     },
     "If Valid Input": {
       "main": [
@@ -385,18 +383,30 @@
     },
     "Generate Marketing Content": {
       "main": [
-        [{ "node": "Extract & Safety-Check Content", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Extract & Safety-Check Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Extract & Safety-Check Content": {
-      "main": [
-        [{ "node": "If Marketing Safe", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "If Marketing Safe", "type": "main", "index": 0 }]]
     },
     "If Marketing Safe": {
       "main": [
-        [{ "node": "Compliance Check — Audit Log", "type": "main", "index": 0 }],
-        [{ "node": "Skip — flagged for human review", "type": "main", "index": 0 }]
+        [
+          { "node": "Compliance Check — Audit Log", "type": "main", "index": 0 }
+        ],
+        [
+          {
+            "node": "Skip — flagged for human review",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Compliance Check — Audit Log": {
@@ -406,7 +416,13 @@
     },
     "If Approved to Deliver": {
       "main": [
-        [{ "node": "Email Content Package to Firm", "type": "main", "index": 0 }],
+        [
+          {
+            "node": "Email Content Package to Firm",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [{ "node": "Skip — delivery suppressed", "type": "main", "index": 0 }]
       ]
     }
