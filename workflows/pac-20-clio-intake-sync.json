@@ -1,0 +1,960 @@
+{
+  "name": "Clio Intake Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Clio Intake Sync\n\n### How it works\n\n1. Listens for a Fluent Forms intake submission via webhook.\n2. Validates and normalizes the payload (fails loudly on a missing required field).\n3. Searches Clio for an existing contact by email so the same client is never duplicated.\n4. Reuses the existing contact, or creates a new one, then creates the Matter linked to it.\n5. Notifies the PM/staff by email (and optionally Slack) with a plain routing summary — never a legal opinion.\n6. Optionally sends the client a plain confirmation message, gated through the Bar-Compliance Guardrail (OPS1) sub-workflow so opt-outs/disclaimers are respected.\n7. Responds to the form with a success or graceful error message.\n8. An Error Trigger catches any unhandled failure as a safety net on top of the explicit error branch.\n\n### Setup steps\n\n- [ ] Add a Clio credential: project → Credentials → New → Header Auth, named 'Clio API (Bearer token)'.\n- [ ] Set project Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, GUARDRAIL_WORKFLOW_ID (shared with other templates if already deployed).\n- [ ] Deploy and activate the Bar-Compliance Guardrail workflow first — this template calls it via Execute Workflow using GUARDRAIL_WORKFLOW_ID.\n- [ ] Point your Fluent Forms webhook (Form Settings → Webhooks) at this workflow's Production URL.\n- [ ] Confirm the practice-area mapping in 'Validate And Normalize Intake Data' matches your Clio practice area names exactly (case-sensitive on some Clio instances).\n- [ ] Optional: set FIRM_SLACK_WEBHOOK_URL to also alert a Slack channel.\n\n### Customization\n\nEdit the MATTER_TYPE_MAP inside 'Validate And Normalize Intake Data' if your form uses different labels than your Clio practice areas. Add channels for the client confirmation (SMS instead of email) by changing the 'channel' and 'recipient' fields in 'Build Client Confirmation Message'.",
+        "height": 1000,
+        "width": 560
+      },
+      "id": "c0d2a5b2-ea20-43cd-8c8d-7ea01c8584df",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        -608
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Receive & validate intake\n\nReceives the Fluent Forms submission and checks the required fields (name, email, matter type) before anything touches Clio. A missing field throws immediately instead of creating a half-built record.",
+        "height": 400,
+        "width": 640,
+        "color": 7
+      },
+      "id": "c4a1group0-0001-4000-a000-000000000101",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -432
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Dedupe & write to Clio\n\nSearches Clio for an existing contact by email so the same client never gets duplicated. Reuses the contact if found, otherwise creates one — then creates the Matter linked to it, tagged with the practice area from the form.",
+        "height": 760,
+        "width": 1860,
+        "color": 7
+      },
+      "id": "c4a1group0-0001-4000-a000-000000000102",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        360,
+        -608
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Notify staff & respond to form\n\nOnce the Matter exists, emails staff (and optionally posts to Slack) with a plain routing summary — no legal opinion, just who, what, and a link to the record — then returns a success response to the form.",
+        "height": 600,
+        "width": 900,
+        "color": 7
+      },
+      "id": "c4a1group0-0001-4000-a000-000000000103",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2270,
+        -608
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Send compliance-gated confirmation (optional)\n\nBuilds a short client acknowledgement, then routes it through the Bar-Compliance Guardrail (OPS1) before anything is sent. Opted-out recipients are silently skipped — approved messages go out with the required disclaimer attached.",
+        "height": 500,
+        "width": 1300,
+        "color": 7
+      },
+      "id": "c4a1group0-0001-4000-a000-000000000104",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2790,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Handle Clio write failures\n\nIf Clio rejects the Matter creation (bad practice area, expired token, etc.), alerts staff by email and returns a graceful error to the form instead of pretending the intake succeeded.",
+        "height": 420,
+        "width": 820,
+        "color": 7
+      },
+      "id": "c4a1group0-0001-4000-a000-000000000105",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1480,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Unhandled-error safety net\n\nCatches anything not already handled above — e.g. a thrown validation error — and emails staff so a failed intake always gets a human follow-up.",
+        "height": 420,
+        "width": 640,
+        "color": 7
+      },
+      "id": "c4a1group0-0001-4000-a000-000000000106",
+      "name": "Sticky Note6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "client-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7eb7d22a-9f1e-43cf-9d6c-f1db6c0e2415",
+      "name": "New Intake Form Submitted",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -160,
+        -192
+      ],
+      "webhookId": "c4-intake-webhook",
+      "notes": "Entry point — point your Fluent Forms webhook feed at this URL. Expected form fields (adjust names in the next node if your form labels differ):\n  full_name, email, phone, matter_type, case_details, referral_source (optional)\n\nActivate the workflow, then open this node and copy the Production URL from the panel on the right."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validates and normalizes the intake payload from Fluent Forms.\n// Fails loudly with a descriptive error if a required field is missing —\n// a silent failure here would create a broken Clio contact with blank data.\nconst raw = $input.first().json.body || $input.first().json;\n\nconst required = ['full_name', 'email', 'matter_type'];\nfor (const field of required) {\n  if (!raw[field] || String(raw[field]).trim() === '') {\n    throw new Error(`Intake sync: missing required field '${field}'. Check the Fluent Forms field mapping.`);\n  }\n}\n\n// Practice-area label mapping — edit to match your Clio instance's exact practice area names.\nconst MATTER_TYPE_MAP = {\n  'family law': 'Family Law',\n  'estate planning': 'Estate Planning',\n  'personal injury': 'Personal Injury',\n  'business law': 'Business Law',\n  'criminal defense': 'Criminal Defense',\n};\nconst rawType = String(raw.matter_type).trim().toLowerCase();\nconst practice_area = MATTER_TYPE_MAP[rawType] || String(raw.matter_type).trim();\n\n// Normalize phone to E.164 (US default) if provided.\nlet phone = String(raw.phone || '').replace(/[^0-9+]/g, '');\nif (phone && !phone.startsWith('+')) {\n  phone = phone.length === 10 ? `+1${phone}` : `+${phone}`;\n}\n\nreturn [{ json: {\n  full_name: String(raw.full_name).trim(),\n  email: String(raw.email).trim().toLowerCase(),\n  phone,\n  practice_area,\n  case_details: String(raw.case_details || '').trim(),\n  referral_source: String(raw.referral_source || '').trim(),\n  submitted_at: new Date().toISOString(),\n} }];"
+      },
+      "id": "7bdfd315-3894-41dd-a416-123cd6e03e13",
+      "name": "Validate And Normalize Intake Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        -192
+      ],
+      "notes": "Required fields: full_name, email, matter_type. Phone and case_details are optional but recommended.\nThrows a descriptive error (caught downstream by the Error Trigger) if a required field is missing, so a bad form submission never silently creates a broken Clio record."
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/contacts.json?query={{ $json.email }}&fields=id,name,primary_email_address",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "8281007f-e37c-46f0-a096-fe1e5c219bec",
+      "name": "Search Clio For Existing Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        400,
+        -192
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Clio API (Bearer token)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Dedupe check — searches Clio contacts by email before creating a new one.\nSet CLIO_BASE_URL in project → Variables (https://app.clio.com, or https://eu.app.clio.com for EU firms).\nCredential: Header Auth named 'Clio API (Bearer token)' — in Clio go to Settings → API Keys → New API key, then in n8n set the header Name to 'Authorization' and Value to 'Bearer YOUR_TOKEN'.\nIf this call errors (e.g. Clio rate limit), the workflow continues and treats it as 'not found' rather than blocking the whole intake — a duplicate contact is a smaller problem than a lost lead."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determines whether a matching contact already exists in Clio.\nconst response = $input.first().json;\nconst contacts = response.data || [];\nconst intake = $('Validate And Normalize Intake Data').first().json;\n\nconst match = contacts.find(c => (c.primary_email_address || '').toLowerCase() === intake.email);\n\nreturn [{ json: {\n  ...intake,\n  contact_exists: !!match,\n  existing_contact_id: match ? match.id : null,\n} }];"
+      },
+      "id": "93796726-55dd-4ac0-88e8-630220858478",
+      "name": "Check If Contact Exists",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -192
+      ],
+      "notes": "Runs safely even if the Clio search above errored or returned zero rows — 'no data' is treated as 'contact does not exist'."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_exists",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.contact_exists }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9c4d5182-1565-4fcd-ac3e-8f67745a68fb",
+      "name": "If Contact Already Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        -208
+      ],
+      "onError": "continueErrorOutput",
+      "notes": "Yes → reuse existing_contact_id, skip creation.\nNo → create a new Clio contact from the intake fields."
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nreturn [{ json: { ...input, contact_id: input.existing_contact_id } }];"
+      },
+      "id": "afe668a7-acd5-4429-bdc0-ade1f26d7f43",
+      "name": "Use Existing Contact Id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -368
+      ],
+      "notes": "Contact already exists in Clio — no duplicate is created. Forwards existing_contact_id as contact_id for the Matter step."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/contacts.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { type: 'Person', name: $json.full_name, email_addresses: [{ address: $json.email, name: 'Work' }], phone_numbers: $json.phone ? [{ number: $json.phone, name: 'Mobile' }] : [] } }) }}",
+        "options": {}
+      },
+      "id": "020a7145-7d0c-40aa-9d37-436e362995be",
+      "name": "Create Contact In Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        -48
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Clio API (Bearer token)"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Creates a new Person contact in Clio. If this call fails, execution routes to the error-notification branch below rather than silently dropping the lead."
+    },
+    {
+      "parameters": {
+        "jsCode": "const created = $input.first().json;\nconst intake = $('Check If Contact Exists').first().json;\nif (!created.data || !created.data.id) {\n  throw new Error('Intake sync: Clio contact creation returned no id — check the Clio API response and credential scope.');\n}\nreturn [{ json: { ...intake, contact_id: created.data.id } }];"
+      },
+      "id": "75e54639-b092-45b1-9d59-33d053e9622e",
+      "name": "Extract New Contact Id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -48
+      ],
+      "notes": "Throws loudly if Clio didn't return a usable contact id — this stops the run and surfaces in the Error Trigger rather than creating a Matter with no linked contact."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { client: { id: $json.contact_id }, practice_area: { name: $json.practice_area }, description: $json.case_details || ($json.full_name + ' — ' + $json.practice_area), status: 'Open' } }) }}",
+        "options": {}
+      },
+      "id": "6193e88b-aa21-4ff2-915d-fd69b3d4ba73",
+      "name": "Create Matter In Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1600,
+        -192
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Clio API (Bearer token)"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Both the 'existing contact' and 'new contact' branches above feed into this node — only one branch fires per run, so no Merge node is needed. Creates the Matter linked to contact_id, with practice_area mapped from the form's matter_type."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_matter_ok",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.data }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bde6b396-b045-4f6d-bfea-6c0c22ffba95",
+      "name": "If Matter Created Successfully",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        -208
+      ],
+      "onError": "continueErrorOutput",
+      "notes": "Yes → matter has a real Clio object, proceed to staff notification.\nNo → Clio rejected the request (e.g. unknown practice area name) — route to error notification instead of pretending success."
+    },
+    {
+      "parameters": {
+        "jsCode": "const matter = $input.first().json.data;\nconst intake = $('Check If Contact Exists').first().json;\n\nlet contact_id = null;\ntry { contact_id = $('Extract New Contact Id').first().json.contact_id; } catch (e) {}\nif (!contact_id) {\n  try { contact_id = $('Use Existing Contact Id').first().json.contact_id; } catch (e) {}\n}\n\nreturn [{ json: {\n  matter_id: matter.id,\n  contact_id,\n  full_name: intake.full_name,\n  email: intake.email,\n  phone: intake.phone,\n  practice_area: intake.practice_area,\n  case_details: intake.case_details,\n  referral_source: intake.referral_source,\n} }];"
+      },
+      "id": "8e3a1f63-fe0a-43dd-a8b3-567ea149071a",
+      "name": "Build PM Notification Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2310,
+        -368
+      ],
+      "notes": "Builds a plain routing summary for staff — name, contact info, practice area, matter link. Deliberately contains no legal assessment or screening language (ABA Op. 512 — operational only)."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $vars.FIRM_EMAIL }}",
+        "subject": "=New intake routed to Clio: {{ $json.full_name }}",
+        "emailType": "text",
+        "text": "=New intake routed to Clio\n\nName: {{ $json.full_name }}\nEmail: {{ $json.email }}\nPhone: {{ $json.phone }}\nPractice area: {{ $json.practice_area }}\nMatter: {{ $vars.CLIO_BASE_URL }}/nc/#/matters/{{ $json.matter_id }}\nReferral source: {{ $json.referral_source }}\n\nRouting only — no screening performed."
+      },
+      "id": "8eebde41-5422-4010-943e-25e6e31a4a29",
+      "name": "Notify Staff Of New Intake",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2550,
+        -368
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Emails the PM/staff a plain routing summary the moment a Matter is created — no legal opinion, just who, what, and a link to the record.\n\nCredential: project → Credentials → New → SMTP, saved as 'Email account (SMTP)'. Works with Gmail app passwords, Outlook 365, Zoho, or any SMTP provider.\n\nSet FIRM_FROM_EMAIL and FIRM_EMAIL in project → Variables (can be the same address)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_slack_set",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ $vars.FIRM_SLACK_WEBHOOK_URL }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9e734862-09ff-4352-a676-e18b5616834a",
+      "name": "If Slack Is Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2790,
+        -368
+      ],
+      "notes": "Checks whether the optional Slack alert is configured.\n\nYes (FIRM_SLACK_WEBHOOK_URL is set) → also post the intake summary to Slack.\nNo (variable is blank) → skip silently. The staff email alert has already been sent regardless.\n\nTo enable: Slack → your workspace → Apps → Incoming Webhooks → Add New Webhook → choose a channel → copy the URL → paste into FIRM_SLACK_WEBHOOK_URL in project → Variables."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.FIRM_SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({ text: 'New intake routed to Clio: ' + $json.full_name, blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '*New Intake Routed to Clio*\\n*Name:* ' + $json.full_name + '\\n*Email:* ' + $json.email + '\\n*Phone:* ' + ($json.phone || '_not provided_') + '\\n*Practice area:* ' + $json.practice_area + '\\n*Matter:* ' + $vars.CLIO_BASE_URL + '/nc/#/matters/' + $json.matter_id } }] }) }}",
+        "options": {}
+      },
+      "id": "0e95fa0f-5b7a-47dd-828b-3da8785a3709",
+      "name": "Post Slack Alert To Staff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3030,
+        -448
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Posts the same routing summary to Slack via your Incoming Webhook URL.\n\nSetup: Slack → your workspace → Apps → Incoming Webhooks → Add New Webhook → choose a channel → copy the URL → paste into FIRM_SLACK_WEBHOOK_URL in project → Variables.\n\nIf Slack returns an error (e.g. the webhook was revoked), the workflow continues — the staff already received the email alert."
+    },
+    {
+      "parameters": {},
+      "id": "051b3249-7d79-451e-9096-bed607736c51",
+      "name": "Skip Missing Slack Config",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3030,
+        -288
+      ],
+      "notes": "FIRM_SLACK_WEBHOOK_URL is not set — Slack alert skipped. The staff email alert has already been sent. Add FIRM_SLACK_WEBHOOK_URL to project → Variables to enable Slack pings."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the optional client confirmation message.\n// This node only prepares text — actual sending is gated behind the OPS1 compliance guardrail.\nconst d = $('Build PM Notification Message').first().json;\nconst message = `Hi ${d.full_name.split(' ')[0]}, thanks for reaching out about your ${d.practice_area} matter. Our team has received your information and will follow up shortly.`;\nreturn [{ json: {\n  ...d,\n  channel: 'email',\n  recipient: d.email,\n  message,\n  template_id: 'PAC-20',\n} }];"
+      },
+      "id": "8293819b-eecc-4b9a-871c-5772986767a7",
+      "name": "Build Client Confirmation Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2550,
+        352
+      ],
+      "notes": "Purely operational acknowledgement — no legal advice, no case assessment. To send by SMS instead, set channel: 'sms' and recipient: d.phone here."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "={{ $json.channel }}",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "={{ $json.template_id }}",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "3ed911ad-775d-4682-83b8-0108f1532f1e",
+      "name": "Call Bar-Compliance Guardrail (OPS1)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2790,
+        352
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Calls the shared Bar-Compliance Guardrail workflow (OPS1) — checks opt-out status and appends the required disclaimer before any client-facing message goes out.\n\nSet GUARDRAIL_WORKFLOW_ID in project → Variables to the numeric ID from the guardrail workflow's URL: .../workflow/WORKFLOW_ID.\n\nPasses: channel, recipient, message, template_id ('PAC-20'), matter_id.\nReturns: approved (bool), message_out (disclaimer-appended text), suppression_reason.\n\nPrerequisite: Bar-Compliance Guardrail must be deployed and active."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "edbd6edb-5a25-4973-a22e-111b39d61f83",
+      "name": "If Compliance Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3030,
+        352
+      ],
+      "notes": "Yes → send the confirmation using message_out (carries the required disclaimer).\nNo → recipient is opted out or compliance check failed — do not send, no error raised."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "We received your information",
+        "emailType": "text",
+        "text": "={{ $json.message_out }}"
+      },
+      "id": "0776b7d7-5bf4-4a31-84e1-3666b267170c",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        3270,
+        272
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Credential: 'Email account (SMTP)' — same credential used for the staff alert above. Sends message_out, never the raw draft — that's the version with the opt-out disclaimer attached."
+    },
+    {
+      "parameters": {},
+      "id": "06b852e4-73f8-46a6-90a9-8e1b605b57e7",
+      "name": "Skip Suppressed Confirmation",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3270,
+        512
+      ],
+      "notes": "Recipient is opted out (or the compliance check errored) — no confirmation sent. Visible in execution history for audit."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'success', contact_id: $('If Matter Created Successfully').first().json.data.client.id, matter_id: $('If Matter Created Successfully').first().json.data.id } }}",
+        "options": {}
+      },
+      "id": "8235b530-c3ea-4167-9263-876b4231032d",
+      "name": "Respond Success To Form",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2310,
+        -192
+      ],
+      "notes": "Returns a small JSON success payload to Fluent Forms' webhook feed — useful if you show a custom confirmation state on the form."
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.first().json;\nreturn [{ json: { error_summary: 'Intake sync: Clio matter creation failed. Check the Clio API response for details.', raw: err } }];"
+      },
+      "id": "14512a60-2069-4d16-92c3-b4e95ffa6a92",
+      "name": "Build Error Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        480
+      ],
+      "notes": "Only reached when Clio rejects the Matter creation request (e.g. bad practice_area name, expired token)."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $vars.FIRM_EMAIL }}",
+        "subject": "Intake sync failed — action needed",
+        "emailType": "text",
+        "text": "={{ $json.error_summary }}"
+      },
+      "id": "e7481de9-fd98-43a0-8bfb-b49a78b40553",
+      "name": "Notify Staff Of Clio Failure",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        480
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Alerts staff by email when Clio rejects the Matter creation request, so the lead still gets a human follow-up."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'error', message: 'We could not process your submission automatically — our team has been notified and will follow up directly.' } }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "c659d4cc-4e74-48e5-a2e3-15a0c0299aa4",
+      "name": "Respond Error To Form",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        480
+      ],
+      "notes": "Returned to Fluent Forms if Clio matter creation failed — still a graceful message to the client, not a raw error."
+    },
+    {
+      "parameters": {},
+      "id": "22e51173-c893-4e5d-9b44-e3b7124e754a",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        700
+      ],
+      "notes": "Catches any unhandled exception anywhere in this workflow (e.g. the validation node's thrown errors) and emails staff — a safety net on top of the explicit error branch."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $vars.FIRM_EMAIL }}",
+        "subject": "Intake sync workflow error",
+        "emailType": "text",
+        "text": "={{ 'Unhandled error in the Clio Intake Sync workflow: ' + $json.execution.error.message }}"
+      },
+      "id": "0e8d085f-583a-439a-8150-e1f3fdca520d",
+      "name": "Notify Staff Of Unhandled Error",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        80,
+        700
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Safety-net alert — fires for any error not already caught by the explicit Clio-failure branch."
+    }
+  ],
+  "pinData": {
+    "New Intake Form Submitted": [
+      {
+        "json": {
+          "headers": {
+            "content-type": "application/json",
+            "user-agent": "FluentForms/5.0"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "full_name": "Maria Torres",
+            "email": "m.torres@example.com",
+            "phone": "5551234567",
+            "matter_type": "family law",
+            "case_details": "Filing for an uncontested divorce, need help getting started.",
+            "referral_source": "Google Search"
+          },
+          "webhookUrl": "https://your-n8n.example.com/webhook/client-intake",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "New Intake Form Submitted": {
+      "main": [
+        [
+          {
+            "node": "Validate And Normalize Intake Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate And Normalize Intake Data": {
+      "main": [
+        [
+          {
+            "node": "Search Clio For Existing Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Clio For Existing Contact": {
+      "main": [
+        [
+          {
+            "node": "Check If Contact Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Contact Exists": {
+      "main": [
+        [
+          {
+            "node": "If Contact Already Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Contact Already Exists": {
+      "main": [
+        [
+          {
+            "node": "Use Existing Contact Id",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Contact In Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Existing Contact Id": {
+      "main": [
+        [
+          {
+            "node": "Create Matter In Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Contact In Clio": {
+      "main": [
+        [
+          {
+            "node": "Extract New Contact Id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract New Contact Id": {
+      "main": [
+        [
+          {
+            "node": "Create Matter In Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Matter In Clio": {
+      "main": [
+        [
+          {
+            "node": "If Matter Created Successfully",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Matter Created Successfully": {
+      "main": [
+        [
+          {
+            "node": "Build PM Notification Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond Success To Form",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build PM Notification Message": {
+      "main": [
+        [
+          {
+            "node": "Notify Staff Of New Intake",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Client Confirmation Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Staff Of New Intake": {
+      "main": [
+        [
+          {
+            "node": "If Slack Is Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Slack Is Configured": {
+      "main": [
+        [
+          {
+            "node": "Post Slack Alert To Staff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Missing Slack Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Client Confirmation Message": {
+      "main": [
+        [
+          {
+            "node": "Call Bar-Compliance Guardrail (OPS1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Bar-Compliance Guardrail (OPS1)": {
+      "main": [
+        [
+          {
+            "node": "If Compliance Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Compliance Approved": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Suppressed Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Payload": {
+      "main": [
+        [
+          {
+            "node": "Notify Staff Of Clio Failure",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond Error To Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Notify Staff Of Unhandled Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "executionTimeout": 60,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodeGroups": [],
+  "tags": [],
+  "description": "Writes a clean Clio Contact and Matter from a Fluent Forms intake submission — no retyping. Dedupes by email, notifies staff, and optionally sends a compliance-gated client confirmation. Replaces manual data entry from web forms into Clio."
+}
