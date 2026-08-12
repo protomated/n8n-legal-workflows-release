@@ -199,25 +199,27 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.template_doc_id }}/copy",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "googleOAuth2Api",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ name: $json.doc_label + ' — ' + $json.full_name }) }}",
-        "options": {}
+        "resource": "file",
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.template_doc_id }}"
+        },
+        "options": {
+          "name": "={{ $json.doc_label + ' — ' + $json.full_name }}"
+        }
       },
       "id": "5700ff00-0057-4000-a000-000000000009",
       "name": "Copy Template Document",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
       "position": [1552, 0],
-      "notes": "Duplicates the Google Doc template so the merge step below can safely replace text without ever touching your original template.\n\nCredential: project → Credentials tab → New → search 'Google OAuth2 API' → enter your Client ID/Secret from Google Cloud Console → Scopes: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents' → Connect my account.\n\nResponse: { id, name, mimeType } — id is the new copy's document ID, read explicitly by the next two steps (this node's own output replaces the intake data, so downstream steps reference the intake fields via 'Split Into One Item Per Document' by name, not $json).",
+      "notes": "Duplicates the Google Doc template so the merge step below can safely replace text without ever touching your original template.\n\nCredential: project → Credentials tab → New → search 'Google Drive' → select 'Google Drive OAuth2 API'. Same setup pattern as the Google Sheets credential used by the Bar-Compliance Guardrail (NTC-33) — create an OAuth client in Google Cloud Console, enable the Google Drive API AND the Google Docs API (both, since 'Merge Fields Into Copy' below needs Docs API access on this same credential), then connect. Save as 'Google Drive account'.\n\nResponse: { id, name, mimeType } — id is the new copy's document ID, read explicitly by the next two steps (this node's own output replaces the intake data, so downstream steps reference the intake fields via 'Split Into One Item Per Document' by name, not $json).",
       "credentials": {
-        "googleOAuth2Api": {
+        "googleDriveOAuth2Api": {
           "id": "1",
-          "name": "Google OAuth2 API"
+          "name": "Google Drive account"
         }
       }
     },
@@ -237,7 +239,7 @@
         "method": "POST",
         "url": "=https://docs.googleapis.com/v1/documents/{{ $json.new_doc_id }}:batchUpdate",
         "authentication": "genericCredentialType",
-        "genericAuthType": "googleOAuth2Api",
+        "genericAuthType": "googleDriveOAuth2Api",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ requests: $json.batch_requests }) }}",
@@ -248,48 +250,41 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [2000, 0],
-      "notes": "Replaces every merge tag in the copied document with the actual intake data.\n\nUses the same Google OAuth2 API credential as the copy step (Drive + Docs scopes cover both APIs).\n\nThis node's own response ({documentId, replies}) is a different shape than what the export step needs -- the export step reads new_doc_id explicitly from 'Build Merge Field Replacements', not from this node's output.",
+      "notes": "Replaces every merge tag in the copied document with the actual intake data.\n\nn8n's native Google Docs node doesn't expose a find-and-replace / merge-fields operation (confirmed against n8n's own community forum — this is a known gap, not something we missed), so this one step still needs a direct API call. It reuses the exact same 'Google Drive account' credential as the Copy and Export steps on either side of it — no separate credential to set up, as long as the Google Docs API is enabled alongside Drive API in your Cloud Console project (see the Copy Template Document node's notes).\n\nThis node's own response ({documentId, replies}) is a different shape than what the export step needs -- the export step reads new_doc_id explicitly from 'Build Merge Field Replacements', not from this node's output.",
       "credentials": {
-        "googleOAuth2Api": {
+        "googleDriveOAuth2Api": {
           "id": "1",
-          "name": "Google OAuth2 API"
+          "name": "Google Drive account"
         }
       }
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "=https://www.googleapis.com/drive/v3/files/{{ $('Build Merge Field Replacements').item.json.new_doc_id }}/export",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "googleOAuth2Api",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "mimeType",
-              "value": "application/pdf"
-            }
-          ]
+        "resource": "file",
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Build Merge Field Replacements').item.json.new_doc_id }}"
         },
         "options": {
-          "response": {
-            "response": {
-              "responseFormat": "file",
-              "outputPropertyName": "data"
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf"
             }
           }
         }
       },
       "id": "5700ff00-0057-4000-a000-00000000000c",
       "name": "Export Filled Document As PDF",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
       "position": [2224, 0],
-      "notes": "Exports the filled document as a PDF, using Drive's export endpoint (only works on native Google Docs/Sheets/Slides files, which the copy always is).\n\nIMPORTANT — verify this node's Options → Response → Response Format shows 'File' with Put Output in Field set to 'data' when you first open this in the n8n UI. This exact setting could not be confirmed against live n8n during template authoring; if the PDF comes through empty or as JSON instead of a file, open this node, re-select 'File' from the Response Format dropdown, and re-save.\n\nUses the same Google OAuth2 API credential as the previous two steps.",
+      "notes": "Exports the filled document as a PDF using Drive's native export-on-download conversion (only works on native Google Docs/Sheets/Slides files, which the copy always is).\n\nUses the same 'Google Drive account' credential as the Copy and Merge steps — one credential covers the whole workflow.\n\nVerify the 'Convert Google Docs to' option under this node's Options is set to PDF when you first open it in the n8n UI — the exact nested field layout for this option could not be confirmed against a live n8n instance during template authoring. Output lands in the binary property named 'data' by default, which is what Aggregate Filled Documents downstream expects; if you rename it here, update that node's code to match.",
       "credentials": {
-        "googleOAuth2Api": {
+        "googleDriveOAuth2Api": {
           "id": "1",
-          "name": "Google OAuth2 API"
+          "name": "Google Drive account"
         }
       }
     },

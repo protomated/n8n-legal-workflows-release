@@ -43,12 +43,13 @@ Want a different set of tags? Edit the `MERGE_FIELDS` object in the **Build Merg
 ## Step 2 — Import the workflow and add credentials (5 min)
 
 1. Open your n8n canvas, press `Ctrl+V` (or `Cmd+V`), and paste the contents of [`pac-57-form-fill-from-intake-data.json`](https://raw.githubusercontent.com/protomated/n8n-legal-workflows-release/main/workflows/pac-57-form-fill-from-intake-data.json). Do not activate it yet.
-2. Google credential:
-   - In [Google Cloud Console](https://console.cloud.google.com), create OAuth 2.0 credentials (or reuse an existing project) and enable the **Google Drive API** and **Google Docs API**.
-   - In n8n: **Credentials → New credential → Google OAuth2 API**.
-   - Client ID / Client Secret: from Google Cloud Console.
-   - Scopes: `https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents`
-   - Save as `Google OAuth2 API`, then **Connect my account** and approve access.
+2. Google credential — same pattern as the Google Sheets credential used by the Bar-Compliance Guardrail (NTC-33), just with two APIs enabled instead of one:
+   - In [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Library, enable both the **Google Drive API** and the **Google Docs API** on your project (create a project first if you don't have one).
+   - APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID. Copy the Client ID and Client Secret.
+   - In n8n: **Credentials → New credential** → search **Google Drive** → select **Google Drive OAuth2 API**.
+   - Paste in the Client ID / Client Secret, then **Connect my account** and approve access.
+   - Save as `Google Drive account`.
+   - This one credential covers all three Google steps in the workflow (copy, merge, export) — no separate credential needed even though one step calls the Docs API directly, since both APIs are enabled on the same OAuth client.
 3. Email credential: **Credentials → New credential → SMTP** → your provider's settings → save as `Email account (SMTP)`.
 
 ---
@@ -95,7 +96,7 @@ The workflow ships with a pinned test intake (Jane Doe, Personal Injury) on the 
 3. Confirm **Build Document Fill List** finds the documents you configured for "Personal Injury" in `TEMPLATE_MAP`.
 4. Run the rest of the chain and confirm the review email arrives at `FIRM_REVIEWER_EMAIL` with one PDF attachment per configured document, each one showing the pinned test data (Jane Doe, her email, phone, and case details) merged into your template text.
 
-**If the PDF comes through empty or as JSON instead of a proper file**: open **Export Filled Document As PDF** → Options → Response, and confirm Response Format shows "File" with "Put Output in Field" set to `data`. This one setting couldn't be verified against a live n8n instance while this template was built — if it's off, re-select File from the dropdown and re-save.
+**If the PDF comes through empty or in the wrong format**: open **Export Filled Document As PDF** → Options, and confirm the Google Docs conversion format is set to PDF. This exact option's layout couldn't be verified against a live n8n instance while this template was built — if it looks different from what you'd expect, re-select PDF from whatever conversion dropdown is shown and re-save.
 
 **Negative test:** send a POST with a matter_type not in your `TEMPLATE_MAP` (e.g. `"matter_type": "Immigration"`) and confirm it routes to **Skip — No Templates Configured** with no email sent.
 
