@@ -270,7 +270,7 @@
         "html": "={{ $('Build Duplicate Contact Alert Email').item.json.email_body_html }}",
         "subject": "={{ $('Build Duplicate Contact Alert Email').item.json.email_subject }}",
         "toEmail": "={{ $('Build Duplicate Contact Alert Email').item.json.paralegal_email }}",
-        "emailType": "html",
+        "emailFormat": "html",
         "fromEmail": "={{ $('Build Duplicate Contact Alert Email').item.json.from_email }}"
       },
       "id": "5500ee00-0055-4000-a000-00000000000b",
