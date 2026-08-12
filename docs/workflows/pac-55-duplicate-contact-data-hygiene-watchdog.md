@@ -33,10 +33,15 @@ Get value in under 15 minutes. On a schedule, this scans every contact in Clio, 
 ## Step 2 — Add credentials (5 min)
 
 ### Clio credential
-1. In Clio: **Settings → Developer Applications** → create an application (or reuse one you already have for another template in this catalog) → copy the Bearer token.
-2. In n8n: **Credentials → New credential → Header Auth**.
-3. Header Name: `Authorization`. Header Value: `Bearer YOUR_TOKEN`.
-4. Save it as `Clio API (Bearer token)` — reuse the same credential if you've already deployed PAC-18 or PAC-20.
+Clio's API uses OAuth 2.0, not a static API key — set this up as an OAuth2 credential so n8n refreshes the token automatically. A static Bearer token will expire (Clio access tokens last 30 days) and silently break this workflow until someone notices and replaces it by hand.
+
+1. In Clio: **Settings → Developer Applications → New App**. Redirect URI: `{your n8n URL}/rest/oauth2-credential/callback`. Note the **Client ID** and **Client Secret** once it's created.
+2. In n8n: **Credentials → New credential → OAuth2 API**.
+3. Grant Type: `Authorization Code`. Authorization URL: `{CLIO_BASE_URL}/oauth/authorize`. Access Token URL: `{CLIO_BASE_URL}/oauth/token` (use the same base URL as your `CLIO_BASE_URL` variable, e.g. `https://app.clio.com` or `https://eu.app.clio.com`).
+4. Client ID / Client Secret: from Step 1. Scope: leave blank — Clio doesn't use an OAuth scope parameter; permissions come from the checkboxes on the Clio app itself.
+5. Authentication: set to `Body` — Clio expects `client_id`/`client_secret` in the token-exchange request body, not a Basic Auth header.
+6. Save as `Clio API (OAuth2)`, then click **Connect my account** and approve access in Clio.
+7. Reuse the same credential if you've already deployed PAC-18 or PAC-20 — note those two currently document the older static Header Auth setup; update them the same way if you hit the same expiry issue there.
 
 ### Email credential
 1. **Credentials → New credential → SMTP**.

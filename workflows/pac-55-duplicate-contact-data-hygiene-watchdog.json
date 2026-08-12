@@ -89,7 +89,7 @@
         "method": "GET",
         "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/contacts.json",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericAuthType": "oAuth2Api",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -110,11 +110,11 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [224, 0],
-      "notes": "Pulls every contact from Clio for today's scan.\n\nCredential: project → Credentials tab → New → search 'Header Auth' → Name: 'Clio API (Bearer token)' → Header Name: 'Authorization' → Header Value: 'Bearer YOUR_TOKEN' from your Clio Developer Application.\n\nlimit=200 covers typical solo/small firm contact volumes in a single request — the same approach PAC-18 and PAC-20 use against Clio. If your firm has more than 200 contacts, raise this value; this node does not paginate beyond one request.\n\nCLIO_BASE_URL is shared with every other Clio-integrated template in this catalog (e.g. https://app.clio.com or https://eu.app.clio.com) — set once in Variables, reused everywhere.",
+      "notes": "Pulls every contact from Clio for today's scan.\n\nCredential: project → Credentials tab → New → search 'OAuth2 API' → Grant Type: Authorization Code → Authorization URL: '{CLIO_BASE_URL}/oauth/authorize' → Access Token URL: '{CLIO_BASE_URL}/oauth/token' → Client ID/Secret from your Clio Developer Application → Authentication: Body (Clio expects client_id/client_secret in the token-exchange body, not a Basic Auth header) → save as 'Clio API (OAuth2)', then click Connect my account.\n\nClio access tokens expire after 30 days — OAuth2 API handles refreshing automatically via the refresh token, unlike a static Header Auth Bearer token which silently goes stale and has to be replaced by hand.\n\nlimit=200 covers typical solo/small firm contact volumes in a single request. If your firm has more than 200 contacts, raise this value; this node does not paginate beyond one request.\n\nCLIO_BASE_URL is shared with every other Clio-integrated template in this catalog (e.g. https://app.clio.com or https://eu.app.clio.com) — set once in Variables, reused everywhere.",
       "credentials": {
-        "httpHeaderAuth": {
+        "oAuth2Api": {
           "id": "1",
-          "name": "Clio API (Bearer token)"
+          "name": "Clio API (OAuth2)"
         }
       }
     },
