@@ -1,0 +1,552 @@
+{
+  "name": "Form-Fill from Intake Data",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Form-Fill from Intake Data\n\n### How it works\n\n1. Receives intake form data via webhook (Fluent Forms or any generic JSON form provider).\n2. Looks up which of your firm's Google Doc templates apply to this practice area (retainer, intake form, court cover sheet — you configure the list).\n3. For each applicable template: copies it, replaces every {{merge_tag}} with the intake data, exports the filled copy as a PDF.\n4. Combines every generated PDF and emails them to the attorney for review — nothing is sent to the client automatically.\n5. Logs the run to the OPS1 compliance audit sheet.\n\nThis fills firm-provided fields only. It never drafts legal language and never sends anything without a human reviewing it first.\n\n### Setup steps\n\n- [ ] Create your document templates as Google Docs with {{merge_tag}} placeholders (see deploy guide for the exact tag list).\n- [ ] Set TEMPLATE_RETAINER_DOC_ID, TEMPLATE_INTAKE_DOC_ID, TEMPLATE_COVER_SHEET_DOC_ID (or however many templates you have) in n8n Variables.\n- [ ] Edit the TEMPLATE_MAP in 'Build Document Fill List' so each practice area lists the right documents.\n- [ ] Wire a Google OAuth2 credential with Drive + Docs scopes, and an SMTP credential.\n- [ ] Set FIRM_NAME, FIRM_REVIEWER_EMAIL (or reuse FIRM_EMAIL), FIRM_FROM_EMAIL, and GUARDRAIL_WORKFLOW_ID in n8n Variables.\n- [ ] Point your intake form's webhook at this workflow's Production URL.\n\n### Customization\n\nAdd or remove merge tags in 'Build Merge Field Replacements' to match the fields your templates actually use. Add more practice areas or documents to TEMPLATE_MAP as your template library grows.",
+        "width": 480,
+        "height": 980
+      },
+      "id": "f1a2b3c4-d5e6-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-700, -540]
+    },
+    {
+      "parameters": {
+        "content": "## Receive and validate intake\n\nReceives the intake submission and confirms it has the minimum fields needed before looking up templates.",
+        "width": 640,
+        "height": 300,
+        "color": 7
+      },
+      "id": "a2b3c4d5-e6f7-4b8c-9d0e-1f2a3b4c5d6e",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-48, -180]
+    },
+    {
+      "parameters": {
+        "content": "## Look up which templates apply\n\nMaps this intake's practice area to the firm's configured document templates. Fans out into one item per document to fill.",
+        "width": 640,
+        "height": 300,
+        "color": 7
+      },
+      "id": "b3c4d5e6-f7a8-4c9d-0e1f-2a3b4c5d6e7f",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [640, -180]
+    },
+    {
+      "parameters": {
+        "content": "## Copy, merge, and export each document\n\nFor every configured document: copy the template, replace merge tags with intake data, export the filled copy as a PDF.",
+        "width": 1088,
+        "height": 300,
+        "color": 7
+      },
+      "id": "c4d5e6f7-a8b9-4d0e-1f2a-3b4c5d6e7f80",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1328, -180]
+    },
+    {
+      "parameters": {
+        "content": "## Combine, log, and deliver\n\nCombines every generated PDF into one email, logs the run to the OPS1 audit sheet, then delivers to the attorney for review.",
+        "width": 864,
+        "height": 300,
+        "color": 7
+      },
+      "id": "d5e6f7a8-b9c0-4e1f-2a3b-4c5d6e7f8091",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2464, -180]
+    },
+    {
+      "parameters": {
+        "path": "form-fill-intake",
+        "options": {},
+        "httpMethod": "POST"
+      },
+      "id": "5700ff00-0057-4000-a000-000000000001",
+      "name": "When Intake Form Submitted",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "a1b2c3d4-e5f6-7890-abcd-ef1234567893",
+      "notes": "Receives the intake submission that triggers document form-filling.\n\nUses the same field names as the Clio Intake Sync template — if you've already deployed that one, point this webhook at the same Fluent Forms feed (or add a second webhook action for the same form) and both templates read identical data.\n\nFluent Forms setup: Settings → Integrations → Webhook → Add New → paste this node's Production URL → Method POST → Format JSON.\n\nExpected fields: full_name, email, matter_type (required); phone, case_details, referral_source (optional)."
+      },
+    {
+      "parameters": {
+        "jsCode": "// Validates and normalizes the intake payload from Fluent Forms (or any generic JSON\n// form provider). Fails loudly with a descriptive error if a required field is missing --\n// a silent failure here would generate documents with blank client-name fields.\nconst raw = $input.first().json.body || $input.first().json;\n\nconst required = ['full_name', 'email', 'matter_type'];\nconst missing = required.filter(f => !raw[f] || String(raw[f]).trim() === '');\n\nconst is_valid_intake = missing.length === 0;\n\nreturn [{ json: {\n  full_name:       String(raw.full_name || '').trim(),\n  email:           String(raw.email || '').trim().toLowerCase(),\n  phone:           String(raw.phone || '').trim(),\n  practice_area:   String(raw.matter_type || '').trim(),\n  case_details:    String(raw.case_details || '').trim(),\n  referral_source: String(raw.referral_source || '').trim(),\n  is_valid_intake,\n  missing_fields:  missing,\n  submitted_at:    new Date().toISOString(),\n} }];"
+      },
+      "id": "5700ff00-0057-4000-a000-000000000002",
+      "name": "Validate And Normalize Intake Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 0],
+      "notes": "Confirms the intake has the minimum fields needed to fill any document at all: full_name, email, matter_type.\n\npractice_area is read directly from matter_type — keep your form's matter-type field values matching the keys you use in TEMPLATE_MAP below (case-sensitive is not required, but exact spelling is).\n\nOutput: is_valid_intake is false (and the run is skipped) if any required field is missing."
+      },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_valid_intake",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_valid_intake }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5700ff00-0057-4000-a000-000000000003",
+      "name": "If Intake Data Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [448, 0],
+      "notes": "Yes (full_name, email, and matter_type all present) → look up which templates apply.\nNo (a required field is missing) → route to Skip. Better to skip than generate a document with a blank client name.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "5700ff00-0057-4000-a000-000000000004",
+      "name": "Skip — Invalid Intake Payload",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [672, 160],
+      "notes": "The intake submission was missing full_name, email, or matter_type — most likely a form field-mapping issue. No documents generated. Check the intake form's field names against the deploy guide if this keeps happening."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Which documents to auto-fill for each practice area -- edit this map to match your\n// firm's own template library. Each entry's templateVar names the n8n Variable holding\n// that Google Doc template's file ID (the long ID in the template's URL).\nconst TEMPLATE_MAP = {\n  'Family Law': [\n    { doc_label: 'Retainer Agreement', template_var: 'TEMPLATE_RETAINER_DOC_ID' },\n    { doc_label: 'Client Intake Form', template_var: 'TEMPLATE_INTAKE_DOC_ID' },\n  ],\n  'Personal Injury': [\n    { doc_label: 'Retainer Agreement', template_var: 'TEMPLATE_RETAINER_DOC_ID' },\n    { doc_label: 'Client Intake Form', template_var: 'TEMPLATE_INTAKE_DOC_ID' },\n    { doc_label: 'Court Cover Sheet', template_var: 'TEMPLATE_COVER_SHEET_DOC_ID' },\n  ],\n  'Estate Planning': [\n    { doc_label: 'Retainer Agreement', template_var: 'TEMPLATE_RETAINER_DOC_ID' },\n    { doc_label: 'Client Intake Form', template_var: 'TEMPLATE_INTAKE_DOC_ID' },\n  ],\n  // Add a row per practice area your firm handles. Omit any document type a practice\n  // area doesn't need -- e.g. most practice areas never need a court cover sheet.\n};\n\nconst item = $input.first().json;\nconst configured = TEMPLATE_MAP[item.practice_area] || [];\n\nconst docs = configured\n  .map(c => ({ doc_label: c.doc_label, template_doc_id: $vars[c.template_var] }))\n  .filter(d => !!d.template_doc_id); // skip any template the firm hasn't configured a Variable for yet\n\nreturn [{ json: {\n  ...item,\n  docs,\n  doc_count: docs.length,\n  has_docs: docs.length > 0,\n} }];"
+      },
+      "id": "5700ff00-0057-4000-a000-000000000005",
+      "name": "Build Document Fill List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [672, 0],
+      "notes": "Looks up TEMPLATE_MAP by this intake's practice_area to decide which documents to generate.\n\nIf a practice area isn't in the map at all, or its templates' n8n Variables aren't set yet, docs comes back empty and nothing is generated -- this is a safe default, not an error.\n\nEdit the TEMPLATE_MAP object directly in this node's code to add practice areas or documents as your firm's template library grows."
+      },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_docs",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.has_docs }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5700ff00-0057-4000-a000-000000000006",
+      "name": "If Any Templates Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [896, 0],
+      "notes": "Yes (at least one template is configured for this practice area) → generate the documents.\nNo (practice area not in TEMPLATE_MAP, or its template Variables aren't set) → route to Skip. Nothing to fill.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "5700ff00-0057-4000-a000-000000000007",
+      "name": "Skip — No Templates Configured",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1120, 160],
+      "notes": "This practice area has no documents configured in TEMPLATE_MAP, or the relevant TEMPLATE_*_DOC_ID Variables aren't set yet. No documents generated. Add a row to TEMPLATE_MAP (or set the missing Variable) if this practice area should have documents."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fans out into one item per document to generate -- everything downstream through the\n// export step processes one document at a time, then the Aggregate step recombines them.\nconst { docs, doc_count, has_docs, ...intake } = $input.first().json;\nreturn docs.map(d => ({ json: { ...intake, ...d } }));"
+      },
+      "id": "5700ff00-0057-4000-a000-000000000008",
+      "name": "Split Into One Item Per Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1328, 0],
+      "notes": "Turns the single 'docs' array into separate items -- one per document to fill -- so each one runs through the copy/merge/export chain independently. Every item still carries the full intake data (full_name, email, etc.) plus its own doc_label and template_doc_id."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.template_doc_id }}/copy",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.doc_label + ' — ' + $json.full_name }) }}",
+        "options": {}
+      },
+      "id": "5700ff00-0057-4000-a000-000000000009",
+      "name": "Copy Template Document",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1552, 0],
+      "notes": "Duplicates the Google Doc template so the merge step below can safely replace text without ever touching your original template.\n\nCredential: project → Credentials tab → New → search 'Google OAuth2 API' → enter your Client ID/Secret from Google Cloud Console → Scopes: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents' → Connect my account.\n\nResponse: { id, name, mimeType } — id is the new copy's document ID, read explicitly by the next two steps (this node's own output replaces the intake data, so downstream steps reference the intake fields via 'Split Into One Item Per Document' by name, not $json).",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "1",
+          "name": "Google OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the batchUpdate requests that replace every {{merge_tag}} in the copied\n// template with this intake's actual field values. Add a row here for every merge tag\n// your firm's templates use -- the tag text must match exactly (case-sensitive) what's\n// typed into the Google Doc.\nconst item = $('Split Into One Item Per Document').item.json; // intake fields + doc_label + template_doc_id\nconst newDocId = $input.first().json.id; // from Copy Template Document's response\n\nconst MERGE_FIELDS = {\n  '{{full_name}}':        item.full_name,\n  '{{email}}':             item.email,\n  '{{phone}}':             item.phone || 'Not provided',\n  '{{practice_area}}':     item.practice_area,\n  '{{case_details}}':      item.case_details || '',\n  '{{referral_source}}':   item.referral_source || 'Not provided',\n  '{{date}}':              new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),\n};\n\nconst requests = Object.entries(MERGE_FIELDS).map(([tag, value]) => ({\n  replaceAllText: {\n    containsText: { text: tag, matchCase: true },\n    replaceText: String(value),\n  },\n}));\n\nreturn [{ json: { ...item, new_doc_id: newDocId, batch_requests: requests } }];"
+      },
+      "id": "5700ff00-0057-4000-a000-00000000000a",
+      "name": "Build Merge Field Replacements",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1776, 0],
+      "notes": "Builds the list of find-and-replace operations sent to the Docs API in the next step.\n\nYour Google Doc templates must contain these exact tags, typed literally into the document text: {{full_name}}, {{email}}, {{phone}}, {{practice_area}}, {{case_details}}, {{referral_source}}, {{date}}.\n\nAdd or remove entries in MERGE_FIELDS to match what your templates actually use -- an unused tag in this list is harmless (nothing to replace), but a tag in your template that's missing from this list will be left as literal {{text}} in the filled document."
+      },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://docs.googleapis.com/v1/documents/{{ $json.new_doc_id }}:batchUpdate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $json.batch_requests }) }}",
+        "options": {}
+      },
+      "id": "5700ff00-0057-4000-a000-00000000000b",
+      "name": "Merge Fields Into Copy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [2000, 0],
+      "notes": "Replaces every merge tag in the copied document with the actual intake data.\n\nUses the same Google OAuth2 API credential as the copy step (Drive + Docs scopes cover both APIs).\n\nThis node's own response ({documentId, replies}) is a different shape than what the export step needs -- the export step reads new_doc_id explicitly from 'Build Merge Field Replacements', not from this node's output.",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "1",
+          "name": "Google OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $('Build Merge Field Replacements').item.json.new_doc_id }}/export",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "mimeType",
+              "value": "application/pdf"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "5700ff00-0057-4000-a000-00000000000c",
+      "name": "Export Filled Document As PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [2224, 0],
+      "notes": "Exports the filled document as a PDF, using Drive's export endpoint (only works on native Google Docs/Sheets/Slides files, which the copy always is).\n\nIMPORTANT — verify this node's Options → Response → Response Format shows 'File' with Put Output in Field set to 'data' when you first open this in the n8n UI. This exact setting could not be confirmed against live n8n during template authoring; if the PDF comes through empty or as JSON instead of a file, open this node, re-select 'File' from the Response Format dropdown, and re-save.\n\nUses the same Google OAuth2 API credential as the previous two steps.",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "1",
+          "name": "Google OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combines every generated PDF (one per configured document) into a single item with\n// one binary property per document, so the notification email can attach them all at\n// once instead of sending a separate email per document.\nconst items = $input.all();\n\nconst binary = {};\nconst labels = [];\nfor (let i = 0; i < items.length; i++) {\n  const label = items[i].json.doc_label || `Document ${i + 1}`;\n  const key = `file${i}`;\n  const fileData = items[i].binary && items[i].binary.data;\n  if (!fileData) continue; // this document's export failed upstream -- skip it, don't break the whole email\n  binary[key] = { ...fileData, fileName: `${label.replace(/[^a-zA-Z0-9 ._-]/g, '')}.pdf` };\n  labels.push(label);\n}\n\nconst first = items[0].json;\nreturn [{\n  json: {\n    full_name:     first.full_name,\n    email:         first.email,\n    practice_area: first.practice_area,\n    doc_labels:    labels,\n    doc_count:     labels.length,\n  },\n  binary,\n}];"
+      },
+      "id": "5700ff00-0057-4000-a000-00000000000d",
+      "name": "Aggregate Filled Documents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2464, 0],
+      "notes": "Runs once for all documents generated in this run (mode: Run Once for All Items), combining every PDF into one item so a single email can carry every attachment.\n\nAssumes each incoming item's binary property is named 'data', matching the 'Put Output in Field' setting on Export Filled Document As PDF. If you change that field name, update the 'data' reference here to match.\n\nIf any one document's export failed, it's silently excluded from the email rather than blocking the others — check execution history to see which one, if doc_count is lower than expected."
+      },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "message": "={{ $json.doc_count }} document(s) filled from intake and emailed to the attorney for review: {{ $json.doc_labels.join(', ') }}.",
+            "matter_id": "",
+            "recipient": "={{ $json.email }}",
+            "template_id": "PAC-57"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "5700ff00-0057-4000-a000-00000000000e",
+      "name": "Log Document Fill To Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [2688, 0],
+      "notes": "Calls the Bar-Compliance Guardrail to log this document-generation run to your compliance audit sheet.\n\nThis workflow delivers documents to your own attorney/reviewer, not a client -- so opt-out checking does not apply and approved will always be true here. The purpose of this call is the audit trail: which documents were generated, for whom, and when.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (Settings → Variables)."
+    },
+    {
+      "parameters": {
+        "text": "={{ 'New intake for ' + $('Aggregate Filled Documents').item.json.full_name + ' (' + $('Aggregate Filled Documents').item.json.practice_area + ').\\n\\n' + $('Aggregate Filled Documents').item.json.doc_count + ' document(s) attached for your review, filled directly from the intake data:\\n' + $('Aggregate Filled Documents').item.json.doc_labels.map(l => '  • ' + l).join('\\n') + '\\n\\nThese are field-fills only -- review every document before sending to the client or filing. Nothing has been sent or signed automatically.' }}",
+        "subject": "={{ $('Aggregate Filled Documents').item.json.doc_count + ' document(s) ready for review — ' + $('Aggregate Filled Documents').item.json.full_name }}",
+        "toEmail": "={{ $vars.FIRM_REVIEWER_EMAIL || $vars.FIRM_EMAIL }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        },
+        "emailType": "text",
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}"
+      },
+      "id": "5700ff00-0057-4000-a000-00000000000f",
+      "name": "Notify Attorney Documents Ready For Review",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [2912, 0],
+      "notes": "Delivers every filled document as a PDF attachment to the reviewing attorney.\n\ntoEmail reads FIRM_REVIEWER_EMAIL (falls back to FIRM_EMAIL if unset) -- never the intake submitter's own address, so the review copy always lands with your firm, not bounces back to the client.\n\nCredential: project → Credentials tab → New → search SMTP → enter your email provider's settings → save as 'Email account (SMTP)'.\n\nThe attachmentsBinary entry with no 'property' value attaches every binary property on the item -- this picks up all of the file0, file1, ... properties built by Aggregate Filled Documents automatically, regardless of how many documents were generated.",
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When Intake Form Submitted": [
+      {
+        "json": {
+          "body": {
+            "full_name": "Jane Doe",
+            "email": "jane.doe@example.com",
+            "phone": "+14155551234",
+            "matter_type": "Personal Injury",
+            "case_details": "Rear-ended on I-80 on 2026-07-15, ongoing physical therapy for whiplash.",
+            "referral_source": "Google search"
+          },
+          "query": {},
+          "params": {},
+          "headers": {
+            "content-type": "application/json"
+          },
+          "webhookUrl": "https://your-n8n.example.com/webhook/form-fill-intake",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "settings": {
+    "availableInMCP": false,
+    "executionOrder": "v1",
+    "executionTimeout": 60,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When Intake Form Submitted": {
+      "main": [
+        [
+          {
+            "node": "Validate And Normalize Intake Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate And Normalize Intake Data": {
+      "main": [
+        [
+          {
+            "node": "If Intake Data Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Intake Data Valid": {
+      "main": [
+        [
+          {
+            "node": "Build Document Fill List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Invalid Intake Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Document Fill List": {
+      "main": [
+        [
+          {
+            "node": "If Any Templates Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Any Templates Configured": {
+      "main": [
+        [
+          {
+            "node": "Split Into One Item Per Document",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — No Templates Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into One Item Per Document": {
+      "main": [
+        [
+          {
+            "node": "Copy Template Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copy Template Document": {
+      "main": [
+        [
+          {
+            "node": "Build Merge Field Replacements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Merge Field Replacements": {
+      "main": [
+        [
+          {
+            "node": "Merge Fields Into Copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Fields Into Copy": {
+      "main": [
+        [
+          {
+            "node": "Export Filled Document As PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export Filled Document As PDF": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Filled Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Filled Documents": {
+      "main": [
+        [
+          {
+            "node": "Log Document Fill To Compliance Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Document Fill To Compliance Audit": {
+      "main": [
+        [
+          {
+            "node": "Notify Attorney Documents Ready For Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Auto-populates the firm's own retainer, intake, and court cover sheet templates from intake form data — copies each configured Google Doc template, replaces {{merge_tag}} placeholders with the intake fields, exports as PDF, and emails every generated document to the attorney for review. Field population only — never drafts legal language, nothing sent to a client automatically. Replaces Lawyaw or Clio Draft ($70-119/mo). Logs every run to the OPS1 compliance audit sheet."
+}
