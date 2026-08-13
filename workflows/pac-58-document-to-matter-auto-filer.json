@@ -1,0 +1,707 @@
+{
+  "name": "Document to Matter Auto-Filer",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Document to Matter Auto-Filer\n\n### How it works\n\n1. Watches a dedicated intake mailbox for inbound emails with attachments.\n2. Matches the sender's email to a Clio contact, then to that contact's open matter — using metadata and rules only (sender email, matter number in the subject line), never reading the document itself.\n3. Files each attachment into a Google Drive folder named after the matched matter, auto-creating the folder on first use, with the filename prefixed by the date received.\n4. If the sender or matter can't be confidently matched, routes to a staff alert with the original attachments — never guesses and files to the wrong matter.\n5. Logs every filing (and every unmatched exception) to the OPS1 compliance audit sheet.\n\n### Setup steps\n\n- [ ] Set up a dedicated intake mailbox (e.g. documents@yourfirm.com) with IMAP access.\n- [ ] Create a root 'Matters' folder in Google Drive and copy its folder ID.\n- [ ] Set CLIO_BASE_URL, MATTERS_ROOT_FOLDER_ID, FIRM_STAFF_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID in n8n Variables.\n- [ ] Wire an IMAP credential, a Clio OAuth2 credential (reuse if already deployed), a Google Drive OAuth2 credential (reuse if PAC-57 is deployed), and an SMTP credential.\n\n### Customization\n\nThe matter-matching logic lives in 'Determine Matching Matter' — adjust how ambiguous matches (a contact with more than one open matter) get resolved if exact display-number matching in the subject line doesn't fit how your firm references matters in email.",
+        "width": 480,
+        "height": 1080
+      },
+      "id": "e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-700, -560]
+    },
+    {
+      "parameters": {
+        "content": "## Receive email and check for attachments\n\nWatches the intake mailbox and extracts sender, subject, and every attachment.",
+        "width": 640,
+        "height": 300,
+        "color": 7
+      },
+      "id": "f2a3b4c5-d6e7-4f8a-9b0c-1d2e3f4a5b6c",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-48, -190]
+    },
+    {
+      "parameters": {
+        "content": "## Match to a Clio contact and matter\n\nLooks up the sender by email, then their open matters. Metadata and rules only — sender email and matter number in the subject line, never the document content.",
+        "width": 864,
+        "height": 300,
+        "color": 7
+      },
+      "id": "a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [640, -190]
+    },
+    {
+      "parameters": {
+        "content": "## File to the matched matter's folder\n\nFinds or creates the matter's Drive folder, then uploads every attachment with a date-prefixed filename.",
+        "width": 1088,
+        "height": 300,
+        "color": 7
+      },
+      "id": "b4c5d6e7-f8a9-4b0c-1d2e-3f4a5b6c7d8e",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1552, -190]
+    },
+    {
+      "parameters": {
+        "content": "## No confident match — alert staff\n\nWhen the sender or matter can't be confidently identified, the original attachments go to staff for manual filing instead of being guessed at.",
+        "width": 640,
+        "height": 300,
+        "color": 7
+      },
+      "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e9f",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [896, 320]
+    },
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "format": "resolved",
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "id": "5800aa00-0058-4000-a000-000000000001",
+      "name": "When Document Email Received",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "notes": "Watches a dedicated intake mailbox (e.g. documents@yourfirm.com) for new mail and downloads any attachments as binary data.\n\nCredential: project → Credentials tab → New → search 'IMAP' → Host/Port/User/Password from your email provider's IMAP settings (Gmail: use an App Password; Microsoft 365: enable IMAP in the mailbox settings). Save as 'Intake mailbox (IMAP)'.\n\nThis node's exact 'downloadAttachments' option placement (top-level vs nested under Options) could not be confirmed against a live n8n instance during template authoring — if attachments aren't coming through as binary data, open this node and confirm 'Download Attachments' is toggled on wherever it actually appears in your n8n version.\n\nSet the mailbox to whatever folder your provider delivers new intake mail to — usually INBOX."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads the inbound email and every attachment -- any binary property, regardless of\n// naming, so this doesn't depend on a specific attachment-prefix setting.\nconst item = $input.first();\nconst json = item.json;\n\n// Defensive extraction -- IMAP parser output shape can vary; try the structured form first,\n// fall back to pulling an email address out of a raw string.\nconst fromField = json.from;\nlet senderRaw = '';\nif (fromField && fromField.value && fromField.value[0] && fromField.value[0].address) {\n  senderRaw = fromField.value[0].address;\n} else if (typeof fromField === 'string') {\n  senderRaw = fromField;\n} else if (fromField && fromField.text) {\n  senderRaw = fromField.text;\n}\nconst emailMatch = senderRaw.match(/[\\w.+-]+@[\\w-]+\\.[\\w.-]+/);\nconst sender_email = (emailMatch ? emailMatch[0] : senderRaw).trim().toLowerCase();\n\nconst subject     = String(json.subject || '').trim();\nconst received_at = json.date || new Date().toISOString();\n\nconst attachmentKeys = Object.keys(item.binary || {});\n\nreturn [{\n  json: {\n    sender_email,\n    subject,\n    received_at,\n    attachment_count: attachmentKeys.length,\n    attachment_keys: attachmentKeys,\n    has_attachments: attachmentKeys.length > 0,\n  },\n  binary: item.binary,\n}];"
+      },
+      "id": "5800aa00-0058-4000-a000-000000000002",
+      "name": "Extract Email Metadata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 0],
+      "notes": "Pulls the sender's email address, subject line, and the list of attachment binary keys from the inbound email.\n\nReads attachments generically from item.binary rather than assuming a fixed prefix name — works regardless of how the IMAP trigger names its attachment properties.\n\nOutput: has_attachments is false (and the run is skipped) if the email has no attachments at all — most inbound mail to an intake box won't need filing."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_attachments",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.has_attachments }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5800aa00-0058-4000-a000-000000000003",
+      "name": "If Email Has Attachments",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [448, 0],
+      "notes": "Yes (at least one attachment) → try to match it to a matter.\nNo (plain-text email, auto-reply, etc.) → route to Skip. Nothing to file.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "5800aa00-0058-4000-a000-000000000004",
+      "name": "Skip — No Attachments",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [672, 160],
+      "notes": "This email had no attachments — nothing to file. No alert sent; this is the expected case for most inbound mail to the intake box."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://{{ $vars.CLIO_BASE_URL.replace('https://', '') }}/api/v4/contacts.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.sender_email }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,name,primary_email_address"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5800aa00-0058-4000-a000-000000000005",
+      "name": "Look Up Contact By Sender Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [672, 0],
+      "notes": "Searches Clio for a contact matching the sender's email — same query pattern as the Clio Intake Sync template (PAC-20).\n\nCredential: project → Credentials tab → New → search 'OAuth2 API' → same Clio OAuth2 setup as PAC-18/20/55/57 (Authorization URL '{CLIO_BASE_URL}/oauth/authorize', Access Token URL '{CLIO_BASE_URL}/oauth/token', Authentication: Body). Reuse the same credential if already deployed.\n\nClio's query parameter is a broad text search, not an exact match — the next step filters the results down to an exact (case-insensitive) email match before treating anything as a real match.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filters Clio's (broad, fuzzy) contact search down to an exact email match. A\n// partial/fuzzy match here risks filing a document under the wrong client's matter, which\n// is far worse than routing to manual filing -- so this stays strict.\nconst meta = $('Extract Email Metadata').item.json;\nconst response = $input.first().json;\nconst contacts = response.data || [];\n\nconst match = contacts.find(c => String(c.primary_email_address || '').trim().toLowerCase() === meta.sender_email);\n\nreturn [{ json: {\n  ...meta,\n  contact_id: match ? match.id : null,\n  contact_name: match ? match.name : null,\n  is_contact_found: !!match,\n} }];"
+      },
+      "id": "5800aa00-0058-4000-a000-000000000006",
+      "name": "Extract Contact Match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [896, 0],
+      "notes": "Confirms an exact email match against Clio's contact search results — reads sender_email from 'Extract Email Metadata' explicitly, not $json, since the Clio API call above replaced the item's data with its own response."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_contact_found",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_contact_found }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5800aa00-0058-4000-a000-000000000007",
+      "name": "If Contact Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1120, 0],
+      "notes": "Yes (sender's email matches a Clio contact) → look up their open matters.\nNo (no contact matches this email address) → route to the manual-filing alert. Never guess which client this is.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://{{ $vars.CLIO_BASE_URL.replace('https://', '') }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $json.contact_id }}"
+            },
+            {
+              "name": "status",
+              "value": "Open"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5800aa00-0058-4000-a000-000000000008",
+      "name": "Fetch Open Matters For Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1344, 0],
+      "notes": "Fetches every open matter belonging to the matched contact. Most clients only have one open matter at a time, which is the confident-match case the next step looks for first.\n\nUses the same Clio OAuth2 credential as the contact lookup.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Decides which matter this document belongs to -- metadata and rules only, never content.\nconst meta = $('Extract Contact Match').item.json;\nconst response = $input.first().json;\nconst matters = response.data || [];\n\nlet matched = null;\nif (matters.length === 1) {\n  // Only one open matter for this client -- confident match.\n  matched = matters[0];\n} else if (matters.length > 1) {\n  // More than one open matter for this client -- only proceed if the matter's own\n  // display_number appears verbatim in the subject line. This is a reference-number\n  // check, not reading what the document says -- still metadata/rules, not content.\n  const subjectLower = meta.subject.toLowerCase();\n  matched = matters.find(m => m.display_number && subjectLower.includes(String(m.display_number).toLowerCase())) || null;\n}\n\nreturn [{ json: {\n  ...meta,\n  matter_id: matched ? matched.id : null,\n  matter_display_number: matched ? matched.display_number : null,\n  matter_description: matched ? matched.description : null,\n  open_matter_count: matters.length,\n  is_matter_found: !!matched,\n} }];"
+      },
+      "id": "5800aa00-0058-4000-a000-000000000009",
+      "name": "Determine Matching Matter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1568, 0],
+      "notes": "One open matter for the client → confident match, used automatically.\nMultiple open matters → only matched if the matter's display_number appears in the email subject line; otherwise treated as unmatched rather than guessing which matter.\nZero open matters → unmatched.\n\nReads contact/email metadata from 'Extract Contact Match' explicitly, not $json, since the matters.json call above replaced the item's data with its own response."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_matter_found",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_matter_found }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5800aa00-0058-4000-a000-00000000000a",
+      "name": "If Matter Confidently Matched",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1792, 0],
+      "notes": "Yes → find or create the matter's Drive folder and file the attachments there.\nNo (client has no open matters, or has several and none match the subject line) → route to the manual-filing alert.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "search",
+        "queryString": "={{ \"'\" + $vars.MATTERS_ROOT_FOLDER_ID + \"' in parents and name = '\" + $json.matter_display_number.replace(/'/g, \"\\\\'\") + \"' and mimeType = 'application/vnd.google-apps.folder' and trashed = false\" }}",
+        "filter": {},
+        "options": {}
+      },
+      "id": "5800aa00-0058-4000-a000-00000000000b",
+      "name": "Search For Matter Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2016, 0],
+      "notes": "Checks whether a Drive folder already exists for this matter, under your MATTERS_ROOT_FOLDER_ID, named exactly after the matter's display_number.\n\nCredential: same 'Google Drive account' credential as used in PAC-57 — reuse it if that template is already deployed.\n\nThe exact 'Search Query' field name/format on this node's Search operation could not be confirmed against a live n8n instance during template authoring — the query string itself uses standard Google Drive API search syntax, but double-check this node opens with the query populated correctly, and adjust the field it's typed into if needed.\n\nReturns zero or more matching folders — the next step treats more than zero as 'exists' and uses the first match.",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "2",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads whether a matching Drive folder was found. Explicit node references throughout\n// this workflow (rather than $json) because every Drive/Clio API call replaces the item's\n// data with its own response.\nconst meta = $('Determine Matching Matter').item.json;\nconst results = $input.all();\nconst found = results.length > 0 ? results[0].json : null;\n\nreturn [{ json: {\n  ...meta,\n  existing_folder_id: found ? found.id : null,\n  folder_exists: !!found,\n} }];"
+      },
+      "id": "5800aa00-0058-4000-a000-00000000000c",
+      "name": "Check If Matter Folder Exists",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2240, 0],
+      "notes": "Determines whether the matter already has a Drive folder. First run for any given matter, it won't — the next step creates it once, and every subsequent document for that matter reuses it."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_folder_exists",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.folder_exists }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5800aa00-0058-4000-a000-00000000000d",
+      "name": "If Matter Folder Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [2464, 0],
+      "notes": "Yes → go straight to filing, using the existing folder.\nNo → create the folder first, then file into it. Both branches converge on 'Split Into One Item Per Attachment' below.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "operation": "create",
+        "name": "={{ $json.matter_display_number + ($json.matter_description ? ' — ' + $json.matter_description : '') }}",
+        "options": {
+          "folderId": "={{ $vars.MATTERS_ROOT_FOLDER_ID }}"
+        }
+      },
+      "id": "5800aa00-0058-4000-a000-00000000000e",
+      "name": "Create Matter Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2688, 160],
+      "notes": "Creates a new Drive folder for this matter under MATTERS_ROOT_FOLDER_ID, named after the matter's display number and description, the first time a document arrives for it.\n\nUses the same 'Google Drive account' credential as the search step.\n\nThis node's own response ({id, name, ...}) becomes the item's new json — the next step reads matter/email metadata back from 'Determine Matching Matter' explicitly, and reads this folder's id via a fallback expression that works whether the folder was just created here or already existed.",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "2",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fans out into one item per attachment -- everything downstream uploads one file at a\n// time. Converges both the 'folder already existed' and 'folder just created' branches:\n// reads matter/email metadata from 'Determine Matching Matter' explicitly either way, and\n// resolves folder_id from whichever branch actually ran.\nconst meta = $('Determine Matching Matter').item.json;\nconst input = $input.first().json;\n\n// If this ran right after Create Matter Folder, input.id is the new folder's id.\n// If it ran right after the 'exists' branch (which passes through unchanged from Check If\n// Matter Folder Exists), input.existing_folder_id is already set.\nconst folder_id = input.id || input.existing_folder_id;\n\nconst attachmentKeys = $('Extract Email Metadata').item.json.attachment_keys;\nconst receivedDate = new Date(meta.received_at).toISOString().slice(0, 10);\n\nreturn attachmentKeys.map(key => ({\n  json: {\n    matter_id: meta.matter_id,\n    matter_display_number: meta.matter_display_number,\n    sender_email: meta.sender_email,\n    subject: meta.subject,\n    folder_id,\n    binary_key: key,\n    received_date: receivedDate,\n  },\n  binary: { data: $('Extract Email Metadata').item.binary[key] },\n}));"
+      },
+      "id": "5800aa00-0058-4000-a000-00000000000f",
+      "name": "Split Into One Item Per Attachment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2912, 0],
+      "notes": "Both the 'folder exists' and 'folder just created' branches connect here. Turns N attachments into N items, each carrying the resolved folder_id and its own binary file data under a single, consistently-named 'data' property so the upload step below doesn't need to know the original attachment key names."
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "name": "={{ $json.received_date + ' - ' + ($binary.data.fileName || 'attachment') }}",
+        "options": {
+          "parents": ["={{ $json.folder_id }}"]
+        }
+      },
+      "id": "5800aa00-0058-4000-a000-000000000010",
+      "name": "Upload Attachment To Matter Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [3136, 0],
+      "notes": "Uploads each attachment into the matched matter's Drive folder, with the filename prefixed by the date the email was received (e.g. '2026-08-13 - signed retainer.pdf').\n\nUses the same 'Google Drive account' credential as the earlier Drive steps.\n\nThe exact field name/location for setting the parent folder on upload (Options → Parent Folder vs a top-level field) could not be confirmed against a live n8n instance during template authoring — if the file uploads to the wrong location (e.g. Drive root), open this node and move the folder reference to wherever the Parent Folder option actually appears in your n8n version.",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "2",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Runs once after all attachments for this email have been filed, to build one compliance\n// log entry and one internal summary rather than one per attachment.\nconst items = $input.all();\nconst first = items[0].json;\n\nreturn [{ json: {\n  matter_display_number: first.matter_display_number,\n  sender_email: first.sender_email,\n  subject: first.subject,\n  filed_count: items.length,\n} }];"
+      },
+      "id": "5800aa00-0058-4000-a000-000000000011",
+      "name": "Aggregate Filed Documents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3360, 0],
+      "notes": "Combines the per-attachment upload results into one summary item for the audit log — how many documents were filed, to which matter, from whom."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "message": "={{ $json.filed_count }} document(s) auto-filed to matter {{ $json.matter_display_number }} from {{ $json.sender_email }}.",
+            "matter_id": "={{ $json.matter_display_number }}",
+            "recipient": "={{ $vars.FIRM_STAFF_EMAIL }}",
+            "template_id": "PAC-58"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "5800aa00-0058-4000-a000-000000000012",
+      "name": "Log Filing To Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [3584, 0],
+      "notes": "Logs this filing event to the OPS1 compliance audit sheet — no email is sent to anyone from this call, it's purely the audit trail. Successful auto-filing is silent by design; only unmatched documents (below) alert staff."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the staff alert for an email that couldn't be confidently matched to a matter --\n// pulls the ORIGINAL attachments straight from the trigger node by name, since every Clio\n// API call in between replaced the item's binary data with its own response.\nconst meta = $input.first().json;\nconst triggerItem = $('Extract Email Metadata').item;\nconst attachmentKeys = triggerItem.json.attachment_keys;\n\nconst reason = meta.is_contact_found === false\n  ? 'No Clio contact matches this sender\\'s email address.'\n  : (meta.open_matter_count === 0\n      ? 'This contact has no open matters.'\n      : `This contact has ${meta.open_matter_count} open matters and none match a reference number in the subject line.`);\n\nconst binary = {};\nattachmentKeys.forEach((key, i) => {\n  binary[`file${i}`] = triggerItem.binary[key];\n});\n\nreturn [{\n  json: {\n    sender_email: meta.sender_email,\n    subject: meta.subject,\n    reason,\n    attachment_count: attachmentKeys.length,\n  },\n  binary,\n}];"
+      },
+      "id": "5800aa00-0058-4000-a000-000000000013",
+      "name": "Build Manual Filing Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 480],
+      "notes": "Both 'If Contact Found' and 'If Matter Confidently Matched' route their No branch here. Re-attaches the original documents (not renamed/filed) so staff can file them manually without hunting down the original email."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "message": "={{ 'Could not auto-file document(s) from ' + $json.sender_email + ': ' + $json.reason }}",
+            "matter_id": "",
+            "recipient": "={{ $vars.FIRM_STAFF_EMAIL }}",
+            "template_id": "PAC-58"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "5800aa00-0058-4000-a000-000000000014",
+      "name": "Log Unmatched Filing To Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [1344, 480],
+      "notes": "Logs the exception to the OPS1 compliance audit sheet — every inbound document is accounted for, whether auto-filed or routed for manual handling."
+    },
+    {
+      "parameters": {
+        "text": "={{ 'A document could not be auto-filed and needs manual attention.\\n\\nFrom: ' + $('Build Manual Filing Alert').item.json.sender_email + '\\nSubject: ' + $('Build Manual Filing Alert').item.json.subject + '\\nReason: ' + $('Build Manual Filing Alert').item.json.reason + '\\n\\n' + $('Build Manual Filing Alert').item.json.attachment_count + ' attachment(s) included below — please file to the correct matter manually.' }}",
+        "subject": "={{ 'Manual filing needed — ' + $('Build Manual Filing Alert').item.json.sender_email }}",
+        "toEmail": "={{ $vars.FIRM_STAFF_EMAIL }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        },
+        "emailType": "text",
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}"
+      },
+      "id": "5800aa00-0058-4000-a000-000000000015",
+      "name": "Notify Staff Manual Filing Needed",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1568, 480],
+      "notes": "Delivers the original, unfiled attachments to staff whenever a document can't be confidently matched to a matter.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)' (reuse if already deployed elsewhere).\n\nThe attachmentsBinary entry with no 'property' value attaches every binary property on the item — this picks up all of the file0, file1, ... properties built by Build Manual Filing Alert automatically.",
+      "credentials": {
+        "smtp": {
+          "id": "3",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When Document Email Received": [
+      {
+        "json": {
+          "from": {
+            "value": [
+              { "address": "jane.doe@example.com", "name": "Jane Doe" }
+            ],
+            "text": "Jane Doe <jane.doe@example.com>"
+          },
+          "subject": "Signed retainer agreement",
+          "date": "2026-08-13T09:15:00.000Z",
+          "text": "Please find the signed retainer attached."
+        },
+        "binary": {
+          "attachment_0": {
+            "data": "JVBERi0xLjQKJeLjz9MK",
+            "mimeType": "application/pdf",
+            "fileName": "signed-retainer.pdf"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "settings": {
+    "availableInMCP": false,
+    "executionOrder": "v1",
+    "executionTimeout": 60,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When Document Email Received": {
+      "main": [
+        [
+          { "node": "Extract Email Metadata", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Extract Email Metadata": {
+      "main": [
+        [
+          { "node": "If Email Has Attachments", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "If Email Has Attachments": {
+      "main": [
+        [
+          { "node": "Look Up Contact By Sender Email", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Skip — No Attachments", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Look Up Contact By Sender Email": {
+      "main": [
+        [
+          { "node": "Extract Contact Match", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Extract Contact Match": {
+      "main": [
+        [
+          { "node": "If Contact Found", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "If Contact Found": {
+      "main": [
+        [
+          { "node": "Fetch Open Matters For Contact", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Build Manual Filing Alert", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Open Matters For Contact": {
+      "main": [
+        [
+          { "node": "Determine Matching Matter", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Determine Matching Matter": {
+      "main": [
+        [
+          { "node": "If Matter Confidently Matched", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "If Matter Confidently Matched": {
+      "main": [
+        [
+          { "node": "Search For Matter Folder", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Build Manual Filing Alert", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Search For Matter Folder": {
+      "main": [
+        [
+          { "node": "Check If Matter Folder Exists", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Check If Matter Folder Exists": {
+      "main": [
+        [
+          { "node": "If Matter Folder Exists", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "If Matter Folder Exists": {
+      "main": [
+        [
+          { "node": "Split Into One Item Per Attachment", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Create Matter Folder", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Create Matter Folder": {
+      "main": [
+        [
+          { "node": "Split Into One Item Per Attachment", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Split Into One Item Per Attachment": {
+      "main": [
+        [
+          { "node": "Upload Attachment To Matter Folder", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Upload Attachment To Matter Folder": {
+      "main": [
+        [
+          { "node": "Aggregate Filed Documents", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Aggregate Filed Documents": {
+      "main": [
+        [
+          { "node": "Log Filing To Compliance Audit", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build Manual Filing Alert": {
+      "main": [
+        [
+          { "node": "Log Unmatched Filing To Compliance Audit", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Log Unmatched Filing To Compliance Audit": {
+      "main": [
+        [
+          { "node": "Notify Staff Manual Filing Needed", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "description": "Watches a dedicated intake mailbox and auto-files inbound email attachments to the matching Clio matter's Google Drive folder — matched by sender email and matter number in the subject line only, never by reading the document. Auto-creates the matter's folder on first use, names files with the received date. Anything that can't be confidently matched routes to a staff alert with the original attachments instead of guessing. Replaces manual filing and DMS add-ons. Logs every filing and every exception to the OPS1 compliance audit sheet."
+}
