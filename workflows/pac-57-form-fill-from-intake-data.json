@@ -265,14 +265,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Builds the envelope-creation request for the retainer's DocuSign template. Creates the\n// envelope in 'created' (draft) status -- never 'sent' -- so the attorney reviews and sends\n// it manually from inside DocuSign; this workflow never signs or sends anything on its own.\n// Tab labels must match your DocuSign template's field labels exactly (case-sensitive) --\n// add or remove entries here to match what your retainer template actually uses.\nconst doc = $('Split Into One Item Per Document').item.json;\nconst account = $input.first().json.accounts[0];\n\nconst templateRoles = [{\n  email: doc.email,\n  name: doc.full_name,\n  roleName: $vars.DOCUSIGN_RETAINER_ROLE_NAME,\n  tabs: {\n    textTabs: [\n      { tabLabel: 'full_name', value: doc.full_name },\n      { tabLabel: 'email', value: doc.email },\n      { tabLabel: 'phone', value: doc.phone || 'Not provided' },\n      { tabLabel: 'practice_area', value: doc.practice_area },\n      { tabLabel: 'case_details', value: doc.case_details || '' },\n      { tabLabel: 'date', value: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },\n    ],\n  },\n}];\n\nreturn [{ json: {\n  ...doc,\n  docusign_base_uri: account.base_uri,\n  docusign_account_id: account.account_id,\n  envelope_request: {\n    templateId: doc.template_doc_id,\n    status: 'created',\n    templateRoles,\n  },\n} }];"
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the envelope-creation request for the retainer's DocuSign template. Creates the\n// envelope in 'created' (draft) status -- never 'sent' -- so the attorney reviews and sends\n// it manually from inside DocuSign; this workflow never signs or sends anything on its own.\n// Tab labels must match your DocuSign template's field labels exactly (case-sensitive) --\n// add or remove entries here to match what your retainer template actually uses.\n// Runs once per item (Run Once for Each Item) -- with multiple documents fanned out\n// upstream, a single-run version here would silently drop every item but the first.\nconst doc = $('Split Into One Item Per Document').item.json;\nconst account = $input.item.json.accounts[0];\n\nconst templateRoles = [{\n  email: doc.email,\n  name: doc.full_name,\n  roleName: $vars.DOCUSIGN_RETAINER_ROLE_NAME,\n  tabs: {\n    textTabs: [\n      { tabLabel: 'full_name', value: doc.full_name },\n      { tabLabel: 'email', value: doc.email },\n      { tabLabel: 'phone', value: doc.phone || 'Not provided' },\n      { tabLabel: 'practice_area', value: doc.practice_area },\n      { tabLabel: 'case_details', value: doc.case_details || '' },\n      { tabLabel: 'date', value: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },\n    ],\n  },\n}];\n\nreturn { json: {\n  ...doc,\n  docusign_base_uri: account.base_uri,\n  docusign_account_id: account.account_id,\n  envelope_request: {\n    templateId: doc.template_doc_id,\n    status: 'created',\n    templateRoles,\n  },\n} };"
       },
       "id": "5700ff00-0057-4000-a000-000000000018",
       "name": "Build DocuSign Envelope Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1776, 320],
-      "notes": "Constructs the envelope request body. If your retainer template's field labels differ from full_name/email/phone/practice_area/case_details/date, edit the tabLabel values in textTabs to match -- DocuSign matches by exact label text, not by field order.\n\nDOCUSIGN_RETAINER_ROLE_NAME (n8n Variable) must match the signer role name defined on your DocuSign template exactly (e.g. 'Client', 'Signer 1') -- check your template in DocuSign if unsure."
+      "notes": "Constructs the envelope request body. If your retainer template's field labels differ from full_name/email/phone/practice_area/case_details/date, edit the tabLabel values in textTabs to match -- DocuSign matches by exact label text, not by field order.\n\nDOCUSIGN_RETAINER_ROLE_NAME (n8n Variable) must match the signer role name defined on your DocuSign template exactly (e.g. 'Client', 'Signer 1') -- check your template in DocuSign if unsure.\n\nSet to 'Run Once for Each Item' -- if your firm ever configures more than one DocuSign document type, this makes sure every one of them gets processed, not just the first."
       },
     {
       "parameters": {
@@ -300,14 +301,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Normalizes this branch's result to the same shape 'Build Google Docs Result' produces,\n// so 'Aggregate Filled Documents' can handle both engines uniformly. No binary here -- the\n// draft lives inside DocuSign itself, there's no separate file to attach to the review email.\nconst doc = $('Split Into One Item Per Document').item.json;\nconst envelope = $input.first().json;\n\nreturn [{\n  json: {\n    doc_label: doc.doc_label,\n    method: 'docusign',\n    full_name: doc.full_name,\n    email: doc.email,\n    practice_area: doc.practice_area,\n    envelope_id: envelope.envelopeId,\n  },\n  binary: {},\n}];"
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Normalizes this branch's result to the same shape 'Build Google Docs Result' produces,\n// so 'Aggregate Filled Documents' can handle both engines uniformly. No binary here -- the\n// draft lives inside DocuSign itself, there's no separate file to attach to the review email.\n// Runs once per item -- see 'Build DocuSign Envelope Request' notes.\nconst doc = $('Split Into One Item Per Document').item.json;\nconst envelope = $input.item.json;\n\nreturn {\n  json: {\n    doc_label: doc.doc_label,\n    method: 'docusign',\n    full_name: doc.full_name,\n    email: doc.email,\n    practice_area: doc.practice_area,\n    envelope_id: envelope.envelopeId,\n  },\n  binary: {},\n};"
       },
       "id": "5700ff00-0057-4000-a000-00000000001a",
       "name": "Build DocuSign Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [2224, 320],
-      "notes": "Carries the envelope ID forward so the review email can tell the attorney exactly which draft to look for in DocuSign."
+      "notes": "Carries the envelope ID forward so the review email can tell the attorney exactly which draft to look for in DocuSign. Set to 'Run Once for Each Item' -- see 'Build DocuSign Envelope Request' notes."
     },
     {
       "parameters": {
@@ -337,14 +339,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Builds the batchUpdate requests that replace every {{merge_tag}} in the copied\n// template with this intake's actual field values. Add a row here for every merge tag\n// your firm's templates use -- the tag text must match exactly (case-sensitive) what's\n// typed into the Google Doc.\nconst item = $('Split Into One Item Per Document').item.json; // intake fields + doc_label + template_doc_id\nconst newDocId = $input.first().json.id; // from Copy Template Document's response\n\nconst MERGE_FIELDS = {\n  '{{full_name}}':        item.full_name,\n  '{{email}}':             item.email,\n  '{{phone}}':             item.phone || 'Not provided',\n  '{{practice_area}}':     item.practice_area,\n  '{{case_details}}':      item.case_details || '',\n  '{{referral_source}}':   item.referral_source || 'Not provided',\n  '{{date}}':              new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),\n};\n\nconst requests = Object.entries(MERGE_FIELDS).map(([tag, value]) => ({\n  replaceAllText: {\n    containsText: { text: tag, matchCase: true },\n    replaceText: String(value),\n  },\n}));\n\nreturn [{ json: { ...item, new_doc_id: newDocId, batch_requests: requests } }];"
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the batchUpdate requests that replace every {{merge_tag}} in the copied\n// template with this intake's actual field values. Add a row here for every merge tag\n// your firm's templates use -- the tag text must match exactly (case-sensitive) what's\n// typed into the Google Doc.\n// Runs once per item -- with more than one Google Docs template configured for a practice\n// area (e.g. Intake Form + Cover Sheet), a single-run version here would silently drop\n// every document but the first.\nconst item = $('Split Into One Item Per Document').item.json; // intake fields + doc_label + template_doc_id\nconst newDocId = $input.item.json.id; // from Copy Template Document's response\n\nconst MERGE_FIELDS = {\n  '{{full_name}}':        item.full_name,\n  '{{email}}':             item.email,\n  '{{phone}}':             item.phone || 'Not provided',\n  '{{practice_area}}':     item.practice_area,\n  '{{case_details}}':      item.case_details || '',\n  '{{referral_source}}':   item.referral_source || 'Not provided',\n  '{{date}}':              new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),\n};\n\nconst requests = Object.entries(MERGE_FIELDS).map(([tag, value]) => ({\n  replaceAllText: {\n    containsText: { text: tag, matchCase: true },\n    replaceText: String(value),\n  },\n}));\n\nreturn { json: { ...item, new_doc_id: newDocId, batch_requests: requests } };"
       },
       "id": "5700ff00-0057-4000-a000-00000000000a",
       "name": "Build Merge Field Replacements",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1776, 0],
-      "notes": "Builds the list of find-and-replace operations sent to the Docs API in the next step.\n\nYour Google Doc templates must contain these exact tags, typed literally into the document text: {{full_name}}, {{email}}, {{phone}}, {{practice_area}}, {{case_details}}, {{referral_source}}, {{date}}.\n\nAdd or remove entries in MERGE_FIELDS to match what your templates actually use -- an unused tag in this list is harmless (nothing to replace), but a tag in your template that's missing from this list will be left as literal {{text}} in the filled document."
+      "notes": "Builds the list of find-and-replace operations sent to the Docs API in the next step.\n\nYour Google Doc templates must contain these exact tags, typed literally into the document text: {{full_name}}, {{email}}, {{phone}}, {{practice_area}}, {{case_details}}, {{referral_source}}, {{date}}.\n\nAdd or remove entries in MERGE_FIELDS to match what your templates actually use -- an unused tag in this list is harmless (nothing to replace), but a tag in your template that's missing from this list will be left as literal {{text}} in the filled document.\n\nSet to 'Run Once for Each Item' -- with more than one Google Docs template type configured, this makes sure every one of them gets merged, not just the first."
       },
     {
       "parameters": {
@@ -402,14 +405,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Normalizes this branch's result to the same shape 'Build DocuSign Result' produces, so\n// 'Aggregate Filled Documents' can handle both engines uniformly. Also re-attaches doc_label\n// explicitly -- Export Filled Document As PDF's own response replaces the item's json with\n// Drive's file metadata, dropping doc_label otherwise.\nconst doc = $('Split Into One Item Per Document').item.json;\nconst fileData = $input.first().binary && $input.first().binary.data;\n\nreturn [{\n  json: {\n    doc_label: doc.doc_label,\n    method: 'google_docs',\n    full_name: doc.full_name,\n    email: doc.email,\n    practice_area: doc.practice_area,\n  },\n  binary: fileData ? { data: fileData } : {},\n}];"
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Normalizes this branch's result to the same shape 'Build DocuSign Result' produces, so\n// 'Aggregate Filled Documents' can handle both engines uniformly. Also re-attaches doc_label\n// explicitly -- Export Filled Document As PDF's own response replaces the item's json with\n// Drive's file metadata, dropping doc_label otherwise.\n// Runs once per item -- see 'Build Merge Field Replacements' notes.\nconst doc = $('Split Into One Item Per Document').item.json;\nconst fileData = $input.item.binary && $input.item.binary.data;\n\nreturn {\n  json: {\n    doc_label: doc.doc_label,\n    method: 'google_docs',\n    full_name: doc.full_name,\n    email: doc.email,\n    practice_area: doc.practice_area,\n  },\n  binary: fileData ? { data: fileData } : {},\n};"
       },
       "id": "5700ff00-0057-4000-a000-00000000001b",
       "name": "Build Google Docs Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [2464, 0],
-      "notes": "Converges here from the Google Docs path before joining the DocuSign path at Aggregate Filled Documents."
+      "notes": "Converges here from the Google Docs path before joining the DocuSign path at Aggregate Filled Documents. Set to 'Run Once for Each Item' -- see 'Build Merge Field Replacements' notes."
     },
     {
       "parameters": {
