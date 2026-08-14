@@ -350,8 +350,8 @@
       "parameters": {
         "method": "POST",
         "url": "=https://docs.googleapis.com/v1/documents/{{ $json.new_doc_id }}:batchUpdate",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "googleDriveOAuth2Api",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ requests: $json.batch_requests }) }}",
@@ -362,7 +362,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [2000, 0],
-      "notes": "Replaces every merge tag in the copied document with the actual intake data.\n\nn8n's native Google Docs node doesn't expose a find-and-replace / merge-fields operation (confirmed against n8n's own community forum — this is a known gap, not something we missed), so this one step still needs a direct API call. It reuses the exact same 'Google Drive account' credential as the Copy and Export steps on either side of it — no separate credential to set up, as long as the Google Docs API is enabled alongside Drive API in your Cloud Console project (see the Copy Template Document node's notes).\n\nThis node's own response ({documentId, replies}) is a different shape than what the export step needs -- the export step reads new_doc_id explicitly from 'Build Merge Field Replacements', not from this node's output.",
+      "notes": "Replaces every merge tag in the copied document with the actual intake data.\n\nn8n's native Google Docs node doesn't expose a find-and-replace / merge-fields operation (confirmed against n8n's own community forum — this is a known gap, not something we missed), so this one step still needs a direct API call. It reuses the exact same 'Google Drive account' credential as the Copy and Export steps on either side of it — no separate credential to set up, as long as the Google Docs API is enabled alongside Drive API in your Cloud Console project (see the Copy Template Document node's notes). Uses 'Predefined Credential Type' (not 'Generic Credential Type') since Google's OAuth2 credential isn't a generic-auth-compatible type — Generic silently sends no Authorization header at all.\n\nThis node's own response ({documentId, replies}) is a different shape than what the export step needs -- the export step reads new_doc_id explicitly from 'Build Merge Field Replacements', not from this node's output.",
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "1",
