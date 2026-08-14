@@ -4,80 +4,146 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Form-Fill from Intake Data\n\n### How it works\n\n1. Receives intake form data via webhook (Fluent Forms or any generic JSON form provider).\n2. Looks up which of your firm's document templates apply to this practice area — retainer, intake form, court cover sheet — you configure the list.\n3. The retainer is the one document that gets signed, so it fills via DocuSign: creates a draft envelope (never sent) from your DocuSign template with fields pre-filled, for the attorney to review and send manually. Every other document fills via Google Docs: copies the template into GENERATED_DOCS_FOLDER_ID, replaces every {{merge_tag}}, exports as PDF. The filled copy is kept (not deleted) so the review email can link straight to it for editing.\n4. Combines every generated PDF (plus a link to its editable copy) and a reference to the DocuSign draft into one review email — nothing is sent to the client, and nothing is signed, automatically.\n5. Logs the run to the OPS1 compliance audit sheet.\n\nThis fills firm-provided fields only. It never drafts legal language and never sends or signs anything without a human doing it manually.\n\n### Setup steps\n\n- [ ] Create your Google Doc templates (everything except the retainer) with {{merge_tag}} placeholders, and your DocuSign retainer template with matching tab labels (see deploy guide for the exact tag list).\n- [ ] Create a Drive folder for filled copies to land in and set GENERATED_DOCS_FOLDER_ID.\n- [ ] Set DOCUSIGN_RETAINER_TEMPLATE_ID, DOCUSIGN_RETAINER_ROLE_NAME, TEMPLATE_INTAKE_DOC_ID, TEMPLATE_COVER_SHEET_DOC_ID (or however many templates you have) in n8n Variables.\n- [ ] Edit the TEMPLATE_MAP in 'Build Document Fill List' so each practice area lists the right documents and methods.\n- [ ] Wire a Google OAuth2 credential (Drive + Docs scopes), a DocuSign OAuth2 credential, and an SMTP credential.\n- [ ] Set FIRM_NAME, FIRM_REVIEWER_EMAIL (or reuse FIRM_EMAIL), FIRM_FROM_EMAIL, and GUARDRAIL_WORKFLOW_ID in n8n Variables.\n- [ ] Point your intake form's webhook at this workflow's Production URL.\n\n### Customization\n\nAdd or remove merge tags in 'Build Merge Field Replacements' (Google Docs) or tabLabel entries in 'Build DocuSign Envelope Request' (DocuSign) to match the fields your templates actually use. Add more practice areas or documents to TEMPLATE_MAP as your template library grows.",
+        "content": "## Form-Fill from Intake Data\n\n### How it works\n\n1. The workflow triggers when an intake form is submitted via webhook.\n2. It validates and normalizes the submitted intake data.\n3. Depending on validation and configuration, it builds a list of documents to auto-fill and processes each document accordingly.\n4. Documents are either filled and copied in Google Drive or prepared for signatures through DocuSign.\n5. The resulting documents are aggregated, logged for compliance, and an attorney notification email is sent.\n\n### Setup steps\n\n- [ ] Configure the webhook trigger to receive intake form submissions.\n- [ ] Set up and configure credentials for Google Drive API for document manipulation.\n- [ ] Set up and configure credentials for DocuSign API for envelope creation and signing.\n- [ ] Configure the compliance audit sub-workflow to log document fills as needed.\n- [ ] Add email credentials to enable notification sending to attorneys.\n\n### Customization\n\nEdit the 'Build Document Fill List' node to customize which documents to generate for each practice area based on your needs.",
         "width": 480,
-        "height": 980
+        "height": 896
       },
-      "id": "f1a2b3c4-d5e6-4a7b-8c9d-0e1f2a3b4c5d",
-      "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-700, -540]
+      "position": [
+        -608,
+        -448
+      ],
+      "id": "926d366d-131b-4932-98ab-2eaadb3a48a8",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Receive and validate intake\n\nReceives the intake submission and confirms it has the minimum fields needed before looking up templates.",
+        "content": "## Trigger intake form submission\n\nStarts the workflow by capturing intake form data via webhook and validates it.",
         "width": 640,
-        "height": 300,
+        "height": 304,
         "color": 7
       },
-      "id": "a2b3c4d5-e6f7-4b8c-9d0e-1f2a3b4c5d6e",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-48, -180]
+      "position": [
+        -48,
+        -128
+      ],
+      "id": "9ce59bef-0068-4713-8b80-86d4dad22c39",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Look up which templates apply\n\nMaps this intake's practice area to the firm's configured document templates. Fans out into one item per document, then routes each one by method: DocuSign for the retainer, Google Docs for everything else.",
-        "width": 864,
-        "height": 300,
+        "content": "## Handle invalid intake data\n\nHandles the case when intake data is invalid by bypassing further processing.",
+        "width": 240,
+        "height": 352,
         "color": 7
       },
-      "id": "b3c4d5e6-f7a8-4c9d-0e1f-2a3b4c5d6e7f",
-      "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [640, -180]
+      "position": [
+        624,
+        -32
+      ],
+      "id": "8e9ac97a-8b4f-4bf9-83d5-4bd2ed08ed43",
+      "name": "Sticky Note2"
     },
     {
       "parameters": {
-        "content": "## Google Docs path — copy, merge, export\n\nFor every non-retainer document: copy the template, replace merge tags with intake data, export the filled copy as a PDF.",
-        "width": 1088,
-        "height": 300,
+        "content": "## Build document fill list\n\nDetermines which documents to auto-fill based on intake data and practice area.",
+        "width": 240,
+        "height": 384,
         "color": 7
       },
-      "id": "c4d5e6f7-a8b9-4d0e-1f2a-3b4c5d6e7f80",
-      "name": "Sticky Note3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1552, -180]
+      "position": [
+        624,
+        -448
+      ],
+      "id": "55f5e1da-0196-4e5a-bc63-ef36a237005f",
+      "name": "Sticky Note3"
     },
     {
       "parameters": {
-        "content": "## DocuSign path — draft the retainer\n\nCreates the retainer as a draft envelope with fields pre-filled from the template — status 'created', never 'sent'. The attorney reviews and sends it manually from inside DocuSign.",
-        "width": 864,
-        "height": 300,
+        "content": "## Check templates configured\n\nChecks if any document templates are configured before proceeding.",
+        "width": 240,
+        "height": 352,
         "color": 7
       },
-      "id": "e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8092",
-      "name": "Sticky Note5",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1552, 160]
+      "position": [
+        896,
+        -192
+      ],
+      "id": "535aa6e6-4634-46b8-8c71-85be8169b696",
+      "name": "Sticky Note4"
     },
     {
       "parameters": {
-        "content": "## Combine, log, and deliver\n\nWaits for both the Google Docs path and the DocuSign path to finish (Merge node), combines every generated PDF plus the DocuSign draft reference into one email, logs the run to the OPS1 audit sheet, then delivers to the attorney for review.",
-        "width": 1088,
-        "height": 300,
+        "content": "## Handle no templates configured\n\nHandles scenario when no templates are configured by skipping document generation.",
+        "width": 240,
+        "height": 384,
         "color": 7
       },
-      "id": "d5e6f7a8-b9c0-4e1f-2a3b-4c5d6e7f8091",
-      "name": "Sticky Note4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [2688, -180]
+      "position": [
+        1168,
+        -48
+      ],
+      "id": "0d325a2c-3de6-48e8-b8d6-07f9b4515aec",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Document processing branch\n\nSplits documents and processes each either via Google Drive or DocuSign based on configuration.",
+        "width": 1328,
+        "height": 592,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        -112
+      ],
+      "id": "0a45a3a0-e6c8-4ecd-9038-ba7ecf33a622",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Combine and aggregate results\n\nMerges the document processing results into a unified review-ready set.",
+        "width": 416,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2800,
+        32
+      ],
+      "id": "348987e9-3def-4b22-b0e7-dccff1b3ca1e",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## Logging and notification\n\nLogs document fill results for compliance and notifies the attorney for review.",
+        "width": 416,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3248,
+        -128
+      ],
+      "id": "6370c726-a44d-4ba3-9eb1-b2076ea8f802",
+      "name": "Sticky Note8"
     },
     {
       "parameters": {
@@ -86,13 +152,16 @@
         "httpMethod": "POST"
       },
       "id": "5700ff00-0057-4000-a000-000000000001",
-      "name": "When Intake Form Submitted",
+      "name": "When Intake Form Is Submitted",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "webhookId": "a1b2c3d4-e5f6-7890-abcd-ef1234567893",
       "notes": "Receives the intake submission that triggers document form-filling.\n\nUses the same field names as the Clio Intake Sync template — if you've already deployed that one, point this webhook at the same Fluent Forms feed (or add a second webhook action for the same form) and both templates read identical data.\n\nFluent Forms setup: Settings → Integrations → Webhook → Add New → paste this node's Production URL → Method POST → Format JSON.\n\nExpected fields: full_name, email, matter_type (required); phone, case_details, referral_source (optional)."
-      },
+    },
     {
       "parameters": {
         "jsCode": "// Validates and normalizes the intake payload from Fluent Forms (or any generic JSON\n// form provider). Fails loudly with a descriptive error if a required field is missing --\n// a silent failure here would generate documents with blank client-name fields.\nconst raw = $input.first().json.body || $input.first().json;\n\nconst required = ['full_name', 'email', 'matter_type'];\nconst missing = required.filter(f => !raw[f] || String(raw[f]).trim() === '');\n\nconst is_valid_intake = missing.length === 0;\n\nreturn [{ json: {\n  full_name:       String(raw.full_name || '').trim(),\n  email:           String(raw.email || '').trim().toLowerCase(),\n  phone:           String(raw.phone || '').trim(),\n  practice_area:   String(raw.matter_type || '').trim(),\n  case_details:    String(raw.case_details || '').trim(),\n  referral_source: String(raw.referral_source || '').trim(),\n  is_valid_intake,\n  missing_fields:  missing,\n  submitted_at:    new Date().toISOString(),\n} }];"
@@ -101,9 +170,12 @@
       "name": "Validate And Normalize Intake Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [224, 0],
+      "position": [
+        224,
+        0
+      ],
       "notes": "Confirms the intake has the minimum fields needed to fill any document at all: full_name, email, matter_type.\n\npractice_area is read directly from matter_type — keep your form's matter-type field values matching the keys you use in TEMPLATE_MAP below (case-sensitive is not required, but exact spelling is).\n\nOutput: is_valid_intake is false (and the run is skipped) if any required field is missing."
-      },
+    },
     {
       "parameters": {
         "options": {},
@@ -130,20 +202,26 @@
         }
       },
       "id": "5700ff00-0057-4000-a000-000000000003",
-      "name": "If Intake Data Valid",
+      "name": "If Intake Data Is Valid",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [448, 0],
+      "position": [
+        448,
+        0
+      ],
       "notes": "Yes (full_name, email, and matter_type all present) → look up which templates apply.\nNo (a required field is missing) → route to Skip. Better to skip than generate a document with a blank client name.",
       "onError": "continueErrorOutput"
     },
     {
       "parameters": {},
       "id": "5700ff00-0057-4000-a000-000000000004",
-      "name": "Skip — Invalid Intake Payload",
+      "name": "Skip Invalid Intake Payload",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [672, 160],
+      "position": [
+        672,
+        160
+      ],
       "notes": "The intake submission was missing full_name, email, or matter_type — most likely a form field-mapping issue. No documents generated. Check the intake form's field names against the deploy guide if this keeps happening."
     },
     {
@@ -154,9 +232,12 @@
       "name": "Build Document Fill List",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [672, 0],
+      "position": [
+        672,
+        -240
+      ],
       "notes": "Looks up TEMPLATE_MAP by this intake's practice_area to decide which documents to generate.\n\nIf a practice area isn't in the map at all, or its templates' n8n Variables aren't set yet, docs comes back empty and nothing is generated -- this is a safe default, not an error.\n\nEdit the TEMPLATE_MAP object directly in this node's code to add practice areas or documents as your firm's template library grows."
-      },
+    },
     {
       "parameters": {
         "options": {},
@@ -183,20 +264,26 @@
         }
       },
       "id": "5700ff00-0057-4000-a000-000000000006",
-      "name": "If Any Templates Configured",
+      "name": "If Templates Are Configured",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [896, 0],
+      "position": [
+        944,
+        0
+      ],
       "notes": "Yes (at least one template is configured for this practice area) → generate the documents.\nNo (practice area not in TEMPLATE_MAP, or its template Variables aren't set) → route to Skip. Nothing to fill.",
       "onError": "continueErrorOutput"
     },
     {
       "parameters": {},
       "id": "5700ff00-0057-4000-a000-000000000007",
-      "name": "Skip — No Templates Configured",
+      "name": "Skip No Templates Configured",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1120, 160],
+      "position": [
+        1216,
+        160
+      ],
       "notes": "This practice area has no documents configured in TEMPLATE_MAP, or the relevant TEMPLATE_*_DOC_ID Variables aren't set yet. No documents generated. Add a row to TEMPLATE_MAP (or set the missing Variable) if this practice area should have documents."
     },
     {
@@ -204,10 +291,13 @@
         "jsCode": "// Fans out into one item per document to generate -- everything downstream through the\n// export step processes one document at a time, then the Aggregate step recombines them.\nconst { docs, doc_count, has_docs, ...intake } = $input.first().json;\nreturn docs.map(d => ({ json: { ...intake, ...d } }));"
       },
       "id": "5700ff00-0057-4000-a000-000000000008",
-      "name": "Split Into One Item Per Document",
+      "name": "Split Into Single Document Items",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1328, 0],
+      "position": [
+        1488,
+        0
+      ],
       "notes": "Turns the single 'docs' array into separate items -- one per document to fill -- so each one runs through its own fill chain independently. Every item still carries the full intake data (full_name, email, etc.) plus its own doc_label, method, and template_doc_id."
     },
     {
@@ -238,7 +328,10 @@
       "name": "If Document Uses DocuSign",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [1552, 0],
+      "position": [
+        1712,
+        0
+      ],
       "notes": "Routes the retainer (method: 'docusign') to the DocuSign draft-envelope path, and every other configured document (method: 'google_docs') to the existing copy/merge/export path. Both paths converge at 'Aggregate Filled Documents'.",
       "onError": "continueErrorOutput"
     },
@@ -251,10 +344,13 @@
         "options": {}
       },
       "id": "5700ff00-0057-4000-a000-000000000017",
-      "name": "Get DocuSign Account Info",
+      "name": "Fetch DocuSign Account Info",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [1552, 320],
+      "position": [
+        1712,
+        320
+      ],
       "notes": "Every DocuSign API call needs the account's base_uri and account_id, which vary per account and aren't fixed URLs -- this looks them up fresh each run rather than hardcoding them.\n\nCredential: project → Credentials tab → New → search 'OAuth2 API' → Grant Type: Authorization Code → Authorization URL: '{DOCUSIGN_AUTH_BASE_URL}/oauth/auth' → Access Token URL: '{DOCUSIGN_AUTH_BASE_URL}/oauth/token' → Client ID/Secret from a DocuSign Integration Key (DocuSign Admin → Apps and Keys → Add App/Integration Key) → Scope: 'signature' → Connect my account. Save as 'DocuSign account'.\n\nDOCUSIGN_AUTH_BASE_URL is 'https://account-d.docusign.com' for a developer/demo sandbox account, or 'https://account.docusign.com' for production -- most firms should start with the sandbox for testing.\n\nResponse includes accounts[0].base_uri and accounts[0].account_id, read explicitly by the next step.",
       "credentials": {
         "oAuth2Api": {
@@ -266,15 +362,18 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Builds the envelope-creation request for the retainer's DocuSign template. Creates the\n// envelope in 'created' (draft) status -- never 'sent' -- so the attorney reviews and sends\n// it manually from inside DocuSign; this workflow never signs or sends anything on its own.\n// Tab labels must match your DocuSign template's field labels exactly (case-sensitive) --\n// add or remove entries here to match what your retainer template actually uses.\n// Runs once per item (Run Once for Each Item) -- with multiple documents fanned out\n// upstream, a single-run version here would silently drop every item but the first.\nconst doc = $('Split Into One Item Per Document').item.json;\nconst account = $input.item.json.accounts[0];\n\nconst templateRoles = [{\n  email: doc.email,\n  name: doc.full_name,\n  roleName: $vars.DOCUSIGN_RETAINER_ROLE_NAME,\n  tabs: {\n    textTabs: [\n      { tabLabel: 'full_name', value: doc.full_name },\n      { tabLabel: 'email', value: doc.email },\n      { tabLabel: 'phone', value: doc.phone || 'Not provided' },\n      { tabLabel: 'practice_area', value: doc.practice_area },\n      { tabLabel: 'case_details', value: doc.case_details || '' },\n      { tabLabel: 'date', value: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },\n    ],\n  },\n}];\n\nreturn { json: {\n  ...doc,\n  docusign_base_uri: account.base_uri,\n  docusign_account_id: account.account_id,\n  envelope_request: {\n    templateId: doc.template_doc_id,\n    status: 'created',\n    templateRoles,\n  },\n} };"
+        "jsCode": "// Builds the envelope-creation request for the retainer's DocuSign template. Creates the\n// envelope in 'created' (draft) status -- never 'sent' -- so the attorney reviews and sends\n// it manually from inside DocuSign; this workflow never signs or sends anything on its own.\n// Tab labels must match your DocuSign template's field labels exactly (case-sensitive) --\n// add or remove entries here to match what your retainer template actually uses.\n// Runs once per item (Run Once for Each Item) -- with multiple documents fanned out\n// upstream, a single-run version here would silently drop every item but the first.\nconst doc = $('Split Into Single Document Items').item.json;\nconst account = $input.item.json.accounts[0];\n\nconst templateRoles = [{\n  email: doc.email,\n  name: doc.full_name,\n  roleName: $vars.DOCUSIGN_RETAINER_ROLE_NAME,\n  tabs: {\n    textTabs: [\n      { tabLabel: 'full_name', value: doc.full_name },\n      { tabLabel: 'email', value: doc.email },\n      { tabLabel: 'phone', value: doc.phone || 'Not provided' },\n      { tabLabel: 'practice_area', value: doc.practice_area },\n      { tabLabel: 'case_details', value: doc.case_details || '' },\n      { tabLabel: 'date', value: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },\n    ],\n  },\n}];\n\nreturn { json: {\n  ...doc,\n  docusign_base_uri: account.base_uri,\n  docusign_account_id: account.account_id,\n  envelope_request: {\n    templateId: doc.template_doc_id,\n    status: 'created',\n    templateRoles,\n  },\n} };"
       },
       "id": "5700ff00-0057-4000-a000-000000000018",
       "name": "Build DocuSign Envelope Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1776, 320],
+      "position": [
+        1936,
+        320
+      ],
       "notes": "Constructs the envelope request body. If your retainer template's field labels differ from full_name/email/phone/practice_area/case_details/date, edit the tabLabel values in textTabs to match -- DocuSign matches by exact label text, not by field order.\n\nDOCUSIGN_RETAINER_ROLE_NAME (n8n Variable) must match the signer role name defined on your DocuSign template exactly (e.g. 'Client', 'Signer 1') -- check your template in DocuSign if unsure.\n\nSet to 'Run Once for Each Item' -- if your firm ever configures more than one DocuSign document type, this makes sure every one of them gets processed, not just the first."
-      },
+    },
     {
       "parameters": {
         "method": "POST",
@@ -287,10 +386,13 @@
         "options": {}
       },
       "id": "5700ff00-0057-4000-a000-000000000019",
-      "name": "Create Draft Retainer Envelope",
+      "name": "Post DocuSign Draft Envelope",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [2000, 320],
+      "position": [
+        2160,
+        320
+      ],
       "notes": "Creates the retainer as a draft envelope in DocuSign -- status 'created', not 'sent'. Nothing is emailed to the client and nothing is signed by this call; the attorney opens DocuSign, reviews the pre-filled draft under Manage → Drafts, edits if needed, and sends it manually.\n\nUses the same 'DocuSign account' credential as the account-info lookup.\n\nResponse: { envelopeId, uri, statusDateTime, status } -- read explicitly by the next step.",
       "credentials": {
         "oAuth2Api": {
@@ -302,13 +404,16 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Normalizes this branch's result to the same shape 'Build Google Docs Result' produces,\n// so 'Aggregate Filled Documents' can handle both engines uniformly. No binary here -- the\n// draft lives inside DocuSign itself, there's no separate file to attach to the review email.\n// Runs once per item -- see 'Build DocuSign Envelope Request' notes.\nconst doc = $('Split Into One Item Per Document').item.json;\nconst envelope = $input.item.json;\n\nreturn {\n  json: {\n    doc_label: doc.doc_label,\n    method: 'docusign',\n    full_name: doc.full_name,\n    email: doc.email,\n    practice_area: doc.practice_area,\n    envelope_id: envelope.envelopeId,\n  },\n  binary: {},\n};"
+        "jsCode": "// Normalizes this branch's result to the same shape 'Build Google Docs Result' produces,\n// so 'Aggregate Filled Documents' can handle both engines uniformly. No binary here -- the\n// draft lives inside DocuSign itself, there's no separate file to attach to the review email.\n// Runs once per item -- see 'Build DocuSign Envelope Request' notes.\nconst doc = $('Split Into Single Document Items').item.json;\nconst envelope = $input.item.json;\n\nreturn {\n  json: {\n    doc_label: doc.doc_label,\n    method: 'docusign',\n    full_name: doc.full_name,\n    email: doc.email,\n    practice_area: doc.practice_area,\n    envelope_id: envelope.envelopeId,\n  },\n  binary: {},\n};"
       },
       "id": "5700ff00-0057-4000-a000-00000000001a",
-      "name": "Build DocuSign Result",
+      "name": "Prepare DocuSign Result Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2224, 320],
+      "position": [
+        2384,
+        320
+      ],
       "notes": "Carries the envelope ID forward so the review email can tell the attorney exactly which draft to look for in DocuSign. Set to 'Run Once for Each Item' -- see 'Build DocuSign Envelope Request' notes."
     },
     {
@@ -336,10 +441,13 @@
         "options": {}
       },
       "id": "5700ff00-0057-4000-a000-000000000009",
-      "name": "Copy Template Document",
+      "name": "Copy Google Docs Template",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
-      "position": [1552, 0],
+      "position": [
+        1712,
+        0
+      ],
       "notes": "Duplicates the Google Doc template so the merge step below can safely replace text without ever touching your original template. 'Copy In The Same Folder' is off, with Parent Drive set to My Drive and Parent Folder set to GENERATED_DOCS_FOLDER_ID (an n8n Variable) — create one folder for this once and reuse it for every intake. The rename (File Name field) and destination folder are both top-level fields on this node, not under Options — an earlier version of this template nested them under Options, which n8n silently ignored (files landed with the default \"Copy of ...\" name, loose in Drive root).\n\nCredential: project → Credentials tab → New → search 'Google Drive' → select 'Google Drive OAuth2 API'. Same setup pattern as the Google Sheets credential used by the Bar-Compliance Guardrail (NTC-33) — create an OAuth client in Google Cloud Console, enable the Google Drive API AND the Google Docs API (both, since 'Merge Fields Into Copy' below needs Docs API access on this same credential), then connect. Save as 'Google Drive account'.\n\nResponse: { id, name, mimeType } — id is the new copy's document ID, read explicitly by the next two steps (this node's own output replaces the intake data, so downstream steps reference the intake fields via 'Split Into One Item Per Document' by name, not $json). The filled copy is intentionally kept (not deleted) so the review email below can link directly to it for editing.",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -351,15 +459,18 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Builds the batchUpdate requests that replace every {{merge_tag}} in the copied\n// template with this intake's actual field values. Add a row here for every merge tag\n// your firm's templates use -- the tag text must match exactly (case-sensitive) what's\n// typed into the Google Doc.\n// Runs once per item -- with more than one Google Docs template configured for a practice\n// area (e.g. Intake Form + Cover Sheet), a single-run version here would silently drop\n// every document but the first.\nconst item = $('Split Into One Item Per Document').item.json; // intake fields + doc_label + template_doc_id\nconst newDocId = $input.item.json.id; // from Copy Template Document's response\n\nconst MERGE_FIELDS = {\n  '{{full_name}}':        item.full_name,\n  '{{email}}':             item.email,\n  '{{phone}}':             item.phone || 'Not provided',\n  '{{practice_area}}':     item.practice_area,\n  '{{case_details}}':      item.case_details || '',\n  '{{referral_source}}':   item.referral_source || 'Not provided',\n  '{{date}}':              new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),\n};\n\nconst requests = Object.entries(MERGE_FIELDS).map(([tag, value]) => ({\n  replaceAllText: {\n    containsText: { text: tag, matchCase: true },\n    replaceText: String(value),\n  },\n}));\n\nreturn { json: { ...item, new_doc_id: newDocId, batch_requests: requests } };"
+        "jsCode": "// Builds the batchUpdate requests that replace every {{merge_tag}} in the copied\n// template with this intake's actual field values. Add a row here for every merge tag\n// your firm's templates use -- the tag text must match exactly (case-sensitive) what's\n// typed into the Google Doc.\n// Runs once per item -- with more than one Google Docs template configured for a practice\n// area (e.g. Intake Form + Cover Sheet), a single-run version here would silently drop\n// every document but the first.\nconst item = $('Split Into Single Document Items').item.json; // intake fields + doc_label + template_doc_id\nconst newDocId = $input.item.json.id; // from Copy Template Document's response\n\nconst MERGE_FIELDS = {\n  '{{full_name}}':        item.full_name,\n  '{{email}}':             item.email,\n  '{{phone}}':             item.phone || 'Not provided',\n  '{{practice_area}}':     item.practice_area,\n  '{{case_details}}':      item.case_details || '',\n  '{{referral_source}}':   item.referral_source || 'Not provided',\n  '{{date}}':              new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),\n};\n\nconst requests = Object.entries(MERGE_FIELDS).map(([tag, value]) => ({\n  replaceAllText: {\n    containsText: { text: tag, matchCase: true },\n    replaceText: String(value),\n  },\n}));\n\nreturn { json: { ...item, new_doc_id: newDocId, batch_requests: requests } };"
       },
       "id": "5700ff00-0057-4000-a000-00000000000a",
-      "name": "Build Merge Field Replacements",
+      "name": "Build Merge Field Updates",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1776, 0],
+      "position": [
+        1936,
+        0
+      ],
       "notes": "Builds the list of find-and-replace operations sent to the Docs API in the next step.\n\nYour Google Doc templates must contain these exact tags, typed literally into the document text: {{full_name}}, {{email}}, {{phone}}, {{practice_area}}, {{case_details}}, {{referral_source}}, {{date}}.\n\nAdd or remove entries in MERGE_FIELDS to match what your templates actually use -- an unused tag in this list is harmless (nothing to replace), but a tag in your template that's missing from this list will be left as literal {{text}} in the filled document.\n\nSet to 'Run Once for Each Item' -- with more than one Google Docs template type configured, this makes sure every one of them gets merged, not just the first."
-      },
+    },
     {
       "parameters": {
         "method": "POST",
@@ -372,10 +483,13 @@
         "options": {}
       },
       "id": "5700ff00-0057-4000-a000-00000000000b",
-      "name": "Merge Fields Into Copy",
+      "name": "Update Google Doc Merge Fields",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [2000, 0],
+      "position": [
+        2160,
+        0
+      ],
       "notes": "Replaces every merge tag in the copied document with the actual intake data.\n\nn8n's native Google Docs node doesn't expose a find-and-replace / merge-fields operation (confirmed against n8n's own community forum — this is a known gap, not something we missed), so this one step still needs a direct API call. It reuses the exact same 'Google Drive account' credential as the Copy and Export steps on either side of it — no separate credential to set up, as long as the Google Docs API is enabled alongside Drive API in your Cloud Console project (see the Copy Template Document node's notes). Uses 'Predefined Credential Type' (not 'Generic Credential Type') since Google's OAuth2 credential isn't a generic-auth-compatible type — Generic silently sends no Authorization header at all.\n\nThis node's own response ({documentId, replies}) is a different shape than what the export step needs -- the export step reads new_doc_id explicitly from 'Build Merge Field Replacements', not from this node's output.",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -391,7 +505,7 @@
         "fileId": {
           "__rl": true,
           "mode": "id",
-          "value": "={{ $('Build Merge Field Replacements').item.json.new_doc_id }}"
+          "value": "={{ $('Build Merge Field Updates').item.json.new_doc_id }}"
         },
         "options": {
           "googleFileConversion": {
@@ -402,10 +516,13 @@
         }
       },
       "id": "5700ff00-0057-4000-a000-00000000000c",
-      "name": "Export Filled Document As PDF",
+      "name": "Export Document As PDF",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
-      "position": [2224, 0],
+      "position": [
+        2384,
+        0
+      ],
       "notes": "Exports the filled document as a PDF using Drive's native export-on-download conversion (only works on native Google Docs/Sheets/Slides files, which the copy always is).\n\nUses the same 'Google Drive account' credential as the Copy and Merge steps — one credential covers the whole workflow.\n\nVerify the 'Convert Google Docs to' option under this node's Options is set to PDF when you first open it in the n8n UI — the exact nested field layout for this option could not be confirmed against a live n8n instance during template authoring. Output lands in the binary property named 'data' by default, which 'Build Google Docs Result' below expects; if you rename it here, update that node's code to match.",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -417,22 +534,28 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Normalizes this branch's result to the same shape 'Build DocuSign Result' produces, so\n// 'Aggregate Filled Documents' can handle both engines uniformly. Also re-attaches doc_label\n// explicitly -- Export Filled Document As PDF's own response replaces the item's json with\n// Drive's file metadata, dropping doc_label otherwise. Also builds a direct link to the\n// filled Google Doc copy (kept in GENERATED_DOCS_FOLDER_ID), so the review email can offer\n// 'open and edit' alongside the PDF attachment.\n// Runs once per item -- see 'Build Merge Field Replacements' notes.\nconst doc = $('Split Into One Item Per Document').item.json;\nconst docId = $('Build Merge Field Replacements').item.json.new_doc_id;\nconst fileData = $input.item.binary && $input.item.binary.data;\n\nreturn {\n  json: {\n    doc_label: doc.doc_label,\n    method: 'google_docs',\n    full_name: doc.full_name,\n    email: doc.email,\n    practice_area: doc.practice_area,\n    doc_link: `https://docs.google.com/document/d/${docId}/edit`,\n  },\n  binary: fileData ? { data: fileData } : {},\n};"
+        "jsCode": "// Normalizes this branch's result to the same shape 'Build DocuSign Result' produces, so\n// 'Aggregate Filled Documents' can handle both engines uniformly. Also re-attaches doc_label\n// explicitly -- Export Filled Document As PDF's own response replaces the item's json with\n// Drive's file metadata, dropping doc_label otherwise. Also builds a direct link to the\n// filled Google Doc copy (kept in GENERATED_DOCS_FOLDER_ID), so the review email can offer\n// 'open and edit' alongside the PDF attachment.\n// Runs once per item -- see 'Build Merge Field Replacements' notes.\nconst doc = $('Split Into Single Document Items').item.json;\nconst docId = $('Build Merge Field Updates').item.json.new_doc_id;\nconst fileData = $input.item.binary && $input.item.binary.data;\n\nreturn {\n  json: {\n    doc_label: doc.doc_label,\n    method: 'google_docs',\n    full_name: doc.full_name,\n    email: doc.email,\n    practice_area: doc.practice_area,\n    doc_link: `https://docs.google.com/document/d/${docId}/edit`,\n  },\n  binary: fileData ? { data: fileData } : {},\n};"
       },
       "id": "5700ff00-0057-4000-a000-00000000001b",
-      "name": "Build Google Docs Result",
+      "name": "Prepare Google Docs Result Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2464, 0],
+      "position": [
+        2624,
+        0
+      ],
       "notes": "Converges here from the Google Docs path before joining the DocuSign path at Combine Document Results. Set to 'Run Once for Each Item' -- see 'Build Merge Field Replacements' notes."
     },
     {
       "parameters": {},
       "id": "5700ff00-0057-4000-a000-00000000001c",
-      "name": "Combine Document Results",
+      "name": "Merge All Document Results",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.1,
-      "position": [2688, 160],
+      "position": [
+        2848,
+        160
+      ],
       "notes": "Waits for both the Google Docs path and the DocuSign path to finish, then combines every item from both into one list for Aggregate Filled Documents.\n\nThis explicit Merge node matters: two branches connected straight into the same input on a downstream node can run that node as soon as the FASTER branch finishes, before the slower one arrives -- silently dropping whichever document type takes longer (this happened during testing: the DocuSign draft was dropped from the review email because its branch finished after Aggregate had already run). A Merge node always waits for all of its inputs first."
     },
     {
@@ -440,12 +563,15 @@
         "jsCode": "// Combines every generated document into a single item for one review email: Google\n// Docs results carry a PDF to attach plus a link to the editable filled copy; DocuSign\n// results carry an envelope_id to reference instead (nothing to attach -- the draft lives\n// inside DocuSign itself). Builds the full email/audit-log message text here rather than\n// in downstream node expressions, since mixing two very different result shapes is easier\n// to get right in real code.\nconst items = $input.all();\n\nconst binary = {};\nconst pdfItems = [];\nconst docusignItems = [];\nlet fileIdx = 0;\n\nfor (const item of items) {\n  if (item.json.method === 'docusign') {\n    docusignItems.push({ label: item.json.doc_label, envelope_id: item.json.envelope_id });\n    continue;\n  }\n  const fileData = item.binary && item.binary.data;\n  if (!fileData) continue; // this document's export failed upstream -- skip it, don't break the others\n  const key = `file${fileIdx++}`;\n  binary[key] = { ...fileData, fileName: `${item.json.doc_label.replace(/[^a-zA-Z0-9 ._-]/g, '')}.pdf` };\n  pdfItems.push({ label: item.json.doc_label, link: item.json.doc_link });\n}\n\nconst first = items[0].json;\nconst doc_count = pdfItems.length + docusignItems.length;\n\nconst lines = [\n  `New intake for ${first.full_name} (${first.practice_area}).`,\n  '',\n  `${doc_count} document(s) generated from the intake data:`,\n];\npdfItems.forEach(d => lines.push(`  • ${d.label} — PDF attached below for review. Open/edit the copy: ${d.link}`));\ndocusignItems.forEach(d => lines.push(`  • ${d.label} — draft envelope created in DocuSign (ID ${d.envelope_id}). Find it under Manage → Drafts to review and send.`));\nlines.push('', 'These are field-fills only -- review every document before sending to the client, filing, or sending for signature. Nothing has been sent or signed automatically.');\n\nconst email_body = lines.join('\\n');\nconst email_subject = `${doc_count} document(s) ready for review — ${first.full_name}`;\nconst audit_summary = `${doc_count} document(s) filled from intake: ${[...pdfItems.map(d => d.label), ...docusignItems.map(d => d.label + ' (DocuSign draft)')].join(', ')}.`;\n\nreturn [{\n  json: {\n    full_name:      first.full_name,\n    email:          first.email,\n    practice_area:  first.practice_area,\n    pdf_items:      pdfItems,\n    docusign_items: docusignItems,\n    doc_count,\n    email_body,\n    email_subject,\n    audit_summary,\n  },\n  binary,\n}];"
       },
       "id": "5700ff00-0057-4000-a000-00000000000d",
-      "name": "Aggregate Filled Documents",
+      "name": "Aggregate All Filled Documents",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2912, 160],
+      "position": [
+        3072,
+        160
+      ],
       "notes": "Runs once for all documents generated in this run (mode: Run Once for All Items) — receives the combined list from Combine Document Results, which waits for both the Google Docs path and the DocuSign path before this runs.\n\nAssumes each Google Docs item's binary property is named 'data', matching the 'Put Output in Field' setting on Export Filled Document As PDF. If any one document's export failed, it's silently excluded rather than blocking the others — check execution history to see which one, if doc_count is lower than expected."
-      },
+    },
     {
       "parameters": {
         "options": {},
@@ -470,16 +596,19 @@
         }
       },
       "id": "5700ff00-0057-4000-a000-00000000000e",
-      "name": "Log Document Fill To Compliance Audit",
+      "name": "Log Document Fill To Audit",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
-      "position": [3136, 0],
+      "position": [
+        3296,
+        0
+      ],
       "notes": "Calls the Bar-Compliance Guardrail to log this document-generation run to your compliance audit sheet.\n\nThis workflow delivers documents to your own attorney/reviewer, not a client -- so opt-out checking does not apply and approved will always be true here. The purpose of this call is the audit trail: which documents were generated, for whom, and when.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (Settings → Variables)."
     },
     {
       "parameters": {
-        "text": "={{ $('Aggregate Filled Documents').item.json.email_body }}",
-        "subject": "={{ $('Aggregate Filled Documents').item.json.email_subject }}",
+        "text": "={{ $('Aggregate All Filled Documents').item.json.email_body }}",
+        "subject": "={{ $('Aggregate All Filled Documents').item.json.email_subject }}",
         "toEmail": "={{ $vars.FIRM_REVIEWER_EMAIL || $vars.FIRM_EMAIL }}",
         "options": {
           "attachmentsUi": {
@@ -494,10 +623,13 @@
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}"
       },
       "id": "5700ff00-0057-4000-a000-00000000000f",
-      "name": "Notify Attorney Documents Ready For Review",
+      "name": "Notify Attorney Of Documents",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [3360, 0],
+      "position": [
+        3520,
+        0
+      ],
       "notes": "Delivers every filled document as a PDF attachment to the reviewing attorney.\n\ntoEmail reads FIRM_REVIEWER_EMAIL (falls back to FIRM_EMAIL if unset) -- never the intake submitter's own address, so the review copy always lands with your firm, not bounces back to the client.\n\nCredential: project → Credentials tab → New → search SMTP → enter your email provider's settings → save as 'Email account (SMTP)'.\n\nattachmentsBinary's 'property' field must name the binary property(s) to attach explicitly -- an empty entry attaches nothing, it does NOT mean 'attach everything' (confirmed live: this shipped broken until fixed). The expression above reads whatever file0, file1, ... keys Aggregate Filled Documents actually built, comma-separated, so it always attaches every generated PDF regardless of how many documents were configured.",
       "credentials": {
         "smtp": {
@@ -509,7 +641,7 @@
   ],
   "active": false,
   "pinData": {
-    "When Intake Form Submitted": [
+    "When Intake Form Is Submitted": [
       {
         "json": {
           "body": {
@@ -545,7 +677,7 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "When Intake Form Submitted": {
+    "When Intake Form Is Submitted": {
       "main": [
         [
           {
@@ -560,14 +692,14 @@
       "main": [
         [
           {
-            "node": "If Intake Data Valid",
+            "node": "If Intake Data Is Valid",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Intake Data Valid": {
+    "If Intake Data Is Valid": {
       "main": [
         [
           {
@@ -578,7 +710,7 @@
         ],
         [
           {
-            "node": "Skip — Invalid Intake Payload",
+            "node": "Skip Invalid Intake Payload",
             "type": "main",
             "index": 0
           }
@@ -589,32 +721,32 @@
       "main": [
         [
           {
-            "node": "If Any Templates Configured",
+            "node": "If Templates Are Configured",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Any Templates Configured": {
+    "If Templates Are Configured": {
       "main": [
         [
           {
-            "node": "Split Into One Item Per Document",
+            "node": "Split Into Single Document Items",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — No Templates Configured",
+            "node": "Skip No Templates Configured",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Split Into One Item Per Document": {
+    "Split Into Single Document Items": {
       "main": [
         [
           {
@@ -629,21 +761,21 @@
       "main": [
         [
           {
-            "node": "Get DocuSign Account Info",
+            "node": "Fetch DocuSign Account Info",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Copy Template Document",
+            "node": "Copy Google Docs Template",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get DocuSign Account Info": {
+    "Fetch DocuSign Account Info": {
       "main": [
         [
           {
@@ -658,117 +790,117 @@
       "main": [
         [
           {
-            "node": "Create Draft Retainer Envelope",
+            "node": "Post DocuSign Draft Envelope",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Create Draft Retainer Envelope": {
+    "Post DocuSign Draft Envelope": {
       "main": [
         [
           {
-            "node": "Build DocuSign Result",
+            "node": "Prepare DocuSign Result Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build DocuSign Result": {
+    "Prepare DocuSign Result Data": {
       "main": [
         [
           {
-            "node": "Combine Document Results",
+            "node": "Merge All Document Results",
             "type": "main",
             "index": 1
           }
         ]
       ]
     },
-    "Copy Template Document": {
+    "Copy Google Docs Template": {
       "main": [
         [
           {
-            "node": "Build Merge Field Replacements",
+            "node": "Build Merge Field Updates",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Merge Field Replacements": {
+    "Build Merge Field Updates": {
       "main": [
         [
           {
-            "node": "Merge Fields Into Copy",
+            "node": "Update Google Doc Merge Fields",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Merge Fields Into Copy": {
+    "Update Google Doc Merge Fields": {
       "main": [
         [
           {
-            "node": "Export Filled Document As PDF",
+            "node": "Export Document As PDF",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Export Filled Document As PDF": {
+    "Export Document As PDF": {
       "main": [
         [
           {
-            "node": "Build Google Docs Result",
+            "node": "Prepare Google Docs Result Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Google Docs Result": {
+    "Prepare Google Docs Result Data": {
       "main": [
         [
           {
-            "node": "Combine Document Results",
+            "node": "Merge All Document Results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Combine Document Results": {
+    "Merge All Document Results": {
       "main": [
         [
           {
-            "node": "Aggregate Filled Documents",
+            "node": "Aggregate All Filled Documents",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Aggregate Filled Documents": {
+    "Aggregate All Filled Documents": {
       "main": [
         [
           {
-            "node": "Log Document Fill To Compliance Audit",
+            "node": "Log Document Fill To Audit",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Document Fill To Compliance Audit": {
+    "Log Document Fill To Audit": {
       "main": [
         [
           {
-            "node": "Notify Attorney Documents Ready For Review",
+            "node": "Notify Attorney Of Documents",
             "type": "main",
             "index": 0
           }
