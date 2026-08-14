@@ -34,6 +34,10 @@ This is field population only. It never drafts legal language, never chooses wha
 
 Want a different set of tags? Edit the `MERGE_FIELDS` object in the **Build Merge Field Replacements** node.
 
+### Generated documents folder (one-time)
+
+Create a Drive folder to hold the filled copies this workflow generates (e.g. "Generated Documents"), and copy its folder ID from the URL the same way as above. Every filled Google Doc copy is saved here rather than sitting in the same folder as your templates, and is kept (not deleted) so the review email can link straight to it if the attorney wants to open and edit it directly instead of just reviewing the PDF.
+
 ### DocuSign template (the retainer)
 
 1. In DocuSign, go to **Templates → New → Create a Template**. Upload your retainer agreement.
@@ -81,6 +85,7 @@ Want different fields? Edit the `textTabs` array in the **Build DocuSign Envelop
 | `DOCUSIGN_RETAINER_ROLE_NAME` | The signer role name from your DocuSign template exactly (e.g. `Client`) |
 | `TEMPLATE_INTAKE_DOC_ID` | The file ID of your Client Intake Form template |
 | `TEMPLATE_COVER_SHEET_DOC_ID` | The file ID of your Court Cover Sheet template |
+| `GENERATED_DOCS_FOLDER_ID` | The folder ID of a Drive folder where filled document copies are saved (create one folder, e.g. "Generated Documents," and reuse it — see Step 1b) |
 | `FIRM_REVIEWER_EMAIL` | Where filled documents are sent for review. Falls back to `FIRM_EMAIL` if unset |
 | `FIRM_FROM_EMAIL` | The address filled-document emails are sent from |
 | `GUARDRAIL_WORKFLOW_ID` | The numeric ID of the Bar-Compliance Guardrail workflow — find it in the n8n URL when you open NTC-33: `.../workflow/WORKFLOW_ID` |
@@ -115,10 +120,14 @@ The workflow ships with a pinned test intake (Jane Doe, Personal Injury) on the 
 2. Confirm **Validate And Normalize Intake Data** outputs `is_valid_intake: true`.
 3. Confirm **Build Document Fill List** finds the documents you configured, with the retainer showing `method: "docusign"` and the others `method: "google_docs"`.
 4. Run the rest of the chain and confirm:
-   - **The review email arrives** at `FIRM_REVIEWER_EMAIL` with a PDF attached for each Google Docs document, and a line referencing a DocuSign envelope ID for the retainer.
+   - **The review email arrives** at `FIRM_REVIEWER_EMAIL` with an actual PDF file attached for each Google Docs document (check the bottom of the email, not just the body text) — plus a line for each one with a link to the editable Drive copy, and a separate line referencing a DocuSign envelope ID for the retainer.
+   - **Open the PDF attachments** and confirm the `{{merge_tag}}` placeholders were actually replaced with the test intake's real data, not left as literal text.
+   - **Click the "Open/edit the copy" link** in the email and confirm it opens the filled Google Doc directly, sitting inside your `GENERATED_DOCS_FOLDER_ID` folder — not the original template.
    - **In DocuSign**, under **Manage → Drafts**, a new draft envelope appears with the retainer template, fields pre-filled with the test intake's data, and status still showing as a draft — **confirm it has NOT been sent**. This is the single most important thing to verify before this goes live.
 
 **If the DocuSign envelope doesn't appear, or fields aren't pre-filled**: check that your template's Data Labels (Step 1) exactly match the `tabLabel` values in **Build DocuSign Envelope Request**, and that `DOCUSIGN_RETAINER_ROLE_NAME` matches your template's signer role name exactly — both are case-sensitive exact-match requirements on DocuSign's side.
+
+**If the email arrives with no PDF attached**: open **Notify Attorney Documents Ready For Review** → Options → Attachments, and confirm the binary property field is set to an expression (not left blank) — a blank/empty attachment entry silently sends no attachment at all on this node, it does not mean "attach everything."
 
 **If the PDF comes through empty or in the wrong format**: open **Export Filled Document As PDF** → Options, and confirm the Google Docs conversion format is set to PDF. This exact option's layout couldn't be verified against a live n8n instance while this template was built — if it looks different from what you'd expect, re-select PDF from whatever conversion dropdown is shown and re-save.
 
