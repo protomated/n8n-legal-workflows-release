@@ -320,17 +320,27 @@
           "mode": "id",
           "value": "={{ $json.template_doc_id }}"
         },
-        "options": {
-          "name": "={{ $json.doc_label + ' — ' + $json.full_name }}",
-          "parents": ["={{ $vars.GENERATED_DOCS_FOLDER_ID }}"]
-        }
+        "name": "={{ $json.doc_label + ' — ' + $json.full_name }}",
+        "sameFolder": false,
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $vars.GENERATED_DOCS_FOLDER_ID }}"
+        },
+        "options": {}
       },
       "id": "5700ff00-0057-4000-a000-000000000009",
       "name": "Copy Template Document",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [1552, 0],
-      "notes": "Duplicates the Google Doc template so the merge step below can safely replace text without ever touching your original template. The copy is saved directly into GENERATED_DOCS_FOLDER_ID (an n8n Variable) rather than sitting loose in your Drive root — create one folder for this once and reuse it for every intake.\n\nCredential: project → Credentials tab → New → search 'Google Drive' → select 'Google Drive OAuth2 API'. Same setup pattern as the Google Sheets credential used by the Bar-Compliance Guardrail (NTC-33) — create an OAuth client in Google Cloud Console, enable the Google Drive API AND the Google Docs API (both, since 'Merge Fields Into Copy' below needs Docs API access on this same credential), then connect. Save as 'Google Drive account'.\n\nResponse: { id, name, mimeType } — id is the new copy's document ID, read explicitly by the next two steps (this node's own output replaces the intake data, so downstream steps reference the intake fields via 'Split Into One Item Per Document' by name, not $json). The filled copy is intentionally kept (not deleted) so the review email below can link directly to it for editing.",
+      "notes": "Duplicates the Google Doc template so the merge step below can safely replace text without ever touching your original template. 'Copy In The Same Folder' is off, with Parent Drive set to My Drive and Parent Folder set to GENERATED_DOCS_FOLDER_ID (an n8n Variable) — create one folder for this once and reuse it for every intake. The rename (File Name field) and destination folder are both top-level fields on this node, not under Options — an earlier version of this template nested them under Options, which n8n silently ignored (files landed with the default \"Copy of ...\" name, loose in Drive root).\n\nCredential: project → Credentials tab → New → search 'Google Drive' → select 'Google Drive OAuth2 API'. Same setup pattern as the Google Sheets credential used by the Bar-Compliance Guardrail (NTC-33) — create an OAuth client in Google Cloud Console, enable the Google Drive API AND the Google Docs API (both, since 'Merge Fields Into Copy' below needs Docs API access on this same credential), then connect. Save as 'Google Drive account'.\n\nResponse: { id, name, mimeType } — id is the new copy's document ID, read explicitly by the next two steps (this node's own output replaces the intake data, so downstream steps reference the intake fields via 'Split Into One Item Per Document' by name, not $json). The filled copy is intentionally kept (not deleted) so the review email below can link directly to it for editing.",
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "1",
