@@ -68,8 +68,8 @@
     },
     {
       "parameters": {
-        "content": "## Combine, log, and deliver\n\nCombines every generated PDF plus the DocuSign draft reference into one email, logs the run to the OPS1 audit sheet, then delivers to the attorney for review.",
-        "width": 864,
+        "content": "## Combine, log, and deliver\n\nWaits for both the Google Docs path and the DocuSign path to finish (Merge node), combines every generated PDF plus the DocuSign draft reference into one email, logs the run to the OPS1 audit sheet, then delivers to the attorney for review.",
+        "width": 1088,
         "height": 300,
         "color": 7
       },
@@ -413,7 +413,16 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [2464, 0],
-      "notes": "Converges here from the Google Docs path before joining the DocuSign path at Aggregate Filled Documents. Set to 'Run Once for Each Item' -- see 'Build Merge Field Replacements' notes."
+      "notes": "Converges here from the Google Docs path before joining the DocuSign path at Combine Document Results. Set to 'Run Once for Each Item' -- see 'Build Merge Field Replacements' notes."
+    },
+    {
+      "parameters": {},
+      "id": "5700ff00-0057-4000-a000-00000000001c",
+      "name": "Combine Document Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [2688, 160],
+      "notes": "Waits for both the Google Docs path and the DocuSign path to finish, then combines every item from both into one list for Aggregate Filled Documents.\n\nThis explicit Merge node matters: two branches connected straight into the same input on a downstream node can run that node as soon as the FASTER branch finishes, before the slower one arrives -- silently dropping whichever document type takes longer (this happened during testing: the DocuSign draft was dropped from the review email because its branch finished after Aggregate had already run). A Merge node always waits for all of its inputs first."
     },
     {
       "parameters": {
@@ -423,8 +432,8 @@
       "name": "Aggregate Filled Documents",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2688, 160],
-      "notes": "Runs once for all documents generated in this run (mode: Run Once for All Items) — receives items from both the Google Docs path and the DocuSign path, since both converge here.\n\nAssumes each Google Docs item's binary property is named 'data', matching the 'Put Output in Field' setting on Export Filled Document As PDF. If any one document's export failed, it's silently excluded rather than blocking the others — check execution history to see which one, if doc_count is lower than expected."
+      "position": [2912, 160],
+      "notes": "Runs once for all documents generated in this run (mode: Run Once for All Items) — receives the combined list from Combine Document Results, which waits for both the Google Docs path and the DocuSign path before this runs.\n\nAssumes each Google Docs item's binary property is named 'data', matching the 'Put Output in Field' setting on Export Filled Document As PDF. If any one document's export failed, it's silently excluded rather than blocking the others — check execution history to see which one, if doc_count is lower than expected."
       },
     {
       "parameters": {
@@ -453,7 +462,7 @@
       "name": "Log Document Fill To Compliance Audit",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
-      "position": [2688, 0],
+      "position": [3136, 0],
       "notes": "Calls the Bar-Compliance Guardrail to log this document-generation run to your compliance audit sheet.\n\nThis workflow delivers documents to your own attorney/reviewer, not a client -- so opt-out checking does not apply and approved will always be true here. The purpose of this call is the audit trail: which documents were generated, for whom, and when.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable (Settings → Variables)."
     },
     {
@@ -475,7 +484,7 @@
       "name": "Notify Attorney Documents Ready For Review",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [2912, 0],
+      "position": [3360, 0],
       "notes": "Delivers every filled document as a PDF attachment to the reviewing attorney.\n\ntoEmail reads FIRM_REVIEWER_EMAIL (falls back to FIRM_EMAIL if unset) -- never the intake submitter's own address, so the review copy always lands with your firm, not bounces back to the client.\n\nCredential: project → Credentials tab → New → search SMTP → enter your email provider's settings → save as 'Email account (SMTP)'.\n\nThe attachmentsBinary entry with no 'property' value attaches every binary property on the item -- this picks up all of the file0, file1, ... properties built by Aggregate Filled Documents automatically, regardless of how many documents were generated.",
       "credentials": {
         "smtp": {
@@ -658,9 +667,9 @@
       "main": [
         [
           {
-            "node": "Aggregate Filled Documents",
+            "node": "Combine Document Results",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
@@ -710,6 +719,17 @@
       ]
     },
     "Build Google Docs Result": {
+      "main": [
+        [
+          {
+            "node": "Combine Document Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Document Results": {
       "main": [
         [
           {
