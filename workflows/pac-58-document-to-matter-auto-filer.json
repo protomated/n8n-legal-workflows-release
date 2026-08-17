@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Document to Matter Auto-Filer\n\n### How it works\n\n1. Watches a dedicated intake mailbox for inbound emails with attachments.\n2. Matches the sender's email to a Clio contact, then to that contact's open matter — using metadata and rules only (sender email, matter number in the subject line), never reading the document itself.\n3. Files each attachment into a Google Drive folder named after the matched matter, auto-creating the folder on first use, with the filename prefixed by the date received.\n4. If the sender or matter can't be confidently matched, routes to a staff alert with the original attachments — never guesses and files to the wrong matter.\n5. Logs every filing (and every unmatched exception) to the OPS1 compliance audit sheet.\n\n### Setup steps\n\n- [ ] Set up a dedicated intake mailbox (e.g. documents@yourfirm.com) with IMAP access.\n- [ ] Create a root 'Matters' folder in Google Drive and copy its folder ID.\n- [ ] Set CLIO_BASE_URL, MATTERS_ROOT_FOLDER_ID, FIRM_STAFF_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID in n8n Variables.\n- [ ] Wire an IMAP credential, a Clio OAuth2 credential (reuse if already deployed), a Google Drive OAuth2 credential (reuse if PAC-57 is deployed), and an SMTP credential.\n\n### Customization\n\nThe matter-matching logic lives in 'Determine Matching Matter' — adjust how ambiguous matches (a contact with more than one open matter) get resolved if exact display-number matching in the subject line doesn't fit how your firm references matters in email.",
+        "content": "## Document to Matter Auto-Filer\n\n### How it works\n\n1. Watches a dedicated intake mailbox for inbound emails with attachments.\n2. Matches the sender's email to a Clio contact, then to that contact's open matter — using metadata and rules only (sender email, matter number in the subject line), never reading the document itself.\n3. Files each attachment into a Google Drive folder named after the matched matter, auto-creating the folder on first use, with the filename prefixed by the date received. Matter folders are created under GENERATED_DOCS_FOLDER_ID — the same folder PAC-57 saves filled documents into — so there's no separate root folder to set up.\n4. If the sender or matter can't be confidently matched, routes to a staff alert (FIRM_FROM_EMAIL) with the original attachments — never guesses and files to the wrong matter.\n5. Logs every filing (and every unmatched exception) to the OPS1 compliance audit sheet.\n\n### Setup steps\n\n- [ ] Set up a dedicated intake mailbox (e.g. documents@yourfirm.com) with IMAP access.\n- [ ] Set CLIO_BASE_URL, GENERATED_DOCS_FOLDER_ID, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID in n8n Variables (reuse the same ones from PAC-57 if already deployed — no new variables needed for this template).\n- [ ] Wire an IMAP credential, a Clio OAuth2 credential (reuse if already deployed), a Google Drive OAuth2 credential (reuse if PAC-57 is deployed), and an SMTP credential.\n\n### Customization\n\nThe matter-matching logic lives in 'Determine Matching Matter' — adjust how ambiguous matches (a contact with more than one open matter) get resolved if exact display-number matching in the subject line doesn't fit how your firm references matters in email.",
         "width": 480,
         "height": 1080
       },
@@ -70,16 +70,14 @@
       "parameters": {
         "mailbox": "INBOX",
         "format": "resolved",
-        "options": {
-          "downloadAttachments": true
-        }
+        "options": {}
       },
       "id": "5800aa00-0058-4000-a000-000000000001",
       "name": "When Document Email Received",
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2,
       "position": [0, 0],
-      "notes": "Watches a dedicated intake mailbox (e.g. documents@yourfirm.com) for new mail and downloads any attachments as binary data.\n\nCredential: project → Credentials tab → New → search 'IMAP' → Host/Port/User/Password from your email provider's IMAP settings (Gmail: use an App Password; Microsoft 365: enable IMAP in the mailbox settings). Save as 'Intake mailbox (IMAP)'.\n\nThis node's exact 'downloadAttachments' option placement (top-level vs nested under Options) could not be confirmed against a live n8n instance during template authoring — if attachments aren't coming through as binary data, open this node and confirm 'Download Attachments' is toggled on wherever it actually appears in your n8n version.\n\nSet the mailbox to whatever folder your provider delivers new intake mail to — usually INBOX."
+      "notes": "Watches a dedicated intake mailbox (e.g. documents@yourfirm.com) for new mail and downloads any attachments as binary data.\n\nCredential: project → Credentials tab → New → search 'IMAP' → Host/Port/User/Password from your email provider's IMAP settings (Gmail: use an App Password; Microsoft 365: enable IMAP in the mailbox settings). Save as 'Intake mailbox (IMAP)'.\n\nFormat is set to 'Resolved' — confirmed live that this alone delivers attachments as binary data with no extra option needed; the top-level 'Download Attachments' toggle only applies when Format is 'Simple' instead.\n\nSet the mailbox to whatever folder your provider delivers new intake mail to — usually INBOX."
     },
     {
       "parameters": {
@@ -298,8 +296,16 @@
       "parameters": {
         "resource": "fileFolder",
         "operation": "search",
-        "queryString": "={{ \"'\" + $vars.MATTERS_ROOT_FOLDER_ID + \"' in parents and name = '\" + $json.matter_display_number.replace(/'/g, \"\\\\'\") + \"' and mimeType = 'application/vnd.google-apps.folder' and trashed = false\" }}",
-        "filter": {},
+        "searchMethod": "query",
+        "queryString": "={{ \"name = '\" + $json.matter_display_number.replace(/'/g, \"\\\\'\") + \"'\" }}",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $vars.GENERATED_DOCS_FOLDER_ID }}"
+          },
+          "whatToSearch": "folders"
+        },
         "options": {}
       },
       "id": "5800aa00-0058-4000-a000-00000000000b",
@@ -307,7 +313,7 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [2016, 0],
-      "notes": "Checks whether a Drive folder already exists for this matter, under your MATTERS_ROOT_FOLDER_ID, named exactly after the matter's display_number.\n\nCredential: same 'Google Drive account' credential as used in PAC-57 — reuse it if that template is already deployed.\n\nThe exact 'Search Query' field name/format on this node's Search operation could not be confirmed against a live n8n instance during template authoring — the query string itself uses standard Google Drive API search syntax, but double-check this node opens with the query populated correctly, and adjust the field it's typed into if needed.\n\nReturns zero or more matching folders — the next step treats more than zero as 'exists' and uses the first match.",
+      "notes": "Checks whether a Drive folder already exists for this matter, under GENERATED_DOCS_FOLDER_ID (reusing PAC-57's Drive folder rather than requiring a separate one), named exactly after the matter's display_number.\n\nCredential: same 'Google Drive account' credential as used in PAC-57 — reuse it if that template is already deployed.\n\nSearch Method is set to 'Advanced Search' with an exact 'name =' query, scoped to GENERATED_DOCS_FOLDER_ID and folders-only via the Filter collection — confirmed against n8n's own Google Drive node source rather than guessed. The default Search Method ('Search File/Folder Name') only does a partial/contains match and doesn't accept a hand-rolled query string the way an earlier version of this node assumed.\n\nReturns zero or more matching folders — the next step treats more than zero as 'exists' and uses the first match.",
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "2",
@@ -364,16 +370,25 @@
         "resource": "folder",
         "operation": "create",
         "name": "={{ $json.matter_display_number + ($json.matter_description ? ' — ' + $json.matter_description : '') }}",
-        "options": {
-          "folderId": "={{ $vars.MATTERS_ROOT_FOLDER_ID }}"
-        }
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $vars.GENERATED_DOCS_FOLDER_ID }}"
+        },
+        "options": {}
       },
       "id": "5800aa00-0058-4000-a000-00000000000e",
       "name": "Create Matter Folder",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [2688, 160],
-      "notes": "Creates a new Drive folder for this matter under MATTERS_ROOT_FOLDER_ID, named after the matter's display number and description, the first time a document arrives for it.\n\nUses the same 'Google Drive account' credential as the search step.\n\nThis node's own response ({id, name, ...}) becomes the item's new json — the next step reads matter/email metadata back from 'Determine Matching Matter' explicitly, and reads this folder's id via a fallback expression that works whether the folder was just created here or already existed.",
+      "notes": "Creates a new Drive folder for this matter under GENERATED_DOCS_FOLDER_ID (reusing the same folder PAC-57 saves filled documents into, so firms don't need a second Drive folder variable), named after the matter's display number and description, the first time a document arrives for it.\n\nUses the same 'Google Drive account' credential as the search step.\n\nParent folder is set via the top-level 'Parent Drive'/'Parent Folder' fields (resource locators), not nested under Options — the Create operation's schema puts driveId/folderId at the top level, same lesson learned the hard way on PAC-57's copy operation.\n\nThis node's own response ({id, name, ...}) becomes the item's new json — the next step reads matter/email metadata back from 'Determine Matching Matter' explicitly, and reads this folder's id via a fallback expression that works whether the folder was just created here or already existed.",
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "2",
@@ -396,17 +411,27 @@
       "parameters": {
         "resource": "file",
         "operation": "upload",
+        "inputDataFieldName": "data",
         "name": "={{ $json.received_date + ' - ' + ($binary.data.fileName || 'attachment') }}",
-        "options": {
-          "parents": ["={{ $json.folder_id }}"]
-        }
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.folder_id }}"
+        },
+        "options": {}
       },
       "id": "5800aa00-0058-4000-a000-000000000010",
       "name": "Upload Attachment To Matter Folder",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [3136, 0],
-      "notes": "Uploads each attachment into the matched matter's Drive folder, with the filename prefixed by the date the email was received (e.g. '2026-08-13 - signed retainer.pdf').\n\nUses the same 'Google Drive account' credential as the earlier Drive steps.\n\nThe exact field name/location for setting the parent folder on upload (Options → Parent Folder vs a top-level field) could not be confirmed against a live n8n instance during template authoring — if the file uploads to the wrong location (e.g. Drive root), open this node and move the folder reference to wherever the Parent Folder option actually appears in your n8n version.",
+      "notes": "Uploads each attachment into the matched matter's Drive folder, with the filename prefixed by the date the email was received (e.g. '2026-08-13 - signed retainer.pdf').\n\nUses the same 'Google Drive account' credential as the earlier Drive steps.\n\nDestination folder is set via the top-level 'Parent Drive'/'Parent Folder' fields (resource locators), not nested under Options — confirmed against n8n's own Google Drive node source, same lesson learned on the Copy and Create steps in PAC-57/58. 'Input Data Field Name' is set to 'data', matching the binary property Split Into One Item Per Attachment builds for every attachment.",
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "2",
@@ -438,7 +463,7 @@
             "channel": "email",
             "message": "={{ $json.filed_count }} document(s) auto-filed to matter {{ $json.matter_display_number }} from {{ $json.sender_email }}.",
             "matter_id": "={{ $json.matter_display_number }}",
-            "recipient": "={{ $vars.FIRM_STAFF_EMAIL }}",
+            "recipient": "={{ $vars.FIRM_FROM_EMAIL }}",
             "template_id": "PAC-58"
           },
           "schema": [],
@@ -479,7 +504,7 @@
             "channel": "email",
             "message": "={{ 'Could not auto-file document(s) from ' + $json.sender_email + ': ' + $json.reason }}",
             "matter_id": "",
-            "recipient": "={{ $vars.FIRM_STAFF_EMAIL }}",
+            "recipient": "={{ $vars.FIRM_FROM_EMAIL }}",
             "template_id": "PAC-58"
           },
           "schema": [],
@@ -500,7 +525,7 @@
       "parameters": {
         "text": "={{ 'A document could not be auto-filed and needs manual attention.\\n\\nFrom: ' + $('Build Manual Filing Alert').item.json.sender_email + '\\nSubject: ' + $('Build Manual Filing Alert').item.json.subject + '\\nReason: ' + $('Build Manual Filing Alert').item.json.reason + '\\n\\n' + $('Build Manual Filing Alert').item.json.attachment_count + ' attachment(s) included below — please file to the correct matter manually.' }}",
         "subject": "={{ 'Manual filing needed — ' + $('Build Manual Filing Alert').item.json.sender_email }}",
-        "toEmail": "={{ $vars.FIRM_STAFF_EMAIL }}",
+        "toEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
         "options": {
           "attachmentsUi": {
             "attachmentsBinary": [
