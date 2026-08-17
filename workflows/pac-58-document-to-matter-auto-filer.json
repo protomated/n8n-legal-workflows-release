@@ -442,7 +442,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Runs once after all attachments for this email have been filed, to build one compliance\n// log entry and one internal summary rather than one per attachment.\nconst items = $input.all();\nconst first = items[0].json;\n\nreturn [{ json: {\n  matter_display_number: first.matter_display_number,\n  sender_email: first.sender_email,\n  subject: first.subject,\n  filed_count: items.length,\n} }];"
+        "jsCode": "// Runs once after all attachments for this email have been filed, to build one compliance\n// log entry and one internal summary rather than one per attachment.\n// Reads matter/sender metadata from 'Split Into One Item Per Attachment' explicitly --\n// Upload Attachment To Matter Folder's own response (Drive file metadata) replaces each\n// item's json, so by the time items reach here that data is already gone from $input.\nconst items = $input.all();\nconst meta = $('Split Into One Item Per Attachment').first().json;\n\nreturn [{ json: {\n  matter_display_number: meta.matter_display_number,\n  sender_email: meta.sender_email,\n  subject: meta.subject,\n  filed_count: items.length,\n} }];"
       },
       "id": "5800aa00-0058-4000-a000-000000000011",
       "name": "Aggregate Filed Documents",
