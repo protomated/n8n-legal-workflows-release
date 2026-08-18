@@ -362,7 +362,7 @@
         },
         "workflowInputs": {
           "value": {
-            "channel": "gbp",
+            "channel": "email",
             "message": "={{ $json.gbp_post }}",
             "matter_id": "",
             "recipient": "={{ $vars.FIRM_EMAIL }}",
@@ -463,7 +463,7 @@
         },
         "workflowInputs": {
           "value": {
-            "channel": "gbp",
+            "channel": "email",
             "message": "={{ 'Flagged, not published: ' + $json.safety_note }}",
             "matter_id": "",
             "recipient": "={{ $vars.FIRM_EMAIL }}",
