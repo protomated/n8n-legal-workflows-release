@@ -4,82 +4,98 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Google Business Profile Auto-Poster\n\n### How it works\n\n1. Once a week, reads the firm's own Content Queue Google Sheet and finds the next row that hasn't been drafted yet.\n2. Sends that raw content (a field note, tip, or announcement the firm typed in) to Claude to be repurposed into a single ready-to-paste Google Business Profile post — marketing copy only, same compliance rules as the Content Repurposer (PAC-31).\n3. An independent post-hoc keyword scan re-checks the generated post for legal-sounding language before it's allowed through.\n4. If it passes, the finished post text is emailed to staff to paste into Google Business Profile directly — this template does not call Google's Business Profile API to auto-publish. Direct posting access requires Google's own developer allowlist approval, which is a real barrier in practice (confirmed against this catalog's own Negative-Review Rapid Response template, PAC-50, whose Zapier-bridge approach to the same API has been stuck in Zapier's own account-approval queue) — so this template stays reliable for every firm by keeping a human as the one who clicks publish, rather than depending on access that may never come through.\n5. The queue row is marked accordingly, the event is logged to the OPS1 compliance audit sheet, and staff get an email with the ready-to-paste post, or a flag if something needs a human look.\n\n### Setup steps\n\n- [ ] Create a Google Sheet named 'Content Queue' with columns: content, status, practice_area, posted_at, notes. Add a header row, then one row per post idea (leave status blank).\n- [ ] Set GBP_CONTENT_QUEUE_SHEET_ID to that sheet's ID and connect the Google Sheets credential.\n- [ ] Get an Anthropic API key from console.anthropic.com and connect it as a Header Auth credential (reuse from PAC-31/PAC-50 if already deployed).\n- [ ] Set FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, FIRM_STAFF_EMAIL, GUARDRAIL_WORKFLOW_ID, and optionally FIRM_GBP_CTA_URL / FIRM_GBP_CTA_TYPE / FIRM_GBP_DASHBOARD_URL (reuse PAC-50's value if already deployed).\n- [ ] Connect the SMTP credential.\n\n### Customization\n\nAdjust the weekly cadence on the trigger node. Edit the compliance rules or character limit directly in 'Build GBP Post Prompt' if your bar's advertising rules require different footer language. If your firm later gets approved Business Profile API access (directly or through Zapier), swap the final email step for a publish call — everything upstream of it (generation, safety check, queue tracking) stays the same.",
+        "content": "## Google Business Profile Auto-Poster\n\n### How it works\n\n1. The workflow triggers every Monday at 9am to start processing content for Google Business Profile posts.\n2. It reads queued content items from a Google Sheet and identifies the next content to process.\n3. For content found, it builds a prompt and sends it to the Claude API for generating a post, then validates the generated content.\n4. Depending on the validation, the content is either marked as drafted and logged for compliance or flagged for review.\n5. Notifications are sent to staff for empty queue, post ready, or flagged content accordingly.\n\n### Setup steps\n\n- [ ] Configure the 'Weekly Monday 9am Trigger' schedule to execute at the desired time.\n- [ ] Set up and connect Google Sheets credentials to allow reading and updating the content queue.\n- [ ] Provide API credentials and endpoint configuration for the Claude API HTTP Request node.\n- [ ] Configure email nodes with SMTP credentials for sending notifications to staff.\n- [ ] Prepare and configure sub-workflows for compliance logging and flagged content handling if used.\n\n### Customization\n\nAdjust the content queue Google Sheet structure and the prompt-building code to match specific posting requirements or firm configurations.",
         "width": 480,
-        "height": 940
+        "height": 896
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -700,
-        -500
+        -608,
+        -448
       ],
-      "id": "sticky-main",
+      "id": "e4f0d74e-769b-46d1-a4b5-32af9a65293e",
       "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Trigger and content queue\n\nRuns weekly, reads the firm's Content Queue sheet, and finds the next row that hasn't been drafted or flagged yet. If nothing's queued, staff get a reminder instead of the week going by silently empty.",
-        "width": 1264,
-        "height": 420,
+        "content": "## Trigger and content read\n\nStarts the workflow on schedule and reads the content queue from the Google Sheet.",
+        "width": 864,
+        "height": 272,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -160
+        -112
       ],
-      "id": "sticky-1",
+      "id": "11802f53-607a-4fad-be11-fe87445ac88b",
       "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Generate and safety-check the post\n\nRepurposes the raw content into one Google Business Profile post via Claude, then re-checks it with an independent keyword scan before anything is allowed through — same two-layer approach as PAC-31 and PAC-50.",
-        "width": 1120,
-        "height": 420,
+        "content": "## Empty queue notification\n\nSends an email notification if no queued content is found to process.",
+        "width": 240,
+        "height": 352,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1360,
-        -160
+        848,
+        0
       ],
-      "id": "sticky-2",
+      "id": "dd9d7431-9f92-4f8d-83f4-0b59349108aa",
       "name": "Sticky Note2"
     },
     {
       "parameters": {
-        "content": "## Draft delivery path\n\nEmails the approved, ready-to-paste post straight to staff — this template doesn't call the Business Profile API to auto-publish (see the main note for why), so a human still clicks publish. Marks the queue row drafted and logs it either way.",
-        "width": 896,
-        "height": 420,
+        "content": "## Build and generate post\n\nConstructs the text prompt from firm configuration and calls Claude API to generate the Google Business Profile post content.",
+        "width": 864,
+        "height": 304,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2320,
-        -160
+        848,
+        -352
       ],
-      "id": "sticky-3",
+      "id": "ae42e6d8-bb08-45f3-80fa-6e9aa0b6f184",
       "name": "Sticky Note3"
     },
     {
       "parameters": {
-        "content": "## Flagged path\n\nIf either safety layer catches legal-sounding language, nothing is published. The queue row is marked 'Needs Review' so next week's run moves on to the next row instead of retrying the same one forever, and staff get the original content to fix or replace.",
-        "width": 1120,
-        "height": 340,
+        "content": "## Process approved posts\n\nUpdates the content queue as drafted, logs compliance, and emails staff that the post is ready.",
+        "width": 640,
+        "height": 304,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2544,
-        320
+        1744,
+        -448
       ],
-      "id": "sticky-4",
+      "id": "13cdcc61-1cb2-4cc3-badf-08944e8d00be",
       "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Process flagged posts\n\nUpdates the content queue as needing review, triggers a flagged content workflow, and emails staff about the flagged content.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        192
+      ],
+      "id": "373f68f1-0357-4522-8ae5-adf3051e9e66",
+      "name": "Sticky Note5"
     },
     {
       "parameters": {
@@ -93,7 +109,7 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000001",
-      "name": "Weekly GBP Post Trigger",
+      "name": "Every Monday at 9am Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -118,7 +134,7 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000002",
-      "name": "Fetch Content Queue Sheet",
+      "name": "Read Content Queue From Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -138,7 +154,7 @@
         "jsCode": "// Finds the first row that hasn't been drafted or flagged yet -- blank status or 'Queued'\n// both count. A row marked 'Drafted' or 'Needs Review' is skipped, so a flagged row never\n// blocks every row behind it from being tried the following week.\nconst rows = $input.all();\n\nconst next = rows.find(r => {\n  const status = String(r.json.status || '').trim().toLowerCase();\n  return status === '' || status === 'queued';\n});\n\nconst content = next ? String(next.json.content || '').trim() : '';\n\nreturn [{ json: {\n  has_content: !!next && content.length > 0,\n  row_number: next ? next.json.row_number : null,\n  content,\n  practice_area: next ? String(next.json.practice_area || '').trim() : '',\n} }];"
       },
       "id": "6000aa00-0060-4000-a000-000000000003",
-      "name": "Find Next Queued Content Row",
+      "name": "Find Next Queued Post",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -173,7 +189,7 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000004",
-      "name": "If Has Queued Content",
+      "name": "If Queued Post Exists",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -185,16 +201,16 @@
     },
     {
       "parameters": {
-        "text": "The Google Business Profile Auto-Poster ran today but found no queued content — every row in the Content Queue sheet is already marked Drafted or Needs Review, or the sheet has no rows beyond the header.\n\nAdd a new row with a field note, tip, or announcement in the 'content' column (leave 'status' blank) so next week's run has something to work with.",
+        "text": "The Google Business Profile Auto-Poster ran today but found no queued content — every row in the Content Queue sheet is already marked Posted or Needs Review, or the sheet has no rows beyond the header.\n\nAdd a new row with a field note, tip, or announcement in the 'content' column (leave 'status' blank) so next week's run has something to work with.",
         "subject": "Google Business Profile queue is empty — nothing posted this week",
-        "html": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\"><div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\"><div style=\"background:#f59e0b;padding:28px 32px;\"><div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">Content Queue Empty</div><div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;\">Nothing posted this week</div></div><div style=\"padding:28px 32px;color:#334155;font-size:14px;line-height:1.6;\"><p style=\"margin:0 0 16px;\">The Google Business Profile Auto-Poster ran today but found no queued content — every row in the Content Queue sheet is already marked Drafted or Needs Review, or the sheet has no rows beyond the header.</p><p style=\"margin:0;\">Add a new row with a field note, tip, or announcement in the <code style=\"background:#f1f5f9;padding:2px 6px;border-radius:4px;\">content</code> column (leave <code style=\"background:#f1f5f9;padding:2px 6px;border-radius:4px;\">status</code> blank) so next week's run has something to work with.</p></div></div></body></html>",
         "toEmail": "={{ $vars.FIRM_STAFF_EMAIL || $vars.FIRM_EMAIL }}",
         "options": {},
         "emailType": "html",
-        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}"
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "html": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\"><div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\"><div style=\"background:#f59e0b;padding:28px 32px;\"><div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">Content Queue Empty</div><div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;\">Nothing posted this week</div></div><div style=\"padding:28px 32px;color:#334155;font-size:14px;line-height:1.6;\"><p style=\"margin:0 0 16px;\">The Google Business Profile Auto-Poster ran today but found no queued content — every row in the Content Queue sheet is already marked Drafted or Needs Review, or the sheet has no rows beyond the header.</p><p style=\"margin:0;\">Add a new row with a field note, tip, or announcement in the <code style=\"background:#f1f5f9;padding:2px 6px;border-radius:4px;\">content</code> column (leave <code style=\"background:#f1f5f9;padding:2px 6px;border-radius:4px;\">status</code> blank) so next week's run has something to work with.</p></div></div></body></html>"
       },
       "id": "6000aa00-0060-4000-a000-000000000005",
-      "name": "Notify Staff Queue Empty",
+      "name": "Send Empty Queue Alert Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -214,12 +230,12 @@
         "jsCode": "// Reads firm config from n8n Variables and constructs the Claude API request.\n// Required variables: FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL\nconst FIRM_NAME       = $vars.FIRM_NAME;\nconst FIRM_EMAIL      = $vars.FIRM_EMAIL;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst CTA_URL         = $vars.FIRM_GBP_CTA_URL || '';\nconst CTA_TYPE        = $vars.FIRM_GBP_CTA_TYPE || 'LEARN_MORE';\n\nif (!FIRM_NAME)       throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL)      throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it (can be the same as FIRM_EMAIL).');\n\nconst item = $input.first().json;\nconst practiceArea = item.practice_area || 'General practice';\n\nconst prompt = `You are a marketing copywriter for ${FIRM_NAME}, a law firm, writing a single Google Business Profile post. Repurpose the raw content below into ONE ready-to-publish post.\n\nRules you must follow — no exceptions:\n- Marketing copy only. No legal advice, legal opinions, case law citations, statutory references, or anything that constitutes legal counsel.\n- No client names, case numbers, opposing party names, specific dollar amounts, or any detail that could identify a specific client or matter.\n- Maximum 1,500 characters (Google Business Profile's hard limit) — aim for 500-900 for readability.\n- Plain language, warm and professional, written for a prospective client doing a local search, not a lawyer.\n- End with a short, clear call to action (e.g. \"Call us today\" or \"Schedule a consultation\").\n\nPractice area: ${practiceArea}\n\nRaw content:\n${item.content}\n\nReturn ONLY a valid JSON object — no markdown fences, no preamble. Keys required:\n- gbp_post: the post text described above\n- is_marketing_safe: true\n\nIf producing safe copy is impossible without legal advice or identifying details, return only: {\"is_marketing_safe\": false, \"safety_note\": \"brief reason\"}`;\n\nreturn [{ json: {\n  ...item,\n  firm_name: FIRM_NAME,\n  firm_email: FIRM_EMAIL,\n  firm_from_email: FIRM_FROM_EMAIL,\n  cta_url: CTA_URL,\n  cta_type: CTA_TYPE,\n  claude_request: {\n    model: 'claude-sonnet-4-6',\n    max_tokens: 800,\n    messages: [{ role: 'user', content: prompt }],\n  },\n} }];"
       },
       "id": "6000aa00-0060-4000-a000-000000000006",
-      "name": "Build GBP Post Prompt",
+      "name": "Build GBP Post Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         896,
-        -160
+        -224
       ],
       "notes": "Builds the Claude prompt from this week's queued row. Same compliance rules as the Content Repurposer (PAC-31) — marketing copy only, no client-identifying details — trimmed to a single Google Business Profile asset with its actual 1,500-character hard limit.\n\nModel: claude-sonnet-4-6. To reduce cost at the expense of quality, change to 'claude-haiku-4-5-20251001'."
     },
@@ -245,12 +261,12 @@
         "options": {}
       },
       "id": "6000aa00-0060-4000-a000-000000000007",
-      "name": "Generate GBP Post Copy",
+      "name": "Post To Claude API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
         1120,
-        -160
+        -224
       ],
       "notes": "Sends the prompt to Claude (Anthropic) and receives the post text as JSON.\n\nCredential: project → Credentials tab → New → search 'Header Auth' → Name: 'Anthropic API key' → Header Name: 'x-api-key' → Header Value: your key from console.anthropic.com. Reuse the same credential as PAC-31/PAC-50 if already deployed.\n\nCost: roughly $0.01-0.02 per run at ~800 output tokens — a weekly post costs under a dollar a year in AI spend.",
       "credentials": {
@@ -262,15 +278,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parses Claude's JSON response and runs an independent post-hoc keyword scan -- Claude's\n// self-report is Layer 1, this scan is Layer 2. is_marketing_safe is true only if both pass.\n// References 'Build GBP Post Prompt' for the queue row's metadata.\nconst prep = $('Build GBP Post Prompt').item.json;\nconst dashboardUrl = $vars.FIRM_GBP_DASHBOARD_URL || 'https://business.google.com';\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Wraps any card body in the same header/footer shell -- headerColor/headerLabel/headerTitle differ\n// between the ready-to-paste and flagged emails, the shell itself doesn't. Inline styles throughout --\n// email clients (Gmail included) strip <style> blocks, so every rule has to live on the element itself.\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n}\n\nconst rawResponse = $input.first().json;\nconst rawText = (rawResponse.content && rawResponse.content[0] && rawResponse.content[0].text)\n  ? rawResponse.content[0].text.trim()\n  : '';\n\nif (!rawText) {\n  throw new Error('Claude API returned an empty response. Check the Anthropic API key, usage quota, and rate limits at console.anthropic.com.');\n}\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```(?:json)?\\n?/, '').replace(/\\n?```$/, '');\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Claude did not return valid JSON. Raw response: ' + rawText.slice(0, 400));\n}\n\nfunction flaggedResult(reason) {\n  const bodyHtml = `\n    <div style=\"margin-bottom:22px;\">\n      <div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;\">Reason</div>\n      <div style=\"color:#334155;font-size:14px;\">${escapeHtml(reason)}</div>\n    </div>\n    <div style=\"margin-bottom:22px;\">\n      <div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;\">Original Content (row ${prep.row_number})</div>\n      <div style=\"background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;color:#334155;font-size:14px;line-height:1.6;white-space:pre-wrap;\">${escapeHtml(prep.content)}</div>\n    </div>\n    <div style=\"color:#64748b;font-size:13px;\">Edit the row in your Content Queue sheet and reset its status to blank so it's picked up again next week, or replace it with different content.</div>`;\n  return [{ json: {\n    ...prep,\n    is_marketing_safe: false,\n    safety_note: reason,\n    gbp_post: '',\n    email_subject: 'GBP Auto-Poster — flagged for human review',\n    email_body: [\n      \"This week's Google Business Profile post was flagged and NOT published.\",\n      '',\n      'Reason: ' + reason,\n      '',\n      'Original content (row ' + prep.row_number + \" in the Content Queue sheet):\",\n      prep.content,\n      '',\n      \"Edit the row and reset its status to blank so it's picked up again next week, or replace it with different content.\",\n    ].join('\\n'),\n    email_html: emailShell('#dc2626', 'Needs Review', \"This week's Google Business Profile post wasn't sent\", bodyHtml),\n  } }];\n}\n\nif (parsed.is_marketing_safe === false) {\n  return flaggedResult(parsed.safety_note || 'Claude flagged this content as unsafe to repurpose.');\n}\n\nlet gbp_post = String(parsed.gbp_post || '').trim();\n\n// Post-hoc keyword scan -- catches legal language that slipped past Claude's self-check.\nconst UNSAFE_RE = /\\b(attorney.client|work.product|privileged|legal.advice|legal.opinion|you should|we advise|we recommend|our recommendation|pursuant to|under\\s+[§\\d]|case law|statute|court held|court ruled|ruling)\\b/i;\n\nif (!gbp_post) return flaggedResult('Claude returned an empty post.');\nif (UNSAFE_RE.test(gbp_post)) return flaggedResult('Post-hoc scan found legal-sounding language in the generated post.');\n\n// Google Business Profile hard-limits posts to 1,500 characters -- truncate at a word boundary\n// rather than let the publish call fail outright if Claude ran long despite instructions.\nconst LIMIT = 1500;\nlet truncated = false;\nif (gbp_post.length > LIMIT) {\n  gbp_post = gbp_post.slice(0, LIMIT - 1).replace(/\\s+\\S*$/, '') + '…';\n  truncated = true;\n}\n\nconst ctaLine = prep.cta_url ? `\n    <div style=\"margin-bottom:22px;\">\n      <div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;\">Suggested Call-to-Action Button</div>\n      <div style=\"color:#334155;font-size:14px;\">${escapeHtml(prep.cta_type || 'LEARN_MORE')} → <a href=\"${prep.cta_url}\" style=\"color:#02BDAD;\">${escapeHtml(prep.cta_url)}</a></div>\n    </div>` : '';\n\nconst bodyHtml = `\n    <div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;\">Post Text (${gbp_post.length} / 1,500 chars)${truncated ? ' — truncated, review recommended' : ''}</div>\n    <div style=\"background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;color:#0f172a;font-size:14px;line-height:1.6;white-space:pre-wrap;margin-bottom:22px;\">${escapeHtml(gbp_post)}</div>\n    ${ctaLine}\n    <a href=\"${dashboardUrl}\" style=\"display:inline-block;background:#02BDAD;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:6px;\">Open Google Business Profile →</a>\n    <div style=\"margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\">Copy the text above and paste it in as a new update. Logged to the OPS1 compliance audit sheet.</div>`;\n\nreturn [{ json: {\n  ...prep,\n  is_marketing_safe: true,\n  gbp_post,\n  truncated,\n  char_count: gbp_post.length,\n  email_subject: 'Google Business Profile post ready to paste — ' + new Date().toLocaleDateString('en-US'),\n  email_body: (() => {\n    const lines = [\n      \"This week's Google Business Profile post is ready — copy it in below.\",\n      '',\n      'POST TEXT (' + gbp_post.length + ' / 1,500 chars)' + (truncated ? ' — truncated to fit the limit, review recommended' : ''),\n      '─'.repeat(60),\n      gbp_post,\n      '─'.repeat(60),\n    ];\n    if (prep.cta_url) {\n      lines.push('', 'Suggested call-to-action button: ' + (prep.cta_type || 'LEARN_MORE') + ' → ' + prep.cta_url);\n    }\n    lines.push('', 'Paste this into Google Business Profile: ' + dashboardUrl);\n    return lines.join('\\n');\n  })(),\n  email_html: emailShell('#02BDAD', 'Ready To Paste', \"This week's Google Business Profile post\", bodyHtml),\n} }];"
+        "jsCode": "// Parses Claude's JSON response and runs an independent post-hoc keyword scan -- Claude's\n// self-report is Layer 1, this scan is Layer 2. is_marketing_safe is true only if both pass.\n// References 'Build GBP Post Request' for the queue row's metadata.\nconst prep = $('Build GBP Post Request').item.json;\nconst dashboardUrl = $vars.FIRM_GBP_DASHBOARD_URL || 'https://business.google.com';\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Wraps any card body in the same header/footer shell -- headerColor/headerLabel/headerTitle differ\n// between the ready-to-paste and flagged emails, the shell itself doesn't. Inline styles throughout --\n// email clients (Gmail included) strip <style> blocks, so every rule has to live on the element itself.\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n}\n\nconst rawResponse = $input.first().json;\nconst rawText = (rawResponse.content && rawResponse.content[0] && rawResponse.content[0].text)\n  ? rawResponse.content[0].text.trim()\n  : '';\n\nif (!rawText) {\n  throw new Error('Claude API returned an empty response. Check the Anthropic API key, usage quota, and rate limits at console.anthropic.com.');\n}\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```(?:json)?\\n?/, '').replace(/\\n?```$/, '');\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Claude did not return valid JSON. Raw response: ' + rawText.slice(0, 400));\n}\n\nfunction flaggedResult(reason) {\n  const bodyHtml = `\n    <div style=\"margin-bottom:22px;\">\n      <div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;\">Reason</div>\n      <div style=\"color:#334155;font-size:14px;\">${escapeHtml(reason)}</div>\n    </div>\n    <div style=\"margin-bottom:22px;\">\n      <div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;\">Original Content (row ${prep.row_number})</div>\n      <div style=\"background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;color:#334155;font-size:14px;line-height:1.6;white-space:pre-wrap;\">${escapeHtml(prep.content)}</div>\n    </div>\n    <div style=\"color:#64748b;font-size:13px;\">Edit the row in your Content Queue sheet and reset its status to blank so it's picked up again next week, or replace it with different content.</div>`;\n  return [{ json: {\n    ...prep,\n    is_marketing_safe: false,\n    safety_note: reason,\n    gbp_post: '',\n    email_subject: 'GBP Auto-Poster — flagged for human review',\n    email_body: [\n      \"This week's Google Business Profile post was flagged and NOT published.\",\n      '',\n      'Reason: ' + reason,\n      '',\n      'Original content (row ' + prep.row_number + \" in the Content Queue sheet):\",\n      prep.content,\n      '',\n      \"Edit the row and reset its status to blank so it's picked up again next week, or replace it with different content.\",\n    ].join('\\n'),\n    email_html: emailShell('#dc2626', 'Needs Review', \"This week's Google Business Profile post wasn't sent\", bodyHtml),\n  } }];\n}\n\nif (parsed.is_marketing_safe === false) {\n  return flaggedResult(parsed.safety_note || 'Claude flagged this content as unsafe to repurpose.');\n}\n\nlet gbp_post = String(parsed.gbp_post || '').trim();\n\n// Post-hoc keyword scan -- catches legal language that slipped past Claude's self-check.\nconst UNSAFE_RE = /\\b(attorney.client|work.product|privileged|legal.advice|legal.opinion|you should|we advise|we recommend|our recommendation|pursuant to|under\\s+[§\\d]|case law|statute|court held|court ruled|ruling)\\b/i;\n\nif (!gbp_post) return flaggedResult('Claude returned an empty post.');\nif (UNSAFE_RE.test(gbp_post)) return flaggedResult('Post-hoc scan found legal-sounding language in the generated post.');\n\n// Google Business Profile hard-limits posts to 1,500 characters -- truncate at a word boundary\n// rather than let the publish call fail outright if Claude ran long despite instructions.\nconst LIMIT = 1500;\nlet truncated = false;\nif (gbp_post.length > LIMIT) {\n  gbp_post = gbp_post.slice(0, LIMIT - 1).replace(/\\s+\\S*$/, '') + '…';\n  truncated = true;\n}\n\nconst ctaLine = prep.cta_url ? `\n    <div style=\"margin-bottom:22px;\">\n      <div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;\">Suggested Call-to-Action Button</div>\n      <div style=\"color:#334155;font-size:14px;\">${escapeHtml(prep.cta_type || 'LEARN_MORE')} → <a href=\"${prep.cta_url}\" style=\"color:#02BDAD;\">${escapeHtml(prep.cta_url)}</a></div>\n    </div>` : '';\n\nconst bodyHtml = `\n    <div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;\">Post Text (${gbp_post.length} / 1,500 chars)${truncated ? ' — truncated, review recommended' : ''}</div>\n    <div style=\"background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;color:#0f172a;font-size:14px;line-height:1.6;white-space:pre-wrap;margin-bottom:22px;\">${escapeHtml(gbp_post)}</div>\n    ${ctaLine}\n    <a href=\"${dashboardUrl}\" style=\"display:inline-block;background:#02BDAD;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:6px;\">Open Google Business Profile →</a>\n    <div style=\"margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\">Copy the text above and paste it in as a new update. Logged to the OPS1 compliance audit sheet.</div>`;\n\nreturn [{ json: {\n  ...prep,\n  is_marketing_safe: true,\n  gbp_post,\n  truncated,\n  char_count: gbp_post.length,\n  email_subject: 'Google Business Profile post ready to paste — ' + new Date().toLocaleDateString('en-US'),\n  email_body: (() => {\n    const lines = [\n      \"This week's Google Business Profile post is ready — copy it in below.\",\n      '',\n      'POST TEXT (' + gbp_post.length + ' / 1,500 chars)' + (truncated ? ' — truncated to fit the limit, review recommended' : ''),\n      '─'.repeat(60),\n      gbp_post,\n      '─'.repeat(60),\n    ];\n    if (prep.cta_url) {\n      lines.push('', 'Suggested call-to-action button: ' + (prep.cta_type || 'LEARN_MORE') + ' → ' + prep.cta_url);\n    }\n    lines.push('', 'Paste this into Google Business Profile: ' + dashboardUrl);\n    return lines.join('\\n');\n  })(),\n  email_html: emailShell('#02BDAD', 'Ready To Paste', \"This week's Google Business Profile post\", bodyHtml),\n} }];"
       },
       "id": "6000aa00-0060-4000-a000-000000000008",
-      "name": "Extract & Safety-Check GBP Post",
+      "name": "Parse And Validate GBP Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1344,
-        -160
+        -224
       ],
       "notes": "Two-layer safety check, same pattern as PAC-31 and PAC-50: Claude's own self-report is Layer 1, an independent keyword regex scan is Layer 2. is_marketing_safe is only true if both pass.\n\nAlso enforces Google Business Profile's real 1,500-character limit — truncates at a word boundary and flags it in the summary rather than handing staff an over-length post to paste.\n\nBuilds both a plain-text email_body (fallback) and a styled email_html card — same shell used for both the ready-to-paste and flagged outcomes, just a different header color/title/body. FIRM_GBP_DASHBOARD_URL is optional (reuse PAC-50's value if already deployed) — falls back to the generic business.google.com URL if unset, so the button always links somewhere real."
     },
@@ -300,12 +316,12 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000009",
-      "name": "If Marketing Safe",
+      "name": "If Post Is Marketing Safe",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
         1568,
-        -160
+        -224
       ],
       "notes": "Yes (both safety layers passed) → email the ready-to-paste post to staff.\nNo (Claude self-flagged, or the post-hoc scan caught legal-sounding language) → mark the row for human review instead.",
       "onError": "continueErrorOutput"
@@ -314,7 +330,7 @@
       "parameters": {
         "columns": {
           "value": {
-            "row_number": "={{ $('Extract & Safety-Check GBP Post').item.json.row_number }}",
+            "row_number": "={{ $('Parse And Validate GBP Response').item.json.row_number }}",
             "status": "Drafted",
             "posted_at": "={{ new Date().toISOString() }}",
             "notes": ""
@@ -338,7 +354,7 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000011",
-      "name": "Mark Queue Row As Drafted",
+      "name": "Update Queue Row As Drafted",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -364,7 +380,7 @@
         "workflowInputs": {
           "value": {
             "channel": "email",
-            "message": "={{ $('Extract & Safety-Check GBP Post').item.json.gbp_post }}",
+            "message": "={{ $('Parse And Validate GBP Response').item.json.gbp_post }}",
             "matter_id": "",
             "recipient": "={{ $vars.FIRM_EMAIL }}",
             "template_id": "PAC-60"
@@ -377,7 +393,7 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000012",
-      "name": "Log Draft To Compliance",
+      "name": "Execute Compliance Logging Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -388,16 +404,16 @@
     },
     {
       "parameters": {
-        "text": "={{ $('Extract & Safety-Check GBP Post').item.json.email_body }}",
-        "subject": "={{ $('Extract & Safety-Check GBP Post').item.json.email_subject }}",
-        "html": "={{ $('Extract & Safety-Check GBP Post').item.json.email_html }}",
+        "text": "={{ $('Parse And Validate GBP Response').item.json.email_body }}",
+        "subject": "={{ $('Parse And Validate GBP Response').item.json.email_subject }}",
         "toEmail": "={{ $vars.FIRM_STAFF_EMAIL || $vars.FIRM_EMAIL }}",
         "options": {},
         "emailType": "html",
-        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}"
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "html": "={{ $('Parse And Validate GBP Response').item.json.email_html }}"
       },
       "id": "6000aa00-0060-4000-a000-000000000013",
-      "name": "Notify Staff GBP Post Ready To Paste",
+      "name": "Send Post Ready Notification Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -440,7 +456,7 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000014",
-      "name": "Mark Queue Row Needs Review",
+      "name": "Update Queue Row For Review",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -466,7 +482,7 @@
         "workflowInputs": {
           "value": {
             "channel": "email",
-            "message": "={{ 'Flagged, not drafted: ' + $('Extract & Safety-Check GBP Post').item.json.safety_note }}",
+            "message": "={{ 'Flagged, not drafted: ' + $('Parse And Validate GBP Response').item.json.safety_note }}",
             "matter_id": "",
             "recipient": "={{ $vars.FIRM_EMAIL }}",
             "template_id": "PAC-60"
@@ -479,7 +495,7 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000015",
-      "name": "Log Flagged Content To Compliance",
+      "name": "Execute Flagged Content Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -490,23 +506,23 @@
     },
     {
       "parameters": {
-        "text": "={{ $('Extract & Safety-Check GBP Post').item.json.email_body }}",
-        "subject": "={{ $('Extract & Safety-Check GBP Post').item.json.email_subject }}",
-        "html": "={{ $('Extract & Safety-Check GBP Post').item.json.email_html }}",
+        "text": "={{ $('Parse And Validate GBP Response').item.json.email_body }}",
+        "subject": "={{ $('Parse And Validate GBP Response').item.json.email_subject }}",
         "toEmail": "={{ $vars.FIRM_STAFF_EMAIL || $vars.FIRM_EMAIL }}",
         "options": {},
         "emailType": "html",
-        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}"
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "html": "={{ $('Parse And Validate GBP Response').item.json.email_html }}"
       },
       "id": "6000aa00-0060-4000-a000-000000000016",
-      "name": "Notify Staff Content Flagged",
+      "name": "Send Content Flagged Alert Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
         2240,
         320
       ],
-      "notes": "Delivers the original content and the flag reason so staff can fix or replace the queue row themselves, as a styled card with a plain-text fallback.\n\nReads email_body/email_subject/email_html explicitly from 'Extract & Safety-Check GBP Post' rather than $json — 'Log Flagged Content To Compliance' immediately upstream is an Execute Sub-workflow call, whose own response replaced the item's json.\n\nCredential: same 'Email account (SMTP)' credential as the other notifications.",
+      "notes": "Delivers the original content and the flag reason so staff can fix or replace the queue row themselves, as a styled card with a plain-text fallback.\n\nReads email_body/email_subject/email_html explicitly from 'Parse And Validate GBP Response' rather than $json — 'Execute Flagged Content Workflow' immediately upstream is an Execute Sub-workflow call, whose own response replaced the item's json.\n\nCredential: same 'Email account (SMTP)' credential as the other notifications.",
       "credentials": {
         "smtp": {
           "id": "3",
@@ -517,7 +533,7 @@
   ],
   "active": false,
   "pinData": {
-    "Weekly GBP Post Trigger": [
+    "Every Monday at 9am Trigger": [
       {
         "json": {
           "timestamp": "2026-08-24T09:00:00.000Z",
@@ -525,7 +541,7 @@
         }
       }
     ],
-    "Fetch Content Queue Sheet": [
+    "Read Content Queue From Sheet": [
       {
         "json": {
           "row_number": 2,
@@ -559,146 +575,146 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Weekly GBP Post Trigger": {
+    "Every Monday at 9am Trigger": {
       "main": [
         [
           {
-            "node": "Fetch Content Queue Sheet",
+            "node": "Read Content Queue From Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Content Queue Sheet": {
+    "Read Content Queue From Sheet": {
       "main": [
         [
           {
-            "node": "Find Next Queued Content Row",
+            "node": "Find Next Queued Post",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Find Next Queued Content Row": {
+    "Find Next Queued Post": {
       "main": [
         [
           {
-            "node": "If Has Queued Content",
+            "node": "If Queued Post Exists",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Has Queued Content": {
+    "If Queued Post Exists": {
       "main": [
         [
           {
-            "node": "Build GBP Post Prompt",
+            "node": "Build GBP Post Request",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Notify Staff Queue Empty",
+            "node": "Send Empty Queue Alert Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build GBP Post Prompt": {
+    "Build GBP Post Request": {
       "main": [
         [
           {
-            "node": "Generate GBP Post Copy",
+            "node": "Post To Claude API",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate GBP Post Copy": {
+    "Post To Claude API": {
       "main": [
         [
           {
-            "node": "Extract & Safety-Check GBP Post",
+            "node": "Parse And Validate GBP Response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract & Safety-Check GBP Post": {
+    "Parse And Validate GBP Response": {
       "main": [
         [
           {
-            "node": "If Marketing Safe",
+            "node": "If Post Is Marketing Safe",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Marketing Safe": {
+    "If Post Is Marketing Safe": {
       "main": [
         [
           {
-            "node": "Mark Queue Row As Drafted",
+            "node": "Update Queue Row As Drafted",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Mark Queue Row Needs Review",
+            "node": "Update Queue Row For Review",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mark Queue Row As Drafted": {
+    "Update Queue Row As Drafted": {
       "main": [
         [
           {
-            "node": "Log Draft To Compliance",
+            "node": "Execute Compliance Logging Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Draft To Compliance": {
+    "Execute Compliance Logging Workflow": {
       "main": [
         [
           {
-            "node": "Notify Staff GBP Post Ready To Paste",
+            "node": "Send Post Ready Notification Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mark Queue Row Needs Review": {
+    "Update Queue Row For Review": {
       "main": [
         [
           {
-            "node": "Log Flagged Content To Compliance",
+            "node": "Execute Flagged Content Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Flagged Content To Compliance": {
+    "Execute Flagged Content Workflow": {
       "main": [
         [
           {
-            "node": "Notify Staff Content Flagged",
+            "node": "Send Content Flagged Alert Email",
             "type": "main",
             "index": 0
           }
