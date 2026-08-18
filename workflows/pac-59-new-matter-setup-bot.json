@@ -448,7 +448,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Edit these three maps to match your firm's own template library, standard task list, and\n// intake deadline rules. Keyed by practice_area -- must match the practice area name exactly as it\n// appears in Clio (Settings → Practice Areas). Any practice area left out of a map simply skips\n// that step for matters in it -- not an error.\nconst DOC_TEMPLATE_MAP = {\n  'Family Law': [\n    { doc_label: 'Matter Opening Checklist', template_var: 'TEMPLATE_MATTER_CHECKLIST_DOC_ID' },\n  ],\n  'Personal Injury': [\n    { doc_label: 'Matter Opening Checklist', template_var: 'TEMPLATE_MATTER_CHECKLIST_DOC_ID' },\n    { doc_label: 'Case Plan', template_var: 'TEMPLATE_CASE_PLAN_DOC_ID' },\n  ],\n  'Estate Planning': [\n    { doc_label: 'Matter Opening Checklist', template_var: 'TEMPLATE_MATTER_CHECKLIST_DOC_ID' },\n  ],\n  // Add a row per practice area your firm handles.\n};\n\nconst TASK_LIST_MAP = {\n  'Family Law': [\n    { name: 'Send engagement letter', offset_days: 1 },\n    { name: 'Run conflict check', offset_days: 0 },\n    { name: 'Open trust ledger', offset_days: 2 },\n  ],\n  'Personal Injury': [\n    { name: 'Send engagement letter', offset_days: 1 },\n    { name: 'Run conflict check', offset_days: 0 },\n    { name: 'Request medical records authorization', offset_days: 3 },\n  ],\n  'Estate Planning': [\n    { name: 'Send engagement letter', offset_days: 1 },\n    { name: 'Run conflict check', offset_days: 0 },\n    { name: 'Send asset questionnaire', offset_days: 2 },\n  ],\n  // Add a row per practice area your firm handles.\n};\n\n// ⚙️ The firm owns every rule here -- this workflow never suggests or interprets a legal deadline,\n// same ground rule as the Court Deadline Calculator (NTC-16). Replace the placeholders below.\nconst DEADLINE_RULE_MAP = {\n  'Family Law': [\n    { name: 'Example Deadline — replace this', offset_days: 21, offset_type: 'calendar', description: 'Placeholder — replace with your firm rule (e.g. response deadline per local rules)' },\n  ],\n  'Personal Injury': [\n    { name: 'Example Deadline — replace this', offset_days: 30, offset_type: 'business', description: 'Placeholder — replace with your firm rule (e.g. statute-of-limitations check-in)' },\n  ],\n  'Estate Planning': [\n    { name: 'Example Deadline — replace this', offset_days: 14, offset_type: 'calendar', description: 'Placeholder — replace with your firm rule (e.g. document review follow-up)' },\n  ],\n  // Add a row per practice area your firm handles.\n};\n\nconst meta = $input.first().json;\n\nconst docs = (DOC_TEMPLATE_MAP[meta.practice_area] || [])\n  .map(d => ({ doc_label: d.doc_label, template_doc_id: $vars[d.template_var] }))\n  .filter(d => !!d.template_doc_id); // skip any template the firm hasn't configured a Variable for yet\n\nconst tasks = TASK_LIST_MAP[meta.practice_area] || [];\nconst deadline_rules = DEADLINE_RULE_MAP[meta.practice_area] || [];\n\nreturn [{ json: {\n  ...meta,\n  docs, doc_count: docs.length, has_docs: docs.length > 0,\n  tasks, task_count: tasks.length, has_tasks: tasks.length > 0,\n  deadline_rules, deadline_count: deadline_rules.length, has_deadlines: deadline_rules.length > 0,\n} }];"
+        "jsCode": "// Edit these three maps to match your firm's own template library, standard task list, and\n// intake deadline rules. Keyed by practice_area -- must match the practice area name exactly as it\n// appears in Clio (Settings → Practice Areas). Any practice area left out of a map simply skips\n// that step for matters in it -- not an error.\nconst DOC_TEMPLATE_MAP = {\n  'Family': [\n    { doc_label: 'Matter Opening Checklist', template_var: 'TEMPLATE_MATTER_CHECKLIST_DOC_ID' },\n  ],\n  'Personal Injury': [\n    { doc_label: 'Matter Opening Checklist', template_var: 'TEMPLATE_MATTER_CHECKLIST_DOC_ID' },\n    { doc_label: 'Case Plan', template_var: 'TEMPLATE_CASE_PLAN_DOC_ID' },\n  ],\n  'Estate Planning': [\n    { doc_label: 'Matter Opening Checklist', template_var: 'TEMPLATE_MATTER_CHECKLIST_DOC_ID' },\n  ],\n  // Add a row per practice area your firm handles.\n};\n\nconst TASK_LIST_MAP = {\n  'Family': [\n    { name: 'Send engagement letter', offset_days: 1 },\n    { name: 'Run conflict check', offset_days: 0 },\n    { name: 'Open trust ledger', offset_days: 2 },\n  ],\n  'Personal Injury': [\n    { name: 'Send engagement letter', offset_days: 1 },\n    { name: 'Run conflict check', offset_days: 0 },\n    { name: 'Request medical records authorization', offset_days: 3 },\n  ],\n  'Estate Planning': [\n    { name: 'Send engagement letter', offset_days: 1 },\n    { name: 'Run conflict check', offset_days: 0 },\n    { name: 'Send asset questionnaire', offset_days: 2 },\n  ],\n  // Add a row per practice area your firm handles.\n};\n\n// ⚙️ The firm owns every rule here -- this workflow never suggests or interprets a legal deadline,\n// same ground rule as the Court Deadline Calculator (NTC-16). Replace the placeholders below.\nconst DEADLINE_RULE_MAP = {\n  'Family': [\n    { name: 'Example Deadline — replace this', offset_days: 21, offset_type: 'calendar', description: 'Placeholder — replace with your firm rule (e.g. response deadline per local rules)' },\n  ],\n  'Personal Injury': [\n    { name: 'Example Deadline — replace this', offset_days: 30, offset_type: 'business', description: 'Placeholder — replace with your firm rule (e.g. statute-of-limitations check-in)' },\n  ],\n  'Estate Planning': [\n    { name: 'Example Deadline — replace this', offset_days: 14, offset_type: 'calendar', description: 'Placeholder — replace with your firm rule (e.g. document review follow-up)' },\n  ],\n  // Add a row per practice area your firm handles.\n};\n\nconst meta = $input.first().json;\n\nconst docs = (DOC_TEMPLATE_MAP[meta.practice_area] || [])\n  .map(d => ({ doc_label: d.doc_label, template_doc_id: $vars[d.template_var] }))\n  .filter(d => !!d.template_doc_id); // skip any template the firm hasn't configured a Variable for yet\n\nconst tasks = TASK_LIST_MAP[meta.practice_area] || [];\nconst deadline_rules = DEADLINE_RULE_MAP[meta.practice_area] || [];\n\nreturn [{ json: {\n  ...meta,\n  docs, doc_count: docs.length, has_docs: docs.length > 0,\n  tasks, task_count: tasks.length, has_tasks: tasks.length > 0,\n  deadline_rules, deadline_count: deadline_rules.length, has_deadlines: deadline_rules.length > 0,\n} }];"
       },
       "id": "5900aa00-0059-4000-a000-000000000014",
       "name": "Determine Practice Area Setup Config",
@@ -999,6 +999,33 @@
             },
             "records": 1
           }
+        }
+      }
+    ],
+    "Filter To Newly Opened Matters": [
+      {
+        "json": {
+          "new_matters": [
+            {
+              "id": 16942609,
+              "display_number": "00003-Doe",
+              "description": "Custody modification matter for Jane Doe",
+              "status": "Open",
+              "open_date": "2026-08-18",
+              "client": {
+                "id": 26034643,
+                "name": "Jane Doe"
+              },
+              "practice_area": {
+                "id": 2953321,
+                "name": "Family"
+              },
+              "responsible_attorney": null
+            }
+          ],
+          "new_matter_count": 1,
+          "has_new_matters": true,
+          "bootstrap": false
         }
       }
     ]
