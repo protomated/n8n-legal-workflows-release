@@ -1,0 +1,1439 @@
+{
+  "name": "New-Matter Setup Bot",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## New-Matter Setup Bot\n\n### How it works\n\n1. Polls Clio hourly for matters opened since the last check (tracked in n8n's own workflow memory, no external database) and safely skips every already-existing matter on first activation instead of processing your whole matter list at once.\n2. For each new matter, finds or creates its Google Drive folder — reusing the same folder the Document-to-Matter Auto-Filer (PAC-58) falls back to creating on first document arrival — then builds out the firm's standard subfolder structure inside it.\n3. Copies the internal document templates configured for that matter's practice area into the new folder and fills in basic merge fields (client name, matter number, open date).\n4. Creates the firm's standard task checklist for that practice area in Clio, with due dates offset from the matter's open date.\n5. Calculates and calendars intake deadlines in Clio from firm-entered rules for that practice area — never suggests or interprets a deadline itself.\n6. Logs the whole setup to the OPS1 compliance audit sheet and emails staff a summary with links.\n\n### Setup steps\n\n- [ ] Set CLIO_BASE_URL and connect the Clio OAuth2 credential (reuse if already deployed for PAC-18/20/55/57/58).\n- [ ] Set GENERATED_DOCS_FOLDER_ID to the same Drive folder PAC-57/58 use — matter folders live alongside generated documents.\n- [ ] Edit DOC_TEMPLATE_MAP, TASK_LIST_MAP, and DEADLINE_RULE_MAP in the 'Determine Practice Area Setup Config' node to match your firm's own templates, task checklist, and deadline rules per practice area.\n- [ ] Create the internal Google Doc templates referenced by TEMPLATE_*_DOC_ID variables (e.g. Matter Opening Checklist, Case Plan) and set those variables.\n- [ ] Set GUARDRAIL_WORKFLOW_ID to the Bar-Compliance Guardrail (OPS1 / NTC-33) workflow ID.\n- [ ] Set FIRM_STAFF_EMAIL and FIRM_FROM_EMAIL, and connect the SMTP credential.\n\n### Customization\n\nAdjust DEFAULT_FOLDERS in 'Build Standard Subfolder List' for your firm's folder structure, and the polling interval on the trigger node.",
+        "width": 480,
+        "height": 960
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -500
+      ],
+      "id": "sticky-main",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Trigger and dedupe\n\nPolls Clio hourly for open matters and filters to ones this workflow hasn't set up yet, using n8n's built-in workflow memory — no external database. First activation seeds every existing matter as already-seen instead of processing the whole matter list at once.",
+        "width": 900,
+        "height": 400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -160
+      ],
+      "id": "sticky-1",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Matter folder and subfolder tree\n\nFinds or creates the matter's Drive folder (reusing PAC-58's folder if a document already arrived for this matter), then builds the firm's standard subfolder structure inside it.",
+        "width": 1120,
+        "height": 400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1096,
+        -160
+      ],
+      "id": "sticky-2",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Practice-area setup lookup\n\nLooks up which document templates, tasks, and deadline rules apply to this matter's practice area. Any of the three can be left unconfigured — the corresponding step is skipped, not blocked.",
+        "width": 200,
+        "height": 400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2664,
+        -160
+      ],
+      "id": "sticky-3",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Document template copy\n\nCopies each configured internal template into the matter folder and fills in basic merge fields. Skipped if no templates are configured for this practice area.",
+        "width": 1120,
+        "height": 400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2888,
+        -160
+      ],
+      "id": "sticky-4",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Task list assignment\n\nCreates the firm's standard task checklist for this practice area in Clio, with due dates calculated from the matter's open date. Skipped if no task list is configured.",
+        "width": 896,
+        "height": 400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4456,
+        -160
+      ],
+      "id": "sticky-5",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Intake deadline calendaring\n\nCalculates and creates calendar entries in Clio for firm-entered intake deadlines — same business-day math as the Court Deadline Calculator (NTC-16). Skipped if no deadline rules are configured. The firm owns every rule; nothing here is legal judgment.",
+        "width": 896,
+        "height": 400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        5776,
+        -160
+      ],
+      "id": "sticky-6",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Summary, audit log, and staff notification\n\nBuilds one summary of everything set up for the matter, logs it to the OPS1 compliance audit sheet, and emails staff with links to the new folder and documents.",
+        "width": 700,
+        "height": 400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        6696,
+        -160
+      ],
+      "id": "sticky-7",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "5900aa00-0059-4000-a000-000000000001",
+      "name": "Poll For New Matters",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Checks Clio for newly opened matters once an hour (n8n server timezone). Staff keep opening matters in Clio exactly as they do today — nothing changes for them; this just picks new ones up on the next poll.\n\nTighten to every 15 minutes ('*/15 * * * *') if matters need same-hour setup, or loosen to every few hours for a firm that opens matters in batches.\n\nThis is the only thing that starts a run — nothing else in this workflow fires on its own."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://{{ $vars.CLIO_BASE_URL.replace('https://', '') }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "Open"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description,status,open_date,client{id,name},practice_area{id,name},responsible_attorney{id,name,email}"
+            },
+            {
+              "name": "order",
+              "value": "id(desc)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5900aa00-0059-4000-a000-000000000002",
+      "name": "Fetch Open Matters From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Fetches every currently-open matter — filtering to genuinely NEW ones happens next via n8n's own workflow memory, not a Clio date filter, since Clio's created-since query behavior wasn't confirmed live during authoring. Same 'fetch everything, dedupe locally' approach as the Duplicate-Contact Watchdog (PAC-55).\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58 — reuse it if already deployed.\n\nThe nested fields syntax (client{id,name}, practice_area{id,name}) follows Clio's documented sub-resource selection — verify the response shape against your own Clio account (Settings → API) and adjust the 'Split New Matters Into Items' node if a relation comes back differently.\n\nClio paginates results (default page size varies by plan); only the first page is fetched here. Fine for the solo/small-firm open-matter counts this template targets — a firm with several hundred simultaneously open matters would need to add pagination.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dedupes against n8n's own workflow memory (global static data) -- no external database, same\n// pattern as the Duplicate-Contact Watchdog (PAC-55). Tracks which matter IDs this workflow has already\n// set up so a matter is never processed twice, even though every poll re-fetches every open matter.\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.processedMatterIds) staticData.processedMatterIds = {}; // matter_id -> ISO processed_at\n\nconst response = $input.first().json;\nconst matters = response.data || [];\n\nif (!staticData.initialized) {\n  // First run after activation: mark every currently-open matter as already-seen WITHOUT running\n  // setup on it -- otherwise activating this template would fire folder/doc/task/deadline creation\n  // for every matter the firm has ever opened, all at once.\n  matters.forEach(m => { staticData.processedMatterIds[m.id] = new Date().toISOString(); });\n  staticData.initialized = true;\n  return [{ json: { new_matters: [], new_matter_count: 0, has_new_matters: false, bootstrap: true } }];\n}\n\nconst newMatters = matters.filter(m => !staticData.processedMatterIds[m.id]);\nnewMatters.forEach(m => { staticData.processedMatterIds[m.id] = new Date().toISOString(); });\n\nreturn [{ json: {\n  new_matters: newMatters,\n  new_matter_count: newMatters.length,\n  has_new_matters: newMatters.length > 0,\n  bootstrap: false,\n} }];"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000003",
+      "name": "Filter To Newly Opened Matters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Marks a matter as seen the moment it's identified as new, before any setup work runs -- so if a later step in this run fails, that matter won't be silently retried forever on every future poll (it also won't be retried at all; check execution history if a run errors partway through and finish that matter's setup by hand).\n\nbootstrap is true only on the very first run after activation, when every open matter gets seeded as already-seen instead of queued for setup."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_new",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.has_new_matters }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5900aa00-0059-4000-a000-000000000004",
+      "name": "If Has New Matters",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Yes (at least one matter this workflow hasn't set up yet) → process each one.\nNo (nothing new since the last poll, or this was the bootstrap run) → route to Skip.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "5900aa00-0059-4000-a000-000000000005",
+      "name": "Skip No New Matters",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        896,
+        200
+      ],
+      "notes": "Nothing new to set up this poll — expected for most hourly checks. No folders, documents, tasks, or calendar entries are created."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns the new_matters array into one n8n item per matter -- everything downstream through the\n// summary email processes one matter at a time.\nreturn $input.first().json.new_matters.map(m => ({ json: {\n  matter_id: m.id,\n  matter_display_number: m.display_number,\n  matter_description: m.description || '',\n  practice_area: (m.practice_area && m.practice_area.name) || '',\n  open_date: (m.open_date || new Date().toISOString().slice(0, 10)),\n  client_name: (m.client && m.client.name) || '',\n  attorney_email: (m.responsible_attorney && m.responsible_attorney.email) || '',\n} }));"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000006",
+      "name": "Split New Matters Into Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Reads client_name and practice_area off the nested relation objects Clio returns for client{id,name} / practice_area{id,name} -- confirm this matches your account's actual response shape (see notes on 'Fetch Open Matters From Clio') and adjust the field paths here if not."
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "search",
+        "searchMethod": "query",
+        "queryString": "={{ \"name = '\" + $json.matter_display_number.replace(/'/g, \"\\\\'\") + \"'\" }}",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $vars.GENERATED_DOCS_FOLDER_ID }}"
+          },
+          "whatToSearch": "folders"
+        },
+        "options": {}
+      },
+      "id": "5900aa00-0059-4000-a000-000000000007",
+      "name": "Search For Existing Matter Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        0
+      ],
+      "alwaysOutputData": true,
+      "notes": "Checks whether this matter already has a Drive folder, under GENERATED_DOCS_FOLDER_ID -- the same folder the Document-to-Matter Auto-Filer (PAC-58) uses, so a matter never ends up with two different folders depending on which template got to it first.\n\nSame Advanced Search / exact 'name =' query pattern as PAC-58's 'Search For Matter Folder' node, confirmed against n8n's own Google Drive node source there.\n\n'Always Output Data' is on (Settings tab) -- a zero-match search (the normal case for a brand-new matter) would otherwise silently halt the whole run instead of proceeding to create the folder.\n\nCredential: same 'Google Drive account' credential as PAC-57/58 — reuse it if already deployed.",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "2",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Explicit node references throughout this workflow (rather than $json) because every Drive/Clio\n// API call replaces the item's data with its own response.\n// 'Search For Existing Matter Folder' has Always Output Data on, so a zero-match search still\n// delivers one item -- an empty placeholder, not a real folder. Checking for a real 'id' field\n// (not just item presence) is what tells the two cases apart.\nconst meta = $('Split New Matters Into Items').item.json;\nconst results = $input.all();\nconst found = results.length > 0 && results[0].json && results[0].json.id ? results[0].json : null;\n\nreturn [{ json: {\n  ...meta,\n  existing_folder_id: found ? found.id : null,\n  folder_exists: !!found,\n} }];"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000008",
+      "name": "Check Matter Folder Existence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "Determines whether the matter already has a Drive folder. If PAC-58 filed a document for this matter before this bot got to it, it won't need to create one — the next step reuses it."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_folder_exists",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.folder_exists }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5900aa00-0059-4000-a000-000000000009",
+      "name": "If Matter Folder Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Yes (PAC-58 or an earlier run already created this matter's folder) → go straight to building the subfolder tree in it.\nNo → create the matter's root folder first. Both branches converge on 'Build Standard Subfolder List'.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "operation": "create",
+        "name": "={{ $json.matter_display_number + ($json.matter_description ? ' — ' + $json.matter_description : '') }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $vars.GENERATED_DOCS_FOLDER_ID }}"
+        },
+        "options": {}
+      },
+      "id": "5900aa00-0059-4000-a000-000000000010",
+      "name": "Create Matter Root Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1792,
+        200
+      ],
+      "notes": "Creates this matter's root Drive folder — same naming convention as PAC-58's 'Create New Matter Folder' node (display number + description), under the same GENERATED_DOCS_FOLDER_ID parent, so both templates always agree on where a matter's documents live.\n\nUses the same 'Google Drive account' credential as the search step. Parent folder is set via the top-level 'Parent Drive'/'Parent Folder' fields, not nested under Options — the lesson learned the hard way on PAC-57/58.",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "2",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Edit this list to match your firm's standard matter folder structure.\nconst DEFAULT_FOLDERS = ['Correspondence', 'Pleadings & Filings', 'Client Documents', 'Billing & Trust', 'Signed Agreements'];\n\nconst meta = $('Check Matter Folder Existence').item.json;\nconst input = $input.first().json;\n// If this ran right after 'Create Matter Root Folder', input.id is the new folder's id.\n// If it ran right after the 'folder exists' branch (unchanged pass-through from 'If Matter Folder\n// Found'), meta.existing_folder_id is already set.\nconst matter_folder_id = input.id || meta.existing_folder_id;\n\nreturn DEFAULT_FOLDERS.map(name => ({ json: { ...meta, matter_folder_id, subfolder_name: name } }));"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000011",
+      "name": "Build Standard Subfolder List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        0
+      ],
+      "notes": "Fans out into one item per standard subfolder -- 5 folders means 5 items reaching 'Create Matter Subfolder' below. Add or remove entries in DEFAULT_FOLDERS directly in this node's code."
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "operation": "create",
+        "name": "={{ $json.subfolder_name }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.matter_folder_id }}"
+        },
+        "options": {}
+      },
+      "id": "5900aa00-0059-4000-a000-000000000012",
+      "name": "Create Matter Subfolder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2240,
+        0
+      ],
+      "notes": "Creates each standard subfolder inside the matter's root folder — runs once per item from 'Build Standard Subfolder List'. If this workflow ever reruns for the same matter (it shouldn't, due to the dedupe step), re-running this node would create duplicate subfolders — not destructive, just untidy; clean up manually if that ever happens.",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "2",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst meta = $('Build Standard Subfolder List').first().json; // matter fields + matter_folder_id, same for every item\nconst subfolder_names = items.map(i => i.json.name).filter(Boolean);\n\nreturn [{ json: {\n  matter_id: meta.matter_id,\n  matter_display_number: meta.matter_display_number,\n  matter_description: meta.matter_description,\n  practice_area: meta.practice_area,\n  open_date: meta.open_date,\n  client_name: meta.client_name,\n  attorney_email: meta.attorney_email,\n  matter_folder_id: meta.matter_folder_id,\n  matter_folder_link: `https://drive.google.com/drive/folders/${meta.matter_folder_id}`,\n  subfolders_created: subfolder_names,\n  subfolder_count: subfolder_names.length,\n} }];"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000013",
+      "name": "Aggregate Folder Tree Setup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        0
+      ],
+      "notes": "Collapses the per-subfolder items back into one summary item for this matter, carrying the matter's own fields forward (they were dropped from $json once the Drive API responses replaced it)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Edit these three maps to match your firm's own template library, standard task list, and\n// intake deadline rules. Keyed by practice_area -- must match the practice area name exactly as it\n// appears in Clio (Settings → Practice Areas). Any practice area left out of a map simply skips\n// that step for matters in it -- not an error.\nconst DOC_TEMPLATE_MAP = {\n  'Family Law': [\n    { doc_label: 'Matter Opening Checklist', template_var: 'TEMPLATE_MATTER_CHECKLIST_DOC_ID' },\n  ],\n  'Personal Injury': [\n    { doc_label: 'Matter Opening Checklist', template_var: 'TEMPLATE_MATTER_CHECKLIST_DOC_ID' },\n    { doc_label: 'Case Plan', template_var: 'TEMPLATE_CASE_PLAN_DOC_ID' },\n  ],\n  'Estate Planning': [\n    { doc_label: 'Matter Opening Checklist', template_var: 'TEMPLATE_MATTER_CHECKLIST_DOC_ID' },\n  ],\n  // Add a row per practice area your firm handles.\n};\n\nconst TASK_LIST_MAP = {\n  'Family Law': [\n    { name: 'Send engagement letter', offset_days: 1 },\n    { name: 'Run conflict check', offset_days: 0 },\n    { name: 'Open trust ledger', offset_days: 2 },\n  ],\n  'Personal Injury': [\n    { name: 'Send engagement letter', offset_days: 1 },\n    { name: 'Run conflict check', offset_days: 0 },\n    { name: 'Request medical records authorization', offset_days: 3 },\n  ],\n  'Estate Planning': [\n    { name: 'Send engagement letter', offset_days: 1 },\n    { name: 'Run conflict check', offset_days: 0 },\n    { name: 'Send asset questionnaire', offset_days: 2 },\n  ],\n  // Add a row per practice area your firm handles.\n};\n\n// ⚙️ The firm owns every rule here -- this workflow never suggests or interprets a legal deadline,\n// same ground rule as the Court Deadline Calculator (NTC-16). Replace the placeholders below.\nconst DEADLINE_RULE_MAP = {\n  'Family Law': [\n    { name: 'Example Deadline — replace this', offset_days: 21, offset_type: 'calendar', description: 'Placeholder — replace with your firm rule (e.g. response deadline per local rules)' },\n  ],\n  'Personal Injury': [\n    { name: 'Example Deadline — replace this', offset_days: 30, offset_type: 'business', description: 'Placeholder — replace with your firm rule (e.g. statute-of-limitations check-in)' },\n  ],\n  'Estate Planning': [\n    { name: 'Example Deadline — replace this', offset_days: 14, offset_type: 'calendar', description: 'Placeholder — replace with your firm rule (e.g. document review follow-up)' },\n  ],\n  // Add a row per practice area your firm handles.\n};\n\nconst meta = $input.first().json;\n\nconst docs = (DOC_TEMPLATE_MAP[meta.practice_area] || [])\n  .map(d => ({ doc_label: d.doc_label, template_doc_id: $vars[d.template_var] }))\n  .filter(d => !!d.template_doc_id); // skip any template the firm hasn't configured a Variable for yet\n\nconst tasks = TASK_LIST_MAP[meta.practice_area] || [];\nconst deadline_rules = DEADLINE_RULE_MAP[meta.practice_area] || [];\n\nreturn [{ json: {\n  ...meta,\n  docs, doc_count: docs.length, has_docs: docs.length > 0,\n  tasks, task_count: tasks.length, has_tasks: tasks.length > 0,\n  deadline_rules, deadline_count: deadline_rules.length, has_deadlines: deadline_rules.length > 0,\n} }];"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000014",
+      "name": "Determine Practice Area Setup Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        0
+      ],
+      "notes": "This is the one node to edit when onboarding a new firm — everything else in the workflow just executes whatever comes out of these three maps. A practice area missing from a map (or a doc template Variable left unset) safely skips that one step rather than erroring."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_docs",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.has_docs }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5900aa00-0059-4000-a000-000000000015",
+      "name": "If Has Document Templates",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2912,
+        0
+      ],
+      "notes": "Yes (at least one document template configured for this practice area) → copy them in.\nNo → route to Skip. Both branches converge on 'Aggregate Document Setup Results'.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "5900aa00-0059-4000-a000-000000000016",
+      "name": "Skip No Document Templates",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3136,
+        200
+      ],
+      "notes": "No document templates configured for this matter's practice area — nothing copied. Add rows to DOC_TEMPLATE_MAP in 'Determine Practice Area Setup Config' if this practice area should have templates."
+    },
+    {
+      "parameters": {
+        "jsCode": "const { docs, doc_count, has_docs, tasks, task_count, has_tasks, deadline_rules, deadline_count, has_deadlines, ...meta } = $input.first().json;\nreturn docs.map(d => ({ json: { ...meta, ...d } }));"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000017",
+      "name": "Split Doc Template List Into Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        0
+      ],
+      "notes": "Fans out into one item per configured document template."
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.template_doc_id }}"
+        },
+        "name": "={{ $json.doc_label + ' — ' + $json.matter_display_number }}",
+        "sameFolder": false,
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.matter_folder_id }}"
+        },
+        "options": {}
+      },
+      "id": "5900aa00-0059-4000-a000-000000000018",
+      "name": "Copy Doc Template To Matter Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3360,
+        0
+      ],
+      "notes": "Duplicates the internal template into the matter's root folder — same copy pattern as PAC-57's 'Copy Google Docs Template'. These are internal matter-setup documents (checklist, case plan), not client-facing paperwork — PAC-57 already handles client-facing intake documents.\n\nCredential: same 'Google Drive account' credential as the folder steps above.",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "2",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the batchUpdate requests that replace {{merge_tag}} placeholders in the copied template\n// with this matter's actual field values. Add a row here for every merge tag your firm's internal\n// templates use.\nconst item = $('Split Doc Template List Into Items').item.json;\nconst newDocId = $input.item.json.id; // from Copy Doc Template To Matter Folder's response\n\nconst MERGE_FIELDS = {\n  '{{matter_display_number}}': item.matter_display_number,\n  '{{matter_description}}': item.matter_description,\n  '{{client_name}}': item.client_name,\n  '{{practice_area}}': item.practice_area,\n  '{{open_date}}': item.open_date,\n};\n\nconst requests = Object.entries(MERGE_FIELDS).map(([tag, value]) => ({\n  replaceAllText: { containsText: { text: tag, matchCase: true }, replaceText: String(value || '') },\n}));\n\nreturn { json: { ...item, new_doc_id: newDocId, batch_requests: requests } };"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000019",
+      "name": "Build Doc Merge Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        0
+      ],
+      "notes": "Your internal template docs must contain these exact tags: {{matter_display_number}}, {{matter_description}}, {{client_name}}, {{practice_area}}, {{open_date}}. Set to 'Run Once for Each Item' so every configured document gets its own merge request, not just the first."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://docs.googleapis.com/v1/documents/{{ $json.new_doc_id }}:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $json.batch_requests }) }}",
+        "options": {}
+      },
+      "id": "5900aa00-0059-4000-a000-000000000020",
+      "name": "Update Doc Merge Fields",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3808,
+        0
+      ],
+      "notes": "Replaces every merge tag in the copied document — same direct Docs API call as PAC-57's 'Update Google Docs Merge Fields', since n8n's native Google Docs node has no find-and-replace operation. Reuses the 'Google Drive account' credential (Google Docs API must be enabled alongside Drive API in the same Cloud Console project). Uses 'Predefined Credential Type', not 'Generic' — Generic sends no Authorization header for Google's OAuth2 type.",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "2",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Update Doc Merge Fields' own response ({documentId, replies}) replaced the item's json, so \n// doc_label and new_doc_id are read back explicitly from 'Build Doc Merge Requests' rather than $json.\nconst item = $('Build Doc Merge Requests').item.json;\nreturn { json: { doc_result: true, doc_label: item.doc_label, new_doc_id: item.new_doc_id } };"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000201",
+      "name": "Prepare Document Setup Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        0
+      ],
+      "notes": "Normalizes this branch's output to a shape 'Aggregate Document Setup Results' can recognize regardless of whether any documents were actually configured."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Both the 'has templates' and 'no templates' branches converge here. Reads the full matter/practice-area\n// config back from 'Determine Practice Area Setup Config' so it carries forward into the task and\n// deadline stages regardless of which branch ran.\nconst config = $('Determine Practice Area Setup Config').first().json;\nconst items = $input.all();\nconst first = items[0].json;\n\nlet docs_created = [];\nif ('doc_result' in first) {\n  docs_created = items.map(i => ({ label: i.json.doc_label, link: `https://docs.google.com/document/d/${i.json.new_doc_id}/edit` }));\n}\n\nreturn [{ json: { ...config, docs_created, doc_setup_count: docs_created.length } }];"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000021",
+      "name": "Aggregate Document Setup Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4256,
+        0
+      ],
+      "notes": "Discriminates the two converging branches by shape, not by which node ran: real doc-copy results carry a 'doc_result' marker (set in 'Prepare Document Setup Result'), the no-templates skip path doesn't. Produces one summary item either way, with the full matter/config context restored so the task and deadline stages downstream still have what they need."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_tasks",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.has_tasks }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5900aa00-0059-4000-a000-000000000022",
+      "name": "If Has Task List",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4480,
+        0
+      ],
+      "notes": "Yes (at least one task configured for this practice area) → create the task checklist in Clio.\nNo → route to Skip. Both branches converge on 'Aggregate Task Setup Results'.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "5900aa00-0059-4000-a000-000000000023",
+      "name": "Skip No Task List",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4704,
+        200
+      ],
+      "notes": "No standard task list configured for this matter's practice area — no Clio tasks created. Add rows to TASK_LIST_MAP in 'Determine Practice Area Setup Config' if this practice area should have one."
+    },
+    {
+      "parameters": {
+        "jsCode": "const { docs, doc_count, has_docs, docs_created, doc_setup_count, tasks, task_count, has_tasks, deadline_rules, deadline_count, has_deadlines, ...meta } = $input.first().json;\n\nfunction addCalendarDays(dateStr, n) {\n  const d = new Date(dateStr + 'T00:00:00Z');\n  d.setUTCDate(d.getUTCDate() + Number(n || 0));\n  return d.toISOString().slice(0, 10);\n}\n\nreturn tasks.map(t => ({ json: {\n  ...meta,\n  task_name: t.name,\n  offset_days: t.offset_days,\n  due_date: addCalendarDays(meta.open_date, t.offset_days),\n} }));"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000024",
+      "name": "Split Task List Into Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4704,
+        0
+      ],
+      "notes": "Fans out into one item per configured task, with its due date already calculated as calendar days from the matter's open date (not business-day math — task due dates are internal reminders, not court deadlines; see the deadline-calendaring stage for business-day rules)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $vars.CLIO_BASE_URL.replace('https://', '') }}/api/v4/tasks.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { name: $json.task_name, due_at: $json.due_date + 'T00:00:00.000Z', matter: { id: $json.matter_id }, status: 'pending', priority: 'normal' } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5900aa00-0059-4000-a000-000000000025",
+      "name": "Create Clio Matter Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4928,
+        0
+      ],
+      "notes": "Creates one Clio task per configured checklist item, linked to the new matter and due-dated from its open date. Same request shape as the Court Deadline Calculator's (NTC-16) 'Update Clio Task API' node.\n\nCredential: same Clio OAuth2 credential as the matters fetch above.\n\n'Never Error' is on so one failed task creation doesn't stop the rest of the checklist from being created — check execution history if a task is missing from Clio afterward.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Create Clio Matter Task's own response replaced the item's json -- task_name and due_date are\n// read back explicitly from 'Split Task List Into Items'.\nconst item = $('Split Task List Into Items').item.json;\nreturn { json: { task_result: true, task_name: item.task_name, due_date: item.due_date } };"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000251",
+      "name": "Prepare Task Setup Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5152,
+        0
+      ],
+      "notes": "Normalizes this branch's output to a shape 'Aggregate Task Setup Results' can recognize regardless of whether any tasks were actually configured."
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Aggregate Document Setup Results').first().json;\nconst items = $input.all();\nconst first = items[0].json;\n\nlet tasks_created = [];\nif ('task_result' in first) {\n  tasks_created = items.map(i => ({ name: i.json.task_name, due_date: i.json.due_date }));\n}\n\nreturn [{ json: { ...config, tasks_created, task_setup_count: tasks_created.length } }];"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000026",
+      "name": "Aggregate Task Setup Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5376,
+        0
+      ],
+      "notes": "Same converge-and-discriminate pattern as 'Aggregate Document Setup Results', one stage over: carries the running config (including doc results already gathered) forward into the deadline stage."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_deadlines",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.has_deadlines }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5900aa00-0059-4000-a000-000000000027",
+      "name": "If Has Deadline Rules",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5600,
+        0
+      ],
+      "notes": "Yes (at least one intake deadline rule configured for this practice area) → calculate and calendar them.\nNo → route to Skip. Both branches converge on 'Aggregate Deadline Setup Results'.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "5900aa00-0059-4000-a000-000000000028",
+      "name": "Skip No Deadline Rules",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        5824,
+        200
+      ],
+      "notes": "No intake deadline rules configured for this matter's practice area — nothing calendared. Add rows to DEADLINE_RULE_MAP in 'Determine Practice Area Setup Config' if this practice area should have intake deadlines."
+    },
+    {
+      "parameters": {
+        "jsCode": "const { docs, doc_count, has_docs, docs_created, doc_setup_count, tasks, task_count, has_tasks, tasks_created, task_setup_count, deadline_rules, deadline_count, has_deadlines, ...meta } = $input.first().json;\n\n// Same US federal holiday + business-day math as the Court Deadline Calculator (NTC-16) -- kept\n// here directly so this template has zero dependency on NTC-16 being deployed.\nfunction nthWeekday(year, month0, weekday, n) {\n  if (n > 0) {\n    const d = new Date(Date.UTC(year, month0, 1));\n    let count = 0;\n    while (true) { if (d.getUTCDay() === weekday) { count++; if (count === n) return new Date(d); } d.setUTCDate(d.getUTCDate() + 1); }\n  } else {\n    const d = new Date(Date.UTC(year, month0 + 1, 0));\n    while (true) { if (d.getUTCDay() === weekday) return new Date(d); d.setUTCDate(d.getUTCDate() - 1); }\n  }\n}\nfunction getUSFederalHolidays(year) {\n  const set = new Set();\n  function addObserved(date) {\n    const d = new Date(date);\n    const day = d.getUTCDay();\n    if (day === 6) d.setUTCDate(d.getUTCDate() - 1);\n    if (day === 0) d.setUTCDate(d.getUTCDate() + 1);\n    set.add(d.toISOString().slice(0, 10));\n  }\n  addObserved(new Date(Date.UTC(year, 0, 1)));\n  addObserved(nthWeekday(year, 0, 1, 3));\n  addObserved(nthWeekday(year, 1, 1, 3));\n  addObserved(nthWeekday(year, 4, 1, -1));\n  addObserved(new Date(Date.UTC(year, 5, 19)));\n  addObserved(new Date(Date.UTC(year, 6, 4)));\n  addObserved(nthWeekday(year, 8, 1, 1));\n  addObserved(nthWeekday(year, 9, 1, 2));\n  addObserved(new Date(Date.UTC(year, 10, 11)));\n  addObserved(nthWeekday(year, 10, 4, 4));\n  addObserved(new Date(Date.UTC(year, 11, 25)));\n  return set;\n}\nconst holidayCache = {};\nfunction isBusinessDay(dateStr) {\n  const d = new Date(dateStr + 'T12:00:00Z');\n  const dow = d.getUTCDay();\n  if (dow === 0 || dow === 6) return false;\n  const yr = d.getUTCFullYear();\n  if (!holidayCache[yr]) holidayCache[yr] = getUSFederalHolidays(yr);\n  return !holidayCache[yr].has(dateStr);\n}\nfunction addBusinessDays(startDateStr, n) {\n  const direction = n >= 0 ? 1 : -1;\n  const steps = Math.abs(n);\n  const d = new Date(startDateStr + 'T12:00:00Z');\n  let counted = 0;\n  while (counted < steps) { d.setUTCDate(d.getUTCDate() + direction); if (isBusinessDay(d.toISOString().slice(0, 10))) counted++; }\n  return d.toISOString().slice(0, 10);\n}\nfunction addCalendarDays(startDateStr, n) {\n  const d = new Date(startDateStr + 'T00:00:00Z');\n  d.setUTCDate(d.getUTCDate() + n);\n  return d.toISOString().slice(0, 10);\n}\n\nreturn deadline_rules.map(rule => {\n  const offsetType = (rule.offset_type || 'calendar').toLowerCase();\n  const deadline_date = offsetType === 'business'\n    ? addBusinessDays(meta.open_date, Number(rule.offset_days) || 0)\n    : addCalendarDays(meta.open_date, Number(rule.offset_days) || 0);\n  return { json: { ...meta, rule_name: rule.name, deadline_date, description: rule.description || rule.name } };\n});"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000029",
+      "name": "Compute Intake Deadlines",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5824,
+        0
+      ],
+      "notes": "Fans out into one item per configured deadline rule, with the calendar date already calculated from the matter's open date. 'business' offset_type skips weekends and US federal holidays; 'calendar' counts every day. The firm owns and enters every rule in DEADLINE_RULE_MAP — this node only does the date arithmetic, never suggests or interprets a deadline."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $vars.CLIO_BASE_URL.replace('https://', '') }}/api/v4/calendar_entries.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { summary: $json.rule_name + ' — ' + $json.matter_display_number, description: $json.description, all_day: true, start_at: $json.deadline_date + 'T00:00:00.000Z', end_at: $json.deadline_date + 'T23:59:59.000Z', matter: { id: $json.matter_id } } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5900aa00-0059-4000-a000-000000000030",
+      "name": "Create Clio Calendar Deadline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        6048,
+        0
+      ],
+      "notes": "Creates one all-day Clio calendar entry per configured deadline rule, linked to the matter. The calendar_entries.json endpoint and field names (summary/description/all_day/start_at/end_at) follow Clio's general REST conventions but weren't confirmed against a live account during authoring — check developer.clio.com and adjust the field names here if your response comes back with an error. If your firm calendars deadlines in Google/Outlook instead of Clio, swap this node for the 'Post to Google Calendar API' / 'Post to Outlook Calendar API' pattern from the Court Deadline Calculator (NTC-16).\n\nCredential: same Clio OAuth2 credential as elsewhere in this workflow.\n\n'Never Error' is on so one failed deadline doesn't block the rest — check execution history if a deadline is missing from Clio afterward.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Create Clio Calendar Deadline's own response replaced the item's json -- rule_name and\n// deadline_date are read back explicitly from 'Compute Intake Deadlines'.\nconst item = $('Compute Intake Deadlines').item.json;\nreturn { json: { deadline_result: true, rule_name: item.rule_name, deadline_date: item.deadline_date } };"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000301",
+      "name": "Prepare Deadline Setup Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6272,
+        0
+      ],
+      "notes": "Normalizes this branch's output to a shape 'Aggregate Deadline Setup Results' can recognize regardless of whether any deadline rules were actually configured."
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Aggregate Task Setup Results').first().json;\nconst items = $input.all();\nconst first = items[0].json;\n\nlet deadlines_created = [];\nif ('deadline_result' in first) {\n  deadlines_created = items.map(i => ({ name: i.json.rule_name, date: i.json.deadline_date }));\n}\n\nreturn [{ json: { ...config, deadlines_created, deadline_setup_count: deadlines_created.length } }];"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000031",
+      "name": "Aggregate Deadline Setup Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6496,
+        0
+      ],
+      "notes": "Final converge point before the summary — every stage's results (folders, docs, tasks, deadlines) are now present on this single item, whether or not each stage found anything configured to do."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\n\nconst lines = [\n  `New matter opened: ${r.matter_display_number} — ${r.matter_description} (${r.practice_area}).`,\n  '',\n  `Folder tree: ${r.subfolder_count} folder(s) created under ${r.matter_folder_link}`,\n  `  ${r.subfolders_created.join(', ')}`,\n  '',\n  r.doc_setup_count > 0 ? `${r.doc_setup_count} document template(s) copied in:` : 'No document templates configured for this practice area.',\n  ...r.docs_created.map(d => `  • ${d.label} — ${d.link}`),\n  '',\n  r.task_setup_count > 0 ? `${r.task_setup_count} task(s) assigned in Clio:` : 'No standard task list configured for this practice area.',\n  ...r.tasks_created.map(t => `  • ${t.name} — due ${t.due_date}`),\n  '',\n  r.deadline_setup_count > 0 ? `${r.deadline_setup_count} intake deadline(s) calendared in Clio:` : 'No intake deadline rules configured for this practice area.',\n  ...r.deadlines_created.map(d => `  • ${d.name} — ${d.date}`),\n];\n\nreturn [{ json: {\n  matter_id: r.matter_id,\n  matter_display_number: r.matter_display_number,\n  attorney_email: r.attorney_email,\n  summary_message: lines.join('\\n'),\n  summary_subject: `Matter setup complete — ${r.matter_display_number}`,\n} }];"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000032",
+      "name": "Build Matter Setup Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6720,
+        0
+      ],
+      "notes": "Combines every stage's results (folders, documents, tasks, deadlines) into one summary for the audit log and staff email — the single place a staff member can see everything this workflow did for this matter."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "message": "={{ $json.summary_message }}",
+            "matter_id": "={{ $json.matter_display_number }}",
+            "recipient": "={{ $vars.FIRM_STAFF_EMAIL || $vars.FIRM_EMAIL }}",
+            "template_id": "PAC-59"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "5900aa00-0059-4000-a000-000000000033",
+      "name": "Log Matter Setup To Compliance",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        6944,
+        0
+      ],
+      "notes": "Logs this matter's full setup to the OPS1 compliance audit sheet — no email sent from this call itself, purely the audit trail. This workflow delivers its summary to staff, not a client, so opt-out checking does not apply here.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable."
+    },
+    {
+      "parameters": {
+        "text": "={{ $('Build Matter Setup Summary').item.json.summary_message }}",
+        "subject": "={{ $('Build Matter Setup Summary').item.json.summary_subject }}",
+        "toEmail": "={{ $vars.FIRM_STAFF_EMAIL || $vars.FIRM_EMAIL }}",
+        "options": {},
+        "emailType": "text",
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}"
+      },
+      "id": "5900aa00-0059-4000-a000-000000000034",
+      "name": "Notify Staff Matter Setup Complete",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        7168,
+        0
+      ],
+      "notes": "Emails staff a plain-text summary of everything set up for the new matter, with a direct link to its Drive folder and every generated document.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)' — reuse if already deployed elsewhere.",
+      "credentials": {
+        "smtp": {
+          "id": "3",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "Poll For New Matters": [
+      {
+        "json": {
+          "timestamp": "2026-08-18T09:00:00.000Z",
+          "Readable date": "August 18th 2026, 9:00:00 am"
+        }
+      }
+    ],
+    "Fetch Open Matters From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 98765,
+              "display_number": "M-2026-0142",
+              "description": "Smith v. Jones — Custody Modification",
+              "status": "Open",
+              "open_date": "2026-08-18",
+              "client": {
+                "id": 10234,
+                "name": "Jane Doe"
+              },
+              "practice_area": {
+                "id": 4,
+                "name": "Family Law"
+              },
+              "responsible_attorney": {
+                "id": 3,
+                "name": "A. Attorney",
+                "email": "attorney@smithlaw.com"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 1
+          }
+        }
+      }
+    ]
+  },
+  "settings": {
+    "availableInMCP": false,
+    "executionOrder": "v1",
+    "executionTimeout": 120,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "Poll For New Matters": {
+      "main": [
+        [
+          {
+            "node": "Fetch Open Matters From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Open Matters From Clio": {
+      "main": [
+        [
+          {
+            "node": "Filter To Newly Opened Matters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter To Newly Opened Matters": {
+      "main": [
+        [
+          {
+            "node": "If Has New Matters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has New Matters": {
+      "main": [
+        [
+          {
+            "node": "Split New Matters Into Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip No New Matters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split New Matters Into Items": {
+      "main": [
+        [
+          {
+            "node": "Search For Existing Matter Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search For Existing Matter Folder": {
+      "main": [
+        [
+          {
+            "node": "Check Matter Folder Existence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Matter Folder Existence": {
+      "main": [
+        [
+          {
+            "node": "If Matter Folder Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Matter Folder Found": {
+      "main": [
+        [
+          {
+            "node": "Build Standard Subfolder List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Matter Root Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Matter Root Folder": {
+      "main": [
+        [
+          {
+            "node": "Build Standard Subfolder List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Standard Subfolder List": {
+      "main": [
+        [
+          {
+            "node": "Create Matter Subfolder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Matter Subfolder": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Folder Tree Setup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Folder Tree Setup": {
+      "main": [
+        [
+          {
+            "node": "Determine Practice Area Setup Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Practice Area Setup Config": {
+      "main": [
+        [
+          {
+            "node": "If Has Document Templates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Document Templates": {
+      "main": [
+        [
+          {
+            "node": "Split Doc Template List Into Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip No Document Templates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Doc Template List Into Items": {
+      "main": [
+        [
+          {
+            "node": "Copy Doc Template To Matter Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copy Doc Template To Matter Folder": {
+      "main": [
+        [
+          {
+            "node": "Build Doc Merge Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Doc Merge Requests": {
+      "main": [
+        [
+          {
+            "node": "Update Doc Merge Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Doc Merge Fields": {
+      "main": [
+        [
+          {
+            "node": "Prepare Document Setup Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Document Setup Result": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Document Setup Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip No Document Templates": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Document Setup Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Document Setup Results": {
+      "main": [
+        [
+          {
+            "node": "If Has Task List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Task List": {
+      "main": [
+        [
+          {
+            "node": "Split Task List Into Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip No Task List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Task List Into Items": {
+      "main": [
+        [
+          {
+            "node": "Create Clio Matter Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Clio Matter Task": {
+      "main": [
+        [
+          {
+            "node": "Prepare Task Setup Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Task Setup Result": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Task Setup Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip No Task List": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Task Setup Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Task Setup Results": {
+      "main": [
+        [
+          {
+            "node": "If Has Deadline Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Deadline Rules": {
+      "main": [
+        [
+          {
+            "node": "Compute Intake Deadlines",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip No Deadline Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Intake Deadlines": {
+      "main": [
+        [
+          {
+            "node": "Create Clio Calendar Deadline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Clio Calendar Deadline": {
+      "main": [
+        [
+          {
+            "node": "Prepare Deadline Setup Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Deadline Setup Result": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Deadline Setup Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip No Deadline Rules": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Deadline Setup Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Deadline Setup Results": {
+      "main": [
+        [
+          {
+            "node": "Build Matter Setup Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Matter Setup Summary": {
+      "main": [
+        [
+          {
+            "node": "Log Matter Setup To Compliance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Matter Setup To Compliance": {
+      "main": [
+        [
+          {
+            "node": "Notify Staff Matter Setup Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Watches Clio for newly opened matters and runs the firm's standard opening checklist automatically — creates the matter's folder tree in Google Drive, copies configured internal document templates into it, assigns the firm's standard task list in Clio, and calendars intake deadlines from firm-entered rules. Docs, tasks, and deadlines are all configured per practice area and skipped gracefully if unconfigured. Replaces manual matter-opening checklists and Clio's own templates. Logs every matter setup to the OPS1 compliance audit sheet."
+}
