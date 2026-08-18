@@ -4,9 +4,9 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Google Business Profile Auto-Poster\n\n### How it works\n\n1. Once a week, reads the firm's own Content Queue Google Sheet and finds the next row that hasn't been posted yet.\n2. Sends that raw content (a field note, tip, or announcement the firm typed in) to Claude to be repurposed into a single ready-to-publish Google Business Profile post — marketing copy only, same compliance rules as the Content Repurposer (PAC-31).\n3. An independent post-hoc keyword scan re-checks the generated post for legal-sounding language before it's allowed to publish.\n4. If it passes, the post is handed to a Zapier zap that publishes it to Google Business Profile — direct API posting requires Google's own allowlist approval that most firms don't have, so this goes through Zapier's already-approved Business Profile integration instead (same bridge pattern as the Negative-Review Rapid Response template, PAC-50).\n5. The queue row is marked accordingly, the event is logged to the OPS1 compliance audit sheet, and staff get an email either confirming what went out or flagging what needs a human look.\n\n### Setup steps\n\n- [ ] Create a Google Sheet named 'Content Queue' with columns: content, status, practice_area, posted_at, notes. Add a header row, then one row per post idea (leave status blank).\n- [ ] Set GBP_CONTENT_QUEUE_SHEET_ID to that sheet's ID and connect the Google Sheets credential.\n- [ ] Get an Anthropic API key from console.anthropic.com and connect it as a Header Auth credential (reuse from PAC-31/PAC-50 if already deployed).\n- [ ] In Zapier, create a zap: Trigger 'Webhooks by Zapier → Catch Hook', Action 'Google Business Profile → Create Post', mapping the hook's 'content' field to the post text. Set ZAPIER_GBP_POST_WEBHOOK_URL to the catch hook's URL.\n- [ ] Set FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, FIRM_STAFF_EMAIL, GUARDRAIL_WORKFLOW_ID, and optionally FIRM_GBP_CTA_URL / FIRM_GBP_CTA_TYPE.\n- [ ] Connect the SMTP credential.\n\n### Customization\n\nAdjust the weekly cadence on the trigger node. Edit the compliance rules or character limit directly in 'Build GBP Post Prompt' if your bar's advertising rules require different footer language.",
+        "content": "## Google Business Profile Auto-Poster\n\n### How it works\n\n1. Once a week, reads the firm's own Content Queue Google Sheet and finds the next row that hasn't been drafted yet.\n2. Sends that raw content (a field note, tip, or announcement the firm typed in) to Claude to be repurposed into a single ready-to-paste Google Business Profile post — marketing copy only, same compliance rules as the Content Repurposer (PAC-31).\n3. An independent post-hoc keyword scan re-checks the generated post for legal-sounding language before it's allowed through.\n4. If it passes, the finished post text is emailed to staff to paste into Google Business Profile directly — this template does not call Google's Business Profile API to auto-publish. Direct posting access requires Google's own developer allowlist approval, which is a real barrier in practice (confirmed against this catalog's own Negative-Review Rapid Response template, PAC-50, whose Zapier-bridge approach to the same API has been stuck in Zapier's own account-approval queue) — so this template stays reliable for every firm by keeping a human as the one who clicks publish, rather than depending on access that may never come through.\n5. The queue row is marked accordingly, the event is logged to the OPS1 compliance audit sheet, and staff get an email with the ready-to-paste post, or a flag if something needs a human look.\n\n### Setup steps\n\n- [ ] Create a Google Sheet named 'Content Queue' with columns: content, status, practice_area, posted_at, notes. Add a header row, then one row per post idea (leave status blank).\n- [ ] Set GBP_CONTENT_QUEUE_SHEET_ID to that sheet's ID and connect the Google Sheets credential.\n- [ ] Get an Anthropic API key from console.anthropic.com and connect it as a Header Auth credential (reuse from PAC-31/PAC-50 if already deployed).\n- [ ] Set FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, FIRM_STAFF_EMAIL, GUARDRAIL_WORKFLOW_ID, and optionally FIRM_GBP_CTA_URL / FIRM_GBP_CTA_TYPE / FIRM_GBP_DASHBOARD_URL (reuse PAC-50's value if already deployed).\n- [ ] Connect the SMTP credential.\n\n### Customization\n\nAdjust the weekly cadence on the trigger node. Edit the compliance rules or character limit directly in 'Build GBP Post Prompt' if your bar's advertising rules require different footer language. If your firm later gets approved Business Profile API access (directly or through Zapier), swap the final email step for a publish call — everything upstream of it (generation, safety check, queue tracking) stays the same.",
         "width": 480,
-        "height": 900
+        "height": 940
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "content": "## Trigger and content queue\n\nRuns weekly, reads the firm's Content Queue sheet, and finds the next row that hasn't been posted or flagged yet. If nothing's queued, staff get a reminder instead of the week going by silently empty.",
+        "content": "## Trigger and content queue\n\nRuns weekly, reads the firm's Content Queue sheet, and finds the next row that hasn't been drafted or flagged yet. If nothing's queued, staff get a reminder instead of the week going by silently empty.",
         "width": 1264,
         "height": 420,
         "color": 7
@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "content": "## Generate and safety-check the post\n\nRepurposes the raw content into one Google Business Profile post via Claude, then re-checks it with an independent keyword scan before anything is allowed to publish — same two-layer approach as PAC-31 and PAC-50.",
+        "content": "## Generate and safety-check the post\n\nRepurposes the raw content into one Google Business Profile post via Claude, then re-checks it with an independent keyword scan before anything is allowed through — same two-layer approach as PAC-31 and PAC-50.",
         "width": 1120,
         "height": 420,
         "color": 7
@@ -51,15 +51,15 @@
     },
     {
       "parameters": {
-        "content": "## Publish path\n\nHands the approved post to Zapier for actual publishing (Google restricts direct API posting to allowlisted developers), marks the queue row posted, logs it, and confirms to staff.",
-        "width": 1120,
+        "content": "## Draft delivery path\n\nEmails the approved, ready-to-paste post straight to staff — this template doesn't call the Business Profile API to auto-publish (see the main note for why), so a human still clicks publish. Marks the queue row drafted and logs it either way.",
+        "width": 896,
         "height": 420,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2544,
+        2320,
         -160
       ],
       "id": "sticky-3",
@@ -135,7 +135,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Finds the first row that hasn't been posted or flagged yet -- blank status or 'Queued'\n// both count. A row marked 'Posted' or 'Needs Review' is skipped, so a flagged row never\n// blocks every row behind it from being tried the following week.\nconst rows = $input.all();\n\nconst next = rows.find(r => {\n  const status = String(r.json.status || '').trim().toLowerCase();\n  return status === '' || status === 'queued';\n});\n\nconst content = next ? String(next.json.content || '').trim() : '';\n\nreturn [{ json: {\n  has_content: !!next && content.length > 0,\n  row_number: next ? next.json.row_number : null,\n  content,\n  practice_area: next ? String(next.json.practice_area || '').trim() : '',\n} }];"
+        "jsCode": "// Finds the first row that hasn't been drafted or flagged yet -- blank status or 'Queued'\n// both count. A row marked 'Drafted' or 'Needs Review' is skipped, so a flagged row never\n// blocks every row behind it from being tried the following week.\nconst rows = $input.all();\n\nconst next = rows.find(r => {\n  const status = String(r.json.status || '').trim().toLowerCase();\n  return status === '' || status === 'queued';\n});\n\nconst content = next ? String(next.json.content || '').trim() : '';\n\nreturn [{ json: {\n  has_content: !!next && content.length > 0,\n  row_number: next ? next.json.row_number : null,\n  content,\n  practice_area: next ? String(next.json.practice_area || '').trim() : '',\n} }];"
       },
       "id": "6000aa00-0060-4000-a000-000000000003",
       "name": "Find Next Queued Content Row",
@@ -145,7 +145,7 @@
         448,
         0
       ],
-      "notes": "Scans the sheet for the next actionable row. If every row is already 'Posted', already 'Needs Review', or the sheet is empty beyond the header, has_content comes back false and the run ends with a reminder to staff instead of silently doing nothing."
+      "notes": "Scans the sheet for the next actionable row. If every row is already 'Drafted', already 'Needs Review', or the sheet is empty beyond the header, has_content comes back false and the run ends with a reminder to staff instead of silently doing nothing."
     },
     {
       "parameters": {
@@ -261,7 +261,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parses Claude's JSON response and runs an independent post-hoc keyword scan -- Claude's\n// self-report is Layer 1, this scan is Layer 2. is_marketing_safe is true only if both pass.\n// References 'Build GBP Post Prompt' for the queue row's metadata.\nconst prep = $('Build GBP Post Prompt').item.json;\n\nconst rawResponse = $input.first().json;\nconst rawText = (rawResponse.content && rawResponse.content[0] && rawResponse.content[0].text)\n  ? rawResponse.content[0].text.trim()\n  : '';\n\nif (!rawText) {\n  throw new Error('Claude API returned an empty response. Check the Anthropic API key, usage quota, and rate limits at console.anthropic.com.');\n}\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```(?:json)?\\n?/, '').replace(/\\n?```$/, '');\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Claude did not return valid JSON. Raw response: ' + rawText.slice(0, 400));\n}\n\nfunction flaggedResult(reason) {\n  return [{ json: {\n    ...prep,\n    is_marketing_safe: false,\n    safety_note: reason,\n    gbp_post: '',\n    email_subject: 'GBP Auto-Poster — flagged for human review',\n    email_body: [\n      \"This week's Google Business Profile post was flagged and NOT published.\",\n      '',\n      'Reason: ' + reason,\n      '',\n      'Original content (row ' + prep.row_number + \" in the Content Queue sheet):\",\n      prep.content,\n      '',\n      \"Edit the row and reset its status to blank so it's picked up again next week, or replace it with different content.\",\n    ].join('\\n'),\n  } }];\n}\n\nif (parsed.is_marketing_safe === false) {\n  return flaggedResult(parsed.safety_note || 'Claude flagged this content as unsafe to repurpose.');\n}\n\nlet gbp_post = String(parsed.gbp_post || '').trim();\n\n// Post-hoc keyword scan -- catches legal language that slipped past Claude's self-check.\nconst UNSAFE_RE = /\\b(attorney.client|work.product|privileged|legal.advice|legal.opinion|you should|we advise|we recommend|our recommendation|pursuant to|under\\s+[§\\d]|case law|statute|court held|court ruled|ruling)\\b/i;\n\nif (!gbp_post) return flaggedResult('Claude returned an empty post.');\nif (UNSAFE_RE.test(gbp_post)) return flaggedResult('Post-hoc scan found legal-sounding language in the generated post.');\n\n// Google Business Profile hard-limits posts to 1,500 characters -- truncate at a word boundary\n// rather than let the publish call fail outright if Claude ran long despite instructions.\nconst LIMIT = 1500;\nlet truncated = false;\nif (gbp_post.length > LIMIT) {\n  gbp_post = gbp_post.slice(0, LIMIT - 1).replace(/\\s+\\S*$/, '') + '…';\n  truncated = true;\n}\n\nreturn [{ json: {\n  ...prep,\n  is_marketing_safe: true,\n  gbp_post,\n  truncated,\n  char_count: gbp_post.length,\n  email_subject: 'Google Business Profile post published — ' + new Date().toLocaleDateString('en-US'),\n  email_body: [\n    \"This week's Google Business Profile post was generated and sent to Zapier for publishing.\",\n    '',\n    'POST TEXT (' + gbp_post.length + ' / 1,500 chars)' + (truncated ? ' — truncated to fit the limit, review recommended' : ''),\n    '─'.repeat(60),\n    gbp_post,\n    '─'.repeat(60),\n    '',\n    \"Check Zapier's Zap history and your Google Business Profile to confirm it went live — this confirms Zapier received the request, not that Google accepted the post.\",\n  ].join('\\n'),\n} }];"
+        "jsCode": "// Parses Claude's JSON response and runs an independent post-hoc keyword scan -- Claude's\n// self-report is Layer 1, this scan is Layer 2. is_marketing_safe is true only if both pass.\n// References 'Build GBP Post Prompt' for the queue row's metadata.\nconst prep = $('Build GBP Post Prompt').item.json;\n\nconst rawResponse = $input.first().json;\nconst rawText = (rawResponse.content && rawResponse.content[0] && rawResponse.content[0].text)\n  ? rawResponse.content[0].text.trim()\n  : '';\n\nif (!rawText) {\n  throw new Error('Claude API returned an empty response. Check the Anthropic API key, usage quota, and rate limits at console.anthropic.com.');\n}\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```(?:json)?\\n?/, '').replace(/\\n?```$/, '');\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Claude did not return valid JSON. Raw response: ' + rawText.slice(0, 400));\n}\n\nfunction flaggedResult(reason) {\n  return [{ json: {\n    ...prep,\n    is_marketing_safe: false,\n    safety_note: reason,\n    gbp_post: '',\n    email_subject: 'GBP Auto-Poster — flagged for human review',\n    email_body: [\n      \"This week's Google Business Profile post was flagged and NOT published.\",\n      '',\n      'Reason: ' + reason,\n      '',\n      'Original content (row ' + prep.row_number + \" in the Content Queue sheet):\",\n      prep.content,\n      '',\n      \"Edit the row and reset its status to blank so it's picked up again next week, or replace it with different content.\",\n    ].join('\\n'),\n  } }];\n}\n\nif (parsed.is_marketing_safe === false) {\n  return flaggedResult(parsed.safety_note || 'Claude flagged this content as unsafe to repurpose.');\n}\n\nlet gbp_post = String(parsed.gbp_post || '').trim();\n\n// Post-hoc keyword scan -- catches legal language that slipped past Claude's self-check.\nconst UNSAFE_RE = /\\b(attorney.client|work.product|privileged|legal.advice|legal.opinion|you should|we advise|we recommend|our recommendation|pursuant to|under\\s+[§\\d]|case law|statute|court held|court ruled|ruling)\\b/i;\n\nif (!gbp_post) return flaggedResult('Claude returned an empty post.');\nif (UNSAFE_RE.test(gbp_post)) return flaggedResult('Post-hoc scan found legal-sounding language in the generated post.');\n\n// Google Business Profile hard-limits posts to 1,500 characters -- truncate at a word boundary\n// rather than let the publish call fail outright if Claude ran long despite instructions.\nconst LIMIT = 1500;\nlet truncated = false;\nif (gbp_post.length > LIMIT) {\n  gbp_post = gbp_post.slice(0, LIMIT - 1).replace(/\\s+\\S*$/, '') + '…';\n  truncated = true;\n}\n\nreturn [{ json: {\n  ...prep,\n  is_marketing_safe: true,\n  gbp_post,\n  truncated,\n  char_count: gbp_post.length,\n  email_subject: 'Google Business Profile post ready to paste — ' + new Date().toLocaleDateString('en-US'),\n  email_body: (() => {\n    const lines = [\n      \"This week's Google Business Profile post is ready — copy it in below.\",\n      '',\n      'POST TEXT (' + gbp_post.length + ' / 1,500 chars)' + (truncated ? ' — truncated to fit the limit, review recommended' : ''),\n      '─'.repeat(60),\n      gbp_post,\n      '─'.repeat(60),\n    ];\n    if (prep.cta_url) {\n      lines.push('', 'Suggested call-to-action button: ' + (prep.cta_type || 'LEARN_MORE') + ' → ' + prep.cta_url);\n    }\n    lines.push('', 'Paste this into Google Business Profile: ' + ($vars.FIRM_GBP_DASHBOARD_URL || 'business.google.com → your profile → Add update'));\n    return lines.join('\\n');\n  })(),\n} }];"
       },
       "id": "6000aa00-0060-4000-a000-000000000008",
       "name": "Extract & Safety-Check GBP Post",
@@ -271,7 +271,7 @@
         1344,
         -160
       ],
-      "notes": "Two-layer safety check, same pattern as PAC-31 and PAC-50: Claude's own self-report is Layer 1, an independent keyword regex scan is Layer 2. is_marketing_safe is only true if both pass.\n\nAlso enforces Google Business Profile's real 1,500-character limit — truncates at a word boundary and flags it in the summary rather than letting an over-length post fail downstream."
+      "notes": "Two-layer safety check, same pattern as PAC-31 and PAC-50: Claude's own self-report is Layer 1, an independent keyword regex scan is Layer 2. is_marketing_safe is only true if both pass.\n\nAlso enforces Google Business Profile's real 1,500-character limit — truncates at a word boundary and flags it in the summary rather than handing staff an over-length post to paste.\n\nFIRM_GBP_DASHBOARD_URL is optional (reuse PAC-50's value if already deployed) — falls back to plain instructions if unset."
     },
     {
       "parameters": {
@@ -306,42 +306,15 @@
         1568,
         -160
       ],
-      "notes": "Yes (both safety layers passed) → publish via Zapier.\nNo (Claude self-flagged, or the post-hoc scan caught legal-sounding language) → mark the row for human review instead of publishing.",
+      "notes": "Yes (both safety layers passed) → email the ready-to-paste post to staff.\nNo (Claude self-flagged, or the post-hoc scan caught legal-sounding language) → mark the row for human review instead.",
       "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.ZAPIER_GBP_POST_WEBHOOK_URL }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ content: $json.gbp_post, cta_type: $json.cta_type, cta_url: $json.cta_url }) }}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true,
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "6000aa00-0060-4000-a000-000000000010",
-      "name": "Post To Google Business Profile Via Zapier",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        1792,
-        -320
-      ],
-      "notes": "Hands the approved post text to a Zapier zap that actually publishes it to Google Business Profile. Direct API posting (Google's Business Profile / My Business API) requires a developer application Google approves case-by-case — most firms and agencies never get it — so this goes through Zapier's already-approved Business Profile integration instead, the same bridge approach the Negative-Review Rapid Response template (PAC-50) uses in the opposite direction.\n\nZapier setup: Zapier → Create Zap → Trigger 'Webhooks by Zapier' → 'Catch Hook' → copy the catch hook URL into ZAPIER_GBP_POST_WEBHOOK_URL → Action app 'Google Business Profile' → action 'Create Post' → connect your Google account, select your location, map the Summary/description field to the hook's 'content', and (if your Zapier plan's action supports it) map the button fields to 'cta_type' / 'cta_url'.\n\n'Never Error' is on — a 200 response here only confirms Zapier received the request, not that Google accepted the post. Spot-check the Business Profile and Zapier's Zap history periodically.",
-      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "columns": {
           "value": {
             "row_number": "={{ $('Extract & Safety-Check GBP Post').item.json.row_number }}",
-            "status": "Posted",
+            "status": "Drafted",
             "posted_at": "={{ new Date().toISOString() }}",
             "notes": ""
           },
@@ -364,14 +337,14 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000011",
-      "name": "Mark Queue Row As Posted",
+      "name": "Mark Queue Row As Drafted",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        2016,
+        1792,
         -320
       ],
-      "notes": "Marks this row Posted so next week's run moves on to the next queued row instead of re-publishing the same content.\n\nMatches on row_number (from the original read, 1-based including the header row) rather than a separate ID column — same technique NTC-33 uses to target a specific opt-out row. Verify the 'Column to Match On' dropdown shows row_number after import; reconfigure it in the UI if your n8n version labels it differently.\n\nSame 'Google Sheets account' credential as the read step.",
+      "notes": "Marks this row Drafted so next week's run moves on to the next queued row instead of regenerating the same content. 'Drafted' rather than 'Posted' since this template hands staff a ready-to-paste post rather than publishing it directly — see the main sticky note for why (Google restricts direct/bridged Business Profile posting access, and this catalog's own PAC-50 hit that wall via Zapier).\n\nMatches on row_number (from the original read, 1-based including the header row) rather than a separate ID column — same technique NTC-33 uses to target a specific opt-out row. Verify the 'Column to Match On' dropdown shows row_number after import; reconfigure it in the UI if your n8n version labels it differently.\n\nSame 'Google Sheets account' credential as the read step.",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "2",
@@ -403,14 +376,14 @@
         }
       },
       "id": "6000aa00-0060-4000-a000-000000000012",
-      "name": "Log Publish To Compliance",
+      "name": "Log Draft To Compliance",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        2240,
+        2016,
         -320
       ],
-      "notes": "Logs the publish event to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33). This is internal record-keeping, not a message to a client — opt-out checking doesn't apply here.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable."
+      "notes": "Logs the generated draft to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33). This is internal record-keeping, not a message to a client — opt-out checking doesn't apply here.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable."
     },
     {
       "parameters": {
@@ -422,14 +395,14 @@
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}"
       },
       "id": "6000aa00-0060-4000-a000-000000000013",
-      "name": "Notify Staff Post Published",
+      "name": "Notify Staff GBP Post Ready To Paste",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2464,
+        2240,
         -320
       ],
-      "notes": "Confirms to staff what went out this week, since it's public content on the firm's actual profile — worth a look even though publishing itself is automatic.\n\nCredential: same 'Email account (SMTP)' credential as the queue-empty notification.",
+      "notes": "Delivers this week's ready-to-paste post to staff — someone still needs to log into Google Business Profile and paste it in (30 seconds), since this template doesn't hold API access to publish automatically.\n\nCredential: same 'Email account (SMTP)' credential as the queue-empty notification.",
       "credentials": {
         "smtp": {
           "id": "3",
@@ -671,7 +644,7 @@
       "main": [
         [
           {
-            "node": "Post To Google Business Profile Via Zapier",
+            "node": "Mark Queue Row As Drafted",
             "type": "main",
             "index": 0
           }
@@ -685,33 +658,22 @@
         ]
       ]
     },
-    "Post To Google Business Profile Via Zapier": {
+    "Mark Queue Row As Drafted": {
       "main": [
         [
           {
-            "node": "Mark Queue Row As Posted",
+            "node": "Log Draft To Compliance",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mark Queue Row As Posted": {
+    "Log Draft To Compliance": {
       "main": [
         [
           {
-            "node": "Log Publish To Compliance",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Publish To Compliance": {
-      "main": [
-        [
-          {
-            "node": "Notify Staff Post Published",
+            "node": "Notify Staff GBP Post Ready To Paste",
             "type": "main",
             "index": 0
           }
@@ -741,5 +703,5 @@
       ]
     }
   },
-  "description": "Repurposes the firm's own field notes and content ideas into a weekly Google Business Profile post — Claude generates marketing-safe copy under the same compliance rules as the Content Repurposer (PAC-31), an independent keyword scan re-checks it, and an approved post is handed to a Zapier zap for actual publishing (direct API posting requires Google's own developer allowlist). Flagged content is held for human review instead of publishing. Replaces a marketing retainer's local-SEO upkeep. Logs every publish and every exception to the OPS1 compliance audit sheet."
+  "description": "Repurposes the firm's own field notes and content ideas into a weekly, ready-to-paste Google Business Profile post — Claude generates marketing-safe copy under the same compliance rules as the Content Repurposer (PAC-31), an independent keyword scan re-checks it, and the approved post is emailed straight to staff to paste in (direct/bridged API publishing access is unreliable to get from Google in practice). Flagged content is held for human review instead. Replaces a marketing retainer's local-SEO upkeep. Logs every draft and every exception to the OPS1 compliance audit sheet."
 }
