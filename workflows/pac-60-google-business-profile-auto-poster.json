@@ -363,7 +363,7 @@
         "workflowInputs": {
           "value": {
             "channel": "email",
-            "message": "={{ $json.gbp_post }}",
+            "message": "={{ $('Extract & Safety-Check GBP Post').item.json.gbp_post }}",
             "matter_id": "",
             "recipient": "={{ $vars.FIRM_EMAIL }}",
             "template_id": "PAC-60"
@@ -383,7 +383,7 @@
         2016,
         -320
       ],
-      "notes": "Logs the generated draft to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33). This is internal record-keeping, not a message to a client — opt-out checking doesn't apply here.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable."
+      "notes": "Logs the generated draft to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33). This is internal record-keeping, not a message to a client — opt-out checking doesn't apply here.\n\nReads gbp_post explicitly from 'Extract & Safety-Check GBP Post' rather than $json — 'Mark Queue Row As Drafted' immediately upstream is a Google Sheets update, whose own response (row_number/status/posted_at) replaced the item's json and doesn't carry gbp_post forward.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable."
     },
     {
       "parameters": {
@@ -464,7 +464,7 @@
         "workflowInputs": {
           "value": {
             "channel": "email",
-            "message": "={{ 'Flagged, not published: ' + $json.safety_note }}",
+            "message": "={{ 'Flagged, not drafted: ' + $('Extract & Safety-Check GBP Post').item.json.safety_note }}",
             "matter_id": "",
             "recipient": "={{ $vars.FIRM_EMAIL }}",
             "template_id": "PAC-60"
@@ -484,12 +484,12 @@
         2016,
         320
       ],
-      "notes": "Logs the exception to the OPS1 compliance audit sheet — every week's content is accounted for, whether published or flagged."
+      "notes": "Logs the exception to the OPS1 compliance audit sheet — every week's content is accounted for, whether drafted or flagged.\n\nReads safety_note explicitly from 'Extract & Safety-Check GBP Post' rather than $json — 'Mark Queue Row Needs Review' immediately upstream is a Google Sheets update, whose own response replaced the item's json."
     },
     {
       "parameters": {
-        "text": "={{ $json.email_body }}",
-        "subject": "={{ $json.email_subject }}",
+        "text": "={{ $('Extract & Safety-Check GBP Post').item.json.email_body }}",
+        "subject": "={{ $('Extract & Safety-Check GBP Post').item.json.email_subject }}",
         "toEmail": "={{ $vars.FIRM_STAFF_EMAIL || $vars.FIRM_EMAIL }}",
         "options": {},
         "emailType": "text",
@@ -503,7 +503,7 @@
         2240,
         320
       ],
-      "notes": "Delivers the original content and the flag reason so staff can fix or replace the queue row themselves.\n\nCredential: same 'Email account (SMTP)' credential as the other notifications.",
+      "notes": "Delivers the original content and the flag reason so staff can fix or replace the queue row themselves.\n\nReads email_body/email_subject explicitly from 'Extract & Safety-Check GBP Post' rather than $json — 'Log Flagged Content To Compliance' immediately upstream is an Execute Sub-workflow call, whose own response replaced the item's json.\n\nCredential: same 'Email account (SMTP)' credential as the other notifications.",
       "credentials": {
         "smtp": {
           "id": "3",
