@@ -4,82 +4,114 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Monthly Pre-Bill Assembler\n\n### How it works\n\n**Compile & route (once a month):**\n1. On your firm's compile day, pulls every draft pre-bill from Clio and groups them by each matter's responsible attorney.\n2. Emails each attorney one message listing every pre-bill they need to review this cycle — matter, client, amount — with a link straight to Clio.\n\n**Nudge laggards (daily, driven by each bill's own age):**\n3. Every day, re-fetches draft pre-bills and checks how long each one has personally been sitting in draft — using Clio's own creation timestamp on the bill, not a shared firm-wide deadline. Draft pre-bills don't carry a due date in Clio (that only gets set once a bill is finalized and issued), so age-in-draft is the real signal available, and it's driven entirely by Clio's own data.\n4. A bill hits 'reminder' at a configurable day count, 'urgent' a bit later, and 'overdue' after that — repeating the overdue escalation periodically until it's resolved. Each bill is checked on its own; two bills for the same attorney can be at different tiers at once.\n5. Attorneys still within the reminder/urgent range get a direct nudge; anything overdue routes straight to the managing partner instead.\n\n### Setup steps\n\n- [ ] Set CLIO_BASE_URL and connect the Clio OAuth2 credential (reuse if already deployed for PAC-18/20/55/57/58/59).\n- [ ] Set FIRM_PREBILL_REMINDER_DAYS / FIRM_PREBILL_URGENT_DAYS / FIRM_PREBILL_ESCALATE_DAYS to your firm's own review cadence (defaults: 5 / 10 / 15 days after a pre-bill is created).\n- [ ] Set FIRM_NAME, FIRM_FROM_EMAIL, FIRM_PARTNER_EMAIL, GUARDRAIL_WORKFLOW_ID, and optionally FIRM_CLIO_BILLING_URL.\n- [ ] In Clio, confirm every matter has a responsible attorney assigned with a valid email — matters without one are silently excluded (nobody to email).\n- [ ] Connect the SMTP credential.\n\n### Customization\n\nAdjust the compile-day cron on 'When Monthly Pre-Bill Compilation Runs' to match when your firm starts its billing cycle. Edit the day thresholds directly in 'Compute Ages And Filter Due Pre-Bills' if your firm wants a different cadence.",
+        "content": "## Monthly Pre-Bill Assembler\n\n### How it works\n\n1. The workflow compiles draft pre-bills monthly, grouping them by responsible attorney and sending review emails.\n2. It conditionally processes drafts only if they exist and logs the routing for audit.\n3. A daily process fetches outstanding draft pre-bills, filtering them by age for nudging or escalation.\n4. Depending on the urgency, it groups pre-bills for either attorney nudges or partner escalations, building corresponding email content.\n5. The workflow logs each nudge or escalation event and sends the appropriate reminder or escalation emails via email nodes.\n\n### Setup steps\n\n- [ ] Configure credentials for Clio API access with the CLIO_BASE_URL variable set appropriately.\n- [ ] Set up email sending credentials for the emailSend nodes to dispatch emails.\n- [ ] Verify and configure any sub-workflows used in executeWorkflow nodes to ensure proper logging and workflow chaining.\n\n### Customization\n\nThe code nodes that build email content and group pre-bills can be customized to alter messaging or grouping logic. Scheduling triggers can be adjusted for timing preferences.",
         "width": 480,
-        "height": 980
+        "height": 896
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -384,
-        240
+        -608,
+        -128
       ],
-      "id": "fe4183e2-b3a4-4714-982c-cb949ee4a860",
+      "id": "7c3f545d-0c6b-4929-a565-4b57e5efe9b5",
       "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Compile and route\n\nOnce a month, fetches every draft pre-bill from Clio, groups them by responsible attorney, and emails each attorney their own review list.",
-        "width": 1568,
-        "height": 420,
+        "content": "## Monthly pre-bill trigger and fetch\n\nStarts monthly compilation by triggering and fetching draft pre-bills from Clio, then grouping by attorney.",
+        "width": 864,
+        "height": 304,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -160
+        -128
       ],
-      "id": "sticky-1",
+      "id": "090b4ef2-cfc0-4bcd-9c54-73792da5939f",
       "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Nudge trigger and per-bill age check\n\nRuns daily. Fetches draft pre-bills and computes how long each one has personally been sitting in draft, using Clio's own timestamp — no shared firm-wide deadline to configure or keep in sync.",
-        "width": 900,
-        "height": 380,
+        "content": "## Monthly pre-bill processing and emailing\n\nProcesses draft pre-bills if they exist, builds review email content, logs workflow, and sends emails to attorneys.",
+        "width": 864,
+        "height": 496,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        848,
+        -128
+      ],
+      "id": "ef407fde-c458-4149-b73e-213247a7015a",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Daily pre-bill nudge trigger and fetch\n\nTriggers daily pre-bill nudge process, fetches outstanding drafts, computes their ages, and filters those due for nudging.",
+        "width": 864,
+        "height": 304,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        320
+        352
       ],
-      "id": "sticky-2",
-      "name": "Sticky Note2"
-    },
-    {
-      "parameters": {
-        "content": "## Filter to what's due today\n\nOnly bills that hit an exact reminder/urgent threshold, or are at/past the overdue threshold, continue — everything else (most bills, most days) is quietly excluded so nobody gets nudged about the same bill every single day.",
-        "width": 1120,
-        "height": 380,
-        "color": 7
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        896,
-        320
-      ],
-      "id": "sticky-3",
+      "id": "d9726d4a-f8e1-4075-8d69-9e0c33bf3d33",
       "name": "Sticky Note3"
     },
     {
       "parameters": {
-        "content": "## Reminder vs. partner escalation\n\nBills still within the reminder/urgent range route to a direct attorney nudge, grouped per attorney. Bills past the overdue threshold route to the managing partner instead — same escalation shape as the Invoice Reminder Ladder (PAC-18), just driven by each bill's own age instead of a shared calendar date.",
-        "width": 1568,
-        "height": 460,
+        "content": "## Nudge handling and splitting\n\nSplits due pre-bills into items for processing and branches based on the urgency tier (overdue or reminder).",
+        "width": 416,
+        "height": 512,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2240,
-        320
+        848,
+        400
       ],
-      "id": "sticky-4",
+      "id": "22dc4961-000b-4daf-af65-5a5947456d60",
       "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Partner escalation processing\n\nHandles overdue pre-bills grouping by attorney, builds escalation email content, logs escalation, and sends partner emails.",
+        "width": 864,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        400
+      ],
+      "id": "6fd4caee-c255-40e2-8e25-19835883396d",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Attorney nudge processing\n\nHandles reminder-tier pre-bills grouped by attorney, builds nudge email content, logs nudge, and sends reminder emails.",
+        "width": 864,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        736
+      ],
+      "id": "e9c12aeb-9f4b-42ae-a61c-0578e2ed50f9",
+      "name": "Sticky Note6"
     },
     {
       "parameters": {
@@ -128,7 +160,7 @@
         "options": {}
       },
       "id": "6100aa00-0061-4000-a000-000000000002",
-      "name": "Fetch Draft Pre-Bills From Clio API",
+      "name": "Fetch Draft Pre-Bills From Clio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -210,7 +242,7 @@
         "jsCode": "return $input.first().json.attorney_groups.map(g => ({ json: g }));"
       },
       "id": "6100aa00-0061-4000-a000-000000000006",
-      "name": "Split Drafts Into Attorney Items",
+      "name": "Split Draft Pre-Bills By Attorney",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -406,12 +438,12 @@
     {
       "parameters": {},
       "id": "6100aa00-0061-4000-a000-000000000017",
-      "name": "Skip When No Pre-Bills Due For Nudge",
+      "name": "Skip When No Pre-Bills Due",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
         896,
-        680
+        768
       ],
       "notes": "Nothing hit a reminder/urgent/overdue threshold today. Expected for most days — this is the workflow behaving correctly, not a failure to detect anything."
     },
@@ -425,7 +457,7 @@
       "typeVersion": 2,
       "position": [
         896,
-        480
+        560
       ],
       "notes": "Fans out into one item per bill that's due for a nudge today — each item still carries its own tier and days_in_draft."
     },
@@ -459,7 +491,7 @@
       "typeVersion": 2.3,
       "position": [
         1120,
-        480
+        560
       ],
       "notes": "Yes (this bill has passed the escalate threshold) → route to the managing partner instead of the attorney.\nNo ('reminder' or 'urgent' tier) → route to a direct attorney nudge. Each bill is routed individually before grouping, so one attorney can end up with some bills going to them directly and others escalated to the partner in the same run.",
       "onError": "continueErrorOutput"
@@ -474,7 +506,7 @@
       "typeVersion": 2,
       "position": [
         1344,
-        320
+        528
       ],
       "notes": "Run Once for All Items (the default) is required here — this needs to see every overdue bill from this run together to group them correctly, not one at a time."
     },
@@ -488,7 +520,7 @@
       "typeVersion": 2,
       "position": [
         1568,
-        320
+        528
       ],
       "notes": "Builds the escalation email for the managing partner — same 'internal email, bypass client-facing guardrail approval' pattern as PAC-18's 60-day overdue-invoice escalation. FIRM_PARTNER_EMAIL reuses the same n8n Variable PAC-18 already uses, so if that template is deployed this needs no new configuration."
     },
@@ -516,12 +548,12 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000022",
-      "name": "Log Escalation Workflow",
+      "name": "Log Partner Escalation Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
         1792,
-        320
+        528
       ],
       "notes": "Logs the escalation to the OPS1 compliance audit sheet — internal record-keeping only, same as the compile step's logging call."
     },
@@ -540,7 +572,7 @@
       "typeVersion": 2,
       "position": [
         2016,
-        320
+        528
       ],
       "notes": "Delivers the escalation to the managing partner. Reads all fields explicitly from 'Build Partner Escalation For Laggard' — the guardrail call immediately upstream replaced the item's json.\n\nCredential: same 'Email account (SMTP)' credential as the compile step.",
       "credentials": {
@@ -560,7 +592,7 @@
       "typeVersion": 2,
       "position": [
         1344,
-        640
+        864
       ],
       "notes": "An attorney's bill list here can be a mix of 'reminder' and 'urgent' tier bills — the next step labels the email by whichever tier is more urgent."
     },
@@ -574,7 +606,7 @@
       "typeVersion": 2,
       "position": [
         1568,
-        640
+        864
       ],
       "notes": "Builds the reminder email for attorneys with 'reminder' and/or 'urgent' tier bills — tone escalates slightly based on the most urgent bill present, same idea as PAC-18's day1→day30 tone ladder."
     },
@@ -602,12 +634,12 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000026",
-      "name": "Log Nudge Workflow",
+      "name": "Log Attorney Nudge Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
         1792,
-        640
+        864
       ],
       "notes": "Logs the nudge to the OPS1 compliance audit sheet — internal record-keeping only, same as the compile step's logging call."
     },
@@ -626,7 +658,7 @@
       "typeVersion": 2,
       "position": [
         2016,
-        640
+        864
       ],
       "notes": "Delivers the reminder to the attorney directly. Reads all fields explicitly from 'Build Attorney Nudge Email' — the guardrail call immediately upstream replaced the item's json.\n\nCredential: same 'Email account (SMTP)' credential as the rest of this workflow.",
       "credentials": {
@@ -647,7 +679,7 @@
         }
       }
     ],
-    "Fetch Draft Pre-Bills From Clio API": [
+    "Fetch Draft Pre-Bills From Clio": [
       {
         "json": {
           "data": [
@@ -779,14 +811,14 @@
       "main": [
         [
           {
-            "node": "Fetch Draft Pre-Bills From Clio API",
+            "node": "Fetch Draft Pre-Bills From Clio",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Draft Pre-Bills From Clio API": {
+    "Fetch Draft Pre-Bills From Clio": {
       "main": [
         [
           {
@@ -812,7 +844,7 @@
       "main": [
         [
           {
-            "node": "Split Drafts Into Attorney Items",
+            "node": "Split Draft Pre-Bills By Attorney",
             "type": "main",
             "index": 0
           }
@@ -826,7 +858,7 @@
         ]
       ]
     },
-    "Split Drafts Into Attorney Items": {
+    "Split Draft Pre-Bills By Attorney": {
       "main": [
         [
           {
@@ -903,7 +935,7 @@
         ],
         [
           {
-            "node": "Skip When No Pre-Bills Due For Nudge",
+            "node": "Skip When No Pre-Bills Due",
             "type": "main",
             "index": 0
           }
@@ -954,14 +986,14 @@
       "main": [
         [
           {
-            "node": "Log Escalation Workflow",
+            "node": "Log Partner Escalation Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Escalation Workflow": {
+    "Log Partner Escalation Workflow": {
       "main": [
         [
           {
@@ -987,14 +1019,14 @@
       "main": [
         [
           {
-            "node": "Log Nudge Workflow",
+            "node": "Log Attorney Nudge Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Nudge Workflow": {
+    "Log Attorney Nudge Workflow": {
       "main": [
         [
           {
