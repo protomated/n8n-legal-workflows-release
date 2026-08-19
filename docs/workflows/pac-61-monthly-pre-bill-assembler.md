@@ -4,7 +4,7 @@
 **Pillar:** Keep
 **Replaces:** Manual billing-cycle herding
 
-Get value in under 15 minutes. Once a month, the workflow pulls every draft pre-bill out of Clio, groups them by responsible attorney, and emails each attorney their own review list with a link straight into Clio. A separate daily check — active only on specific days near your billing deadline, not every day — re-checks who's still behind and nudges them, escalating straight to the managing partner once the deadline is reached. Nobody has to chase anybody down by hand.
+Get value in under 15 minutes. Once a month, the workflow pulls every draft pre-bill out of Clio, groups them by responsible attorney, and emails each attorney their own review list with a link straight into Clio. A separate daily check then tracks how long each individual pre-bill has been sitting in draft — using Clio's own timestamp on the bill — and nudges attorneys once it's been outstanding a while, escalating straight to the managing partner if it stays outstanding much longer. Nobody has to chase anybody down by hand.
 
 ---
 
@@ -12,9 +12,15 @@ Get value in under 15 minutes. Once a month, the workflow pulls every draft pre-
 
 **This never touches, edits, or finalizes a bill.** It only reads draft pre-bills from Clio and sends email reminders — every actual review, edit, and finalize action still happens inside Clio, by the attorney, exactly as it does today.
 
-**This has two independent schedules in one workflow file.** The compile-and-route half runs once a month; the nudge half runs a daily check that only takes action on specific days. Both are visible on the same canvas but don't depend on each other.
+**Nudging is driven by each bill's own age, not a shared firm-wide deadline.** Draft pre-bills don't carry a due date in Clio — that only gets set once a bill is finalized and issued to a client. So instead of a single calendar day everyone converges on, this tracks how long each individual pre-bill has personally been sitting untouched (using the bill's own creation timestamp) and nudges based on that. Two bills for the same attorney can be at completely different stages if they were created on different days.
 
-**"Draft" as the Clio bill status value hasn't been independently confirmed live** — it follows the same `status=` query parameter that the Invoice Reminder Ladder (PAC-18) already confirmed works against `bills.json`, just with a different value. Check your first real compile run's results against what you see in Clio's own pre-bill list, and adjust the value in both `Fetch Draft Pre-Bills From Clio` and `Fetch Outstanding Draft Pre-Bills` if it doesn't match.
+**This has two independent schedules in one workflow file.** The compile-and-route half runs once a month; the nudge half runs a daily check. Both are visible on the same canvas but don't depend on each other.
+
+**Two Clio field names haven't been independently confirmed live:**
+- `status=draft` as the query value on `bills.json` follows the same convention as the Invoice Reminder Ladder's (PAC-18) confirmed-working `status=overdue`, just with a different value.
+- `created_at` (used to compute each bill's age) is a standard REST timestamp field name, but hasn't itself been confirmed against a live Clio bill response.
+
+Check your first real compile run's results against what you see in Clio's own pre-bill list, and adjust either field name in the two `Fetch...` HTTP nodes if something doesn't match.
 
 ---
 
@@ -41,39 +47,43 @@ Get value in under 15 minutes. Once a month, the workflow pulls every draft pre-
 | Variable | What to enter |
 |---|---|
 | `CLIO_BASE_URL` | Same value as your other Clio-integrated templates, e.g. `https://app.clio.com` or `https://eu.app.clio.com` |
-| `FIRM_BILLING_DEADLINE_DAY` | The day of the month pre-bills must be finalized by — pick **28 or lower** (days above 28 don't exist in every month and will roll into the next month unpredictably) |
 | `FIRM_NAME` | Your law firm name |
 | `FIRM_FROM_EMAIL` | The sender address for all emails this workflow sends |
 | `FIRM_PARTNER_EMAIL` | The managing partner's email for laggard escalations — reuses the same variable PAC-18 already uses, so no new configuration if that template is deployed |
 | `GUARDRAIL_WORKFLOW_ID` | The numeric ID of the Bar-Compliance Guardrail workflow — find it in the n8n URL when you open NTC-33 |
+| `FIRM_PREBILL_REMINDER_DAYS` *(optional)* | Days after creation before a pre-bill gets a first reminder — defaults to `5` |
+| `FIRM_PREBILL_URGENT_DAYS` *(optional)* | Days after creation before the tone escalates — defaults to `10` |
+| `FIRM_PREBILL_ESCALATE_DAYS` *(optional)* | Days after creation before the managing partner gets looped in — defaults to `15` |
+| `FIRM_PREBILL_ESCALATE_REPEAT_DAYS` *(optional)* | How often the partner escalation repeats after that, until resolved — defaults to `5` |
 | `FIRM_CLIO_BILLING_URL` *(optional)* | A direct link into Clio's draft-bills view, included in every email — falls back to a generic `https://app.clio.com/bills?status=draft` URL if unset |
 
 ---
 
 ## Step 3 — Set the compile day (2 min)
 
-Open **"Monthly Pre-Bill Compile Trigger"** and confirm the cron expression fires a few days *before* your `FIRM_BILLING_DEADLINE_DAY` — the default is the 25th at 8am. Attorneys need time to actually review before the nudge phase starts checking in.
+Open **"Monthly Pre-Bill Compile Trigger"** and set the cron expression to whenever your firm actually starts its billing cycle — the default is the 25th of each month at 8am. This date is independent of the nudge phase; it doesn't need to line up with any of the day thresholds from Step 2.
 
 ---
 
 ## Step 4 — Activate
 
-Toggle the workflow to **Active**. Both schedules start running on their own — no webhook URL to wire anywhere. The compile trigger fires once a month; the nudge trigger fires daily but only takes action on the specific offsets configured in `Compute Nudge Tier For Today` (3 days before the deadline, 1 day before, on the deadline, and two follow-ups after).
+Toggle the workflow to **Active**. Both schedules start running on their own — no webhook URL to wire anywhere. The compile trigger fires once a month; the nudge trigger fires every day and checks each outstanding pre-bill's own age against your configured thresholds.
 
 ---
 
 ## Step 5 — Test
 
-The workflow ships with pinned sample Clio data (two draft pre-bills, two different attorneys) on both fetch nodes, so you can test without waiting for a real schedule fire or having real draft bills in Clio yet.
+The workflow ships with pinned sample Clio data on both fetch nodes (two draft pre-bills with different ages, for two different attorneys), so you can test without waiting for a real schedule fire or having real draft bills in Clio yet.
 
 **Compile & route path:**
 1. Run **"Fetch Draft Pre-Bills From Clio"** → **"Group Pre-Bills By Attorney"** and confirm you get one group per attorney, each with their own bill list.
 2. Continue through to **"Send Pre-Bill Review Email To Attorney"** and confirm the email lists every bill for that attorney with the right matter, client, and dollar amount.
 
-**Nudge path (test each tier manually since it's date-gated):**
-1. Run **"Compute Nudge Tier For Today"** as-is — on most days it'll return `is_nudge_day: false`, which is correct and means nothing else runs today.
-2. To test the reminder/urgent/overdue branches without waiting for the actual calendar day, temporarily edit `FIRM_BILLING_DEADLINE_DAY` to a day 3 days from today, run it, confirm `tier: "reminder"`, then try 1 day from today for `urgent`, then today's actual day-of-month for `overdue`. Revert the variable afterward.
-3. With `tier: "overdue"` forced, confirm the flow routes to **"Build Partner Escalation For Laggard"** instead of the attorney nudge — check `FIRM_PARTNER_EMAIL` receives it, not the attorney.
+**Nudge path:**
+1. Run **"Fetch Outstanding Draft Pre-Bills"** → **"Compute Pre-Bill Ages And Filter To Due Today"** and confirm `days_in_draft` is calculated correctly for each pinned bill, and that `tier` only gets set for bills that land on an exact threshold (a bill that's 3 days old with a 5-day reminder threshold correctly shows no tier — that's expected, not a bug).
+2. To test each tier without waiting for a real bill to age into it, temporarily edit the pinned data's `created_at` values (or add a test row directly in Clio) to be exactly `FIRM_PREBILL_REMINDER_DAYS` days old, then `FIRM_PREBILL_URGENT_DAYS`, then `FIRM_PREBILL_ESCALATE_DAYS` — confirm each produces the right tier.
+3. With a bill at the `overdue` tier, confirm the flow routes to **"Build Partner Escalation For Laggard"** instead of the attorney nudge — check `FIRM_PARTNER_EMAIL` receives it, not the attorney.
+4. Confirm an attorney with *both* a reminder-tier and an urgent-tier bill gets exactly one email listing both, not two separate emails.
 
 ---
 
@@ -83,11 +93,11 @@ The workflow ships with pinned sample Clio data (two draft pre-bills, two differ
 |---|---|
 | Compile day, at least one draft pre-bill exists | Grouped by attorney, one review email per attorney |
 | Compile day, nothing in draft | Skipped — no emails, nothing to route |
-| A matter has no responsible attorney assigned | That bill is counted in `unassigned_count` but excluded from routing — check execution history periodically |
-| Nudge day, but every pre-bill was already finalized | Skipped — the good outcome, not a failure |
-| Nudge day (3 or 1 days before deadline), attorney still has drafts | Attorney gets a direct reminder |
-| Nudge day (on or after deadline), attorney still has drafts | Managing partner gets the escalation instead of the attorney |
-| Any day that isn't a configured nudge offset | No API call made at all — the workflow does nothing until the next relevant day |
+| A matter has no responsible attorney assigned | That bill is silently excluded from both compile and nudge — there's nobody to send it to |
+| A pre-bill is younger than `FIRM_PREBILL_REMINDER_DAYS` | No nudge yet — this is the normal, expected state for most drafts on most days |
+| A pre-bill hits exactly `FIRM_PREBILL_REMINDER_DAYS` or `FIRM_PREBILL_URGENT_DAYS` old | Attorney gets a direct reminder, tone reflecting the more urgent of any bills they have outstanding |
+| A pre-bill reaches `FIRM_PREBILL_ESCALATE_DAYS` old (and every `FIRM_PREBILL_ESCALATE_REPEAT_DAYS` after) | Managing partner gets the escalation instead of the attorney, repeating until it's finalized |
+| Every outstanding pre-bill was already finalized before the nudge check ran | Skipped — the good outcome, not a failure |
 
 ---
 
