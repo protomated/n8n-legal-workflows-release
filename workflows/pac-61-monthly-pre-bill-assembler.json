@@ -4,17 +4,17 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Monthly Pre-Bill Assembler\n\n### How it works\n\n**Compile & route (once a month):**\n1. On your firm's compile day, pulls every draft pre-bill from Clio and groups them by each matter's responsible attorney.\n2. Emails each attorney one message listing every pre-bill they need to review this cycle — matter, client, amount — with a link straight to Clio.\n\n**Nudge laggards (daily, driven by each bill's own age):**\n3. Every day, re-fetches draft pre-bills and checks how long each one has personally been sitting in draft — using Clio's own creation timestamp on the bill, not a shared firm-wide deadline. Draft pre-bills don't carry a due date in Clio (that only gets set once a bill is finalized and issued), so age-in-draft is the real signal available, and it's driven entirely by Clio's own data.\n4. A bill hits 'reminder' at a configurable day count, 'urgent' a bit later, and 'overdue' after that — repeating the overdue escalation periodically until it's resolved. Each bill is checked on its own; two bills for the same attorney can be at different tiers at once.\n5. Attorneys still within the reminder/urgent range get a direct nudge; anything overdue routes straight to the managing partner instead.\n\n### Setup steps\n\n- [ ] Set CLIO_BASE_URL and connect the Clio OAuth2 credential (reuse if already deployed for PAC-18/20/55/57/58/59).\n- [ ] Set FIRM_PREBILL_REMINDER_DAYS / FIRM_PREBILL_URGENT_DAYS / FIRM_PREBILL_ESCALATE_DAYS to your firm's own review cadence (defaults: 5 / 10 / 15 days after a pre-bill is created).\n- [ ] Set FIRM_NAME, FIRM_FROM_EMAIL, FIRM_PARTNER_EMAIL, GUARDRAIL_WORKFLOW_ID, and optionally FIRM_CLIO_BILLING_URL.\n- [ ] In Clio, confirm every matter has a responsible attorney assigned with a valid email — matters without one are silently excluded (nobody to email).\n- [ ] Connect the SMTP credential.\n\n### Customization\n\nAdjust the compile-day cron on 'Monthly Pre-Bill Compile Trigger' to match when your firm starts its billing cycle. Edit the day thresholds directly in 'Compute Pre-Bill Ages And Filter To Due Today' if your firm wants a different cadence.",
+        "content": "## Monthly Pre-Bill Assembler\n\n### How it works\n\n**Compile & route (once a month):**\n1. On your firm's compile day, pulls every draft pre-bill from Clio and groups them by each matter's responsible attorney.\n2. Emails each attorney one message listing every pre-bill they need to review this cycle — matter, client, amount — with a link straight to Clio.\n\n**Nudge laggards (daily, driven by each bill's own age):**\n3. Every day, re-fetches draft pre-bills and checks how long each one has personally been sitting in draft — using Clio's own creation timestamp on the bill, not a shared firm-wide deadline. Draft pre-bills don't carry a due date in Clio (that only gets set once a bill is finalized and issued), so age-in-draft is the real signal available, and it's driven entirely by Clio's own data.\n4. A bill hits 'reminder' at a configurable day count, 'urgent' a bit later, and 'overdue' after that — repeating the overdue escalation periodically until it's resolved. Each bill is checked on its own; two bills for the same attorney can be at different tiers at once.\n5. Attorneys still within the reminder/urgent range get a direct nudge; anything overdue routes straight to the managing partner instead.\n\n### Setup steps\n\n- [ ] Set CLIO_BASE_URL and connect the Clio OAuth2 credential (reuse if already deployed for PAC-18/20/55/57/58/59).\n- [ ] Set FIRM_PREBILL_REMINDER_DAYS / FIRM_PREBILL_URGENT_DAYS / FIRM_PREBILL_ESCALATE_DAYS to your firm's own review cadence (defaults: 5 / 10 / 15 days after a pre-bill is created).\n- [ ] Set FIRM_NAME, FIRM_FROM_EMAIL, FIRM_PARTNER_EMAIL, GUARDRAIL_WORKFLOW_ID, and optionally FIRM_CLIO_BILLING_URL.\n- [ ] In Clio, confirm every matter has a responsible attorney assigned with a valid email — matters without one are silently excluded (nobody to email).\n- [ ] Connect the SMTP credential.\n\n### Customization\n\nAdjust the compile-day cron on 'When Monthly Pre-Bill Compilation Runs' to match when your firm starts its billing cycle. Edit the day thresholds directly in 'Compute Ages And Filter Due Pre-Bills' if your firm wants a different cadence.",
         "width": 480,
         "height": 980
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -700,
-        -500
+        -384,
+        240
       ],
-      "id": "sticky-main",
+      "id": "fe4183e2-b3a4-4714-982c-cb949ee4a860",
       "name": "Sticky Note"
     },
     {
@@ -93,7 +93,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000001",
-      "name": "Monthly Pre-Bill Compile Trigger",
+      "name": "When Monthly Pre-Bill Compilation Runs",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -128,7 +128,7 @@
         "options": {}
       },
       "id": "6100aa00-0061-4000-a000-000000000002",
-      "name": "Fetch Draft Pre-Bills From Clio",
+      "name": "Fetch Draft Pre-Bills From Clio API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -148,7 +148,7 @@
         "jsCode": "// Groups draft pre-bills by the matter's responsible attorney -- each attorney gets one review\n// email listing everything they need to review this cycle, rather than one email per bill.\nconst bills = $input.first().json.data || [];\nconst groups = {};\n\nfor (const bill of bills) {\n  const attorney = (bill.matter && bill.matter.responsible_attorney) || {};\n  const key = attorney.email || 'unassigned';\n  if (!groups[key]) {\n    groups[key] = { attorney_name: attorney.name || 'Unassigned', attorney_email: attorney.email || '', bills: [] };\n  }\n  groups[key].bills.push({\n    bill_id: bill.id,\n    bill_number: bill.number || '',\n    total: Number(bill.total || 0),\n    matter_ref: (bill.matter && bill.matter.display_number) || '',\n    matter_description: (bill.matter && bill.matter.description) || '',\n    client_name: (bill.client && bill.client.name) || '',\n  });\n}\n\nconst unassigned_count = (groups['unassigned'] || { bills: [] }).bills.length;\nconst attorney_groups = Object.entries(groups)\n  .filter(([key]) => key !== 'unassigned')\n  .map(([, g]) => g);\n\nreturn [{ json: {\n  attorney_groups,\n  has_draft_prebills: attorney_groups.length > 0,\n  unassigned_count,\n} }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000003",
-      "name": "Group Pre-Bills By Attorney",
+      "name": "Group Draft Pre-Bills By Attorney",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -183,7 +183,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000004",
-      "name": "If Has Draft Pre-Bills",
+      "name": "If Draft Pre-Bills Exist",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -196,7 +196,7 @@
     {
       "parameters": {},
       "id": "6100aa00-0061-4000-a000-000000000005",
-      "name": "Skip No Pre-Bills To Compile",
+      "name": "Skip When No Draft Pre-Bills",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -210,7 +210,7 @@
         "jsCode": "return $input.first().json.attorney_groups.map(g => ({ json: g }));"
       },
       "id": "6100aa00-0061-4000-a000-000000000006",
-      "name": "Split Into One Item Per Attorney",
+      "name": "Split Drafts Into Attorney Items",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -224,7 +224,7 @@
         "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\nconst REMINDER_DAYS = $vars.FIRM_PREBILL_REMINDER_DAYS || '5';\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst lines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)}${b.matter_description ? ' (' + b.matter_description + ')' : ''}`);\n\nconst subject = `${bills.length} pre-bill(s) ready for your review`;\nconst body = `Hi ${item.attorney_name},\n\nYou have ${bills.length} draft pre-bill(s) ready for your review this cycle (total $${total.toFixed(2)}):\n\n${lines.join('\\n')}\n\nReview, edit, and finalize each one directly in Clio:\n${BILLING_URL}\n\nPlease review these promptly — an automatic reminder will follow for anything still outstanding after ${REMINDER_DAYS} days.\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000007",
-      "name": "Build Pre-Bill Review Email",
+      "name": "Build Pre-Bill Review Email Content",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -257,7 +257,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000008",
-      "name": "Log Pre-Bill Routing To Compliance",
+      "name": "Log Pre-Bill Routing Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -268,15 +268,15 @@
     },
     {
       "parameters": {
-        "fromEmail": "={{ $('Build Pre-Bill Review Email').item.json.from_email }}",
-        "toEmail": "={{ $('Build Pre-Bill Review Email').item.json.recipient }}",
-        "subject": "={{ $('Build Pre-Bill Review Email').item.json.subject }}",
+        "fromEmail": "={{ $('Build Pre-Bill Review Email Content').item.json.from_email }}",
+        "toEmail": "={{ $('Build Pre-Bill Review Email Content').item.json.recipient }}",
+        "subject": "={{ $('Build Pre-Bill Review Email Content').item.json.subject }}",
         "emailType": "text",
-        "text": "={{ $('Build Pre-Bill Review Email').item.json.message }}",
+        "text": "={{ $('Build Pre-Bill Review Email Content').item.json.message }}",
         "options": {}
       },
       "id": "6100aa00-0061-4000-a000-000000000009",
-      "name": "Send Pre-Bill Review Email To Attorney",
+      "name": "Send Pre-Bill Review Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -303,7 +303,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000010",
-      "name": "Daily Pre-Bill Nudge Trigger",
+      "name": "When Daily Pre-Bill Nudge Runs",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -358,7 +358,7 @@
         "jsCode": "// Nudges based on each pre-bill's OWN age (days sitting in draft), not a shared firm-wide\n// deadline -- Clio doesn't expose a due date on a draft bill (that only gets set once a bill\n// is finalized and issued), so 'how long has this specific bill been waiting for review' is the\n// real signal available, and it's driven entirely by Clio's own timestamp on each bill.\nconst REMINDER_DAYS = Number($vars.FIRM_PREBILL_REMINDER_DAYS) || 5;\nconst URGENT_DAYS = Number($vars.FIRM_PREBILL_URGENT_DAYS) || 10;\nconst ESCALATE_DAYS = Number($vars.FIRM_PREBILL_ESCALATE_DAYS) || 15;\nconst ESCALATE_REPEAT_DAYS = Number($vars.FIRM_PREBILL_ESCALATE_REPEAT_DAYS) || 5;\n\nconst bills = $input.first().json.data || [];\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\n\nconst due_bills = [];\nfor (const bill of bills) {\n  const attorney = (bill.matter && bill.matter.responsible_attorney) || {};\n  if (!attorney.email) continue; // nobody to nudge\n  if (!bill.created_at) continue; // can't compute age without a timestamp -- see notes on the fetch step\n\n  const created = new Date(bill.created_at);\n  created.setHours(0, 0, 0, 0);\n  const daysInDraft = Math.floor((today - created) / msPerDay);\n\n  // Exact-day matches for reminder/urgent avoid re-nudging the same bill every single day once\n  // past the threshold. 'overdue' repeats every ESCALATE_REPEAT_DAYS after the initial escalation\n  // so the partner keeps hearing about it until it's actually resolved, rather than escalating once\n  // and going silent.\n  let tier = 'none';\n  if (daysInDraft === REMINDER_DAYS) tier = 'reminder';\n  else if (daysInDraft === URGENT_DAYS) tier = 'urgent';\n  else if (daysInDraft >= ESCALATE_DAYS && (daysInDraft - ESCALATE_DAYS) % ESCALATE_REPEAT_DAYS === 0) tier = 'overdue';\n\n  if (tier === 'none') continue;\n\n  due_bills.push({\n    bill_id: bill.id,\n    bill_number: bill.number || '',\n    total: Number(bill.total || 0),\n    matter_ref: (bill.matter && bill.matter.display_number) || '',\n    matter_description: (bill.matter && bill.matter.description) || '',\n    client_name: (bill.client && bill.client.name) || '',\n    attorney_name: attorney.name || 'Unassigned',\n    attorney_email: attorney.email,\n    days_in_draft: daysInDraft,\n    tier,\n  });\n}\n\nreturn [{ json: { due_bills, has_due_bills: due_bills.length > 0 } }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000015",
-      "name": "Compute Pre-Bill Ages And Filter To Due Today",
+      "name": "Compute Ages And Filter Due Pre-Bills",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -393,7 +393,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000016",
-      "name": "If Has Bills Due For Nudge Today",
+      "name": "If Pre-Bills Due For Nudge",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -406,7 +406,7 @@
     {
       "parameters": {},
       "id": "6100aa00-0061-4000-a000-000000000017",
-      "name": "Skip No Bills Due For Nudge Today",
+      "name": "Skip When No Pre-Bills Due For Nudge",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -420,7 +420,7 @@
         "jsCode": "return $input.first().json.due_bills.map(b => ({ json: b }));"
       },
       "id": "6100aa00-0061-4000-a000-000000000018",
-      "name": "Split Due Bills Into Items",
+      "name": "Split Due Pre-Bills Into Items",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -454,7 +454,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000019",
-      "name": "If Tier Is Overdue",
+      "name": "If Pre-Bill Tier Is Overdue",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -469,7 +469,7 @@
         "jsCode": "// Collects every overdue bill that reached this branch in this run (not just one item) and\n// groups them by attorney, so one attorney with three overdue bills produces one escalation\n// email listing all three, not three separate emails.\nconst items = $input.all();\nconst groups = {};\nfor (const item of items) {\n  const b = item.json;\n  const key = b.attorney_email;\n  if (!groups[key]) groups[key] = { attorney_name: b.attorney_name, attorney_email: b.attorney_email, bills: [] };\n  groups[key].bills.push(b);\n}\nreturn Object.values(groups).map(g => ({ json: g }));"
       },
       "id": "6100aa00-0061-4000-a000-000000000020",
-      "name": "Group Overdue Bills By Attorney",
+      "name": "Group Overdue Pre-Bills By Attorney",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -483,7 +483,7 @@
         "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst PARTNER_EMAIL = $vars.FIRM_PARTNER_EMAIL;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\n\nif (!PARTNER_EMAIL) throw new Error('FIRM_PARTNER_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst lines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)} — in draft ${b.days_in_draft} day(s)`);\n\nconst subject = `${item.attorney_name} has ${bills.length} pre-bill(s) stuck in draft`;\nconst body = `${item.attorney_name} (${item.attorney_email}) has ${bills.length} draft pre-bill(s) that have been sitting unreviewed for a while (total $${total.toFixed(2)}):\n\n${lines.join('\\n')}\n\nReview directly in Clio:\n${BILLING_URL}\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: PARTNER_EMAIL,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000021",
-      "name": "Build Partner Escalation For Laggard",
+      "name": "Build Partner Escalation Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -516,7 +516,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000022",
-      "name": "Log Escalation To Compliance",
+      "name": "Log Escalation Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -527,11 +527,11 @@
     },
     {
       "parameters": {
-        "fromEmail": "={{ $('Build Partner Escalation For Laggard').item.json.from_email }}",
-        "toEmail": "={{ $('Build Partner Escalation For Laggard').item.json.recipient }}",
-        "subject": "={{ $('Build Partner Escalation For Laggard').item.json.subject }}",
+        "fromEmail": "={{ $('Build Partner Escalation Email').item.json.from_email }}",
+        "toEmail": "={{ $('Build Partner Escalation Email').item.json.recipient }}",
+        "subject": "={{ $('Build Partner Escalation Email').item.json.subject }}",
         "emailType": "text",
-        "text": "={{ $('Build Partner Escalation For Laggard').item.json.message }}",
+        "text": "={{ $('Build Partner Escalation Email').item.json.message }}",
         "options": {}
       },
       "id": "6100aa00-0061-4000-a000-000000000023",
@@ -555,7 +555,7 @@
         "jsCode": "// Same grouping as 'Group Overdue Bills By Attorney', for reminder/urgent tier bills instead.\nconst items = $input.all();\nconst groups = {};\nfor (const item of items) {\n  const b = item.json;\n  const key = b.attorney_email;\n  if (!groups[key]) groups[key] = { attorney_name: b.attorney_name, attorney_email: b.attorney_email, bills: [] };\n  groups[key].bills.push(b);\n}\nreturn Object.values(groups).map(g => ({ json: g }));"
       },
       "id": "6100aa00-0061-4000-a000-000000000024",
-      "name": "Group Nudge Bills By Attorney",
+      "name": "Group Nudge Pre-Bills By Attorney",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -569,7 +569,7 @@
         "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\n\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst lines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)} — in draft ${b.days_in_draft} day(s)`);\n\n// This attorney's bills can be a mix of 'reminder' and 'urgent' tier -- label the email by the\n// most urgent tier present so the subject reflects the most pressing item.\nconst mostUrgent = bills.some(b => b.tier === 'urgent') ? 'urgent' : 'reminder';\nconst TIER_COPY = { reminder: 'A friendly nudge', urgent: 'An urgent reminder' };\n\nconst subject = `${TIER_COPY[mostUrgent]}: ${bills.length} pre-bill(s) still need your review`;\nconst body = `Hi ${item.attorney_name},\n\nYou have ${bills.length} draft pre-bill(s) still waiting for your review (total $${total.toFixed(2)}):\n\n${lines.join('\\n')}\n\nReview and finalize in Clio:\n${BILLING_URL}\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000025",
-      "name": "Build Attorney Nudge Email",
+      "name": "Build Attorney Nudge Email Content",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -602,7 +602,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000026",
-      "name": "Log Nudge To Compliance",
+      "name": "Log Nudge Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -613,11 +613,11 @@
     },
     {
       "parameters": {
-        "fromEmail": "={{ $('Build Attorney Nudge Email').item.json.from_email }}",
-        "toEmail": "={{ $('Build Attorney Nudge Email').item.json.recipient }}",
-        "subject": "={{ $('Build Attorney Nudge Email').item.json.subject }}",
+        "fromEmail": "={{ $('Build Attorney Nudge Email Content').item.json.from_email }}",
+        "toEmail": "={{ $('Build Attorney Nudge Email Content').item.json.recipient }}",
+        "subject": "={{ $('Build Attorney Nudge Email Content').item.json.subject }}",
         "emailType": "text",
-        "text": "={{ $('Build Attorney Nudge Email').item.json.message }}",
+        "text": "={{ $('Build Attorney Nudge Email Content').item.json.message }}",
         "options": {}
       },
       "id": "6100aa00-0061-4000-a000-000000000027",
@@ -639,7 +639,7 @@
   ],
   "active": false,
   "pinData": {
-    "Monthly Pre-Bill Compile Trigger": [
+    "When Monthly Pre-Bill Compilation Runs": [
       {
         "json": {
           "timestamp": "2026-08-25T08:00:00.000Z",
@@ -647,14 +647,14 @@
         }
       }
     ],
-    "Fetch Draft Pre-Bills From Clio": [
+    "Fetch Draft Pre-Bills From Clio API": [
       {
         "json": {
           "data": [
             {
               "id": 5501,
               "number": "DRAFT-2026-101",
-              "total": 3200.0,
+              "total": 3200,
               "created_at": "2026-08-20T09:00:00.000Z",
               "matter": {
                 "id": 301,
@@ -701,7 +701,7 @@
         }
       }
     ],
-    "Daily Pre-Bill Nudge Trigger": [
+    "When Daily Pre-Bill Nudge Runs": [
       {
         "json": {
           "timestamp": "2026-08-25T08:00:00.000Z",
@@ -716,7 +716,7 @@
             {
               "id": 5501,
               "number": "DRAFT-2026-101",
-              "total": 3200.0,
+              "total": 3200,
               "created_at": "2026-08-20T09:00:00.000Z",
               "matter": {
                 "id": 301,
@@ -775,91 +775,91 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Monthly Pre-Bill Compile Trigger": {
+    "When Monthly Pre-Bill Compilation Runs": {
       "main": [
         [
           {
-            "node": "Fetch Draft Pre-Bills From Clio",
+            "node": "Fetch Draft Pre-Bills From Clio API",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Draft Pre-Bills From Clio": {
+    "Fetch Draft Pre-Bills From Clio API": {
       "main": [
         [
           {
-            "node": "Group Pre-Bills By Attorney",
+            "node": "Group Draft Pre-Bills By Attorney",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Group Pre-Bills By Attorney": {
+    "Group Draft Pre-Bills By Attorney": {
       "main": [
         [
           {
-            "node": "If Has Draft Pre-Bills",
+            "node": "If Draft Pre-Bills Exist",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Has Draft Pre-Bills": {
+    "If Draft Pre-Bills Exist": {
       "main": [
         [
           {
-            "node": "Split Into One Item Per Attorney",
+            "node": "Split Drafts Into Attorney Items",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip No Pre-Bills To Compile",
+            "node": "Skip When No Draft Pre-Bills",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Split Into One Item Per Attorney": {
+    "Split Drafts Into Attorney Items": {
       "main": [
         [
           {
-            "node": "Build Pre-Bill Review Email",
+            "node": "Build Pre-Bill Review Email Content",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Pre-Bill Review Email": {
+    "Build Pre-Bill Review Email Content": {
       "main": [
         [
           {
-            "node": "Log Pre-Bill Routing To Compliance",
+            "node": "Log Pre-Bill Routing Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Pre-Bill Routing To Compliance": {
+    "Log Pre-Bill Routing Workflow": {
       "main": [
         [
           {
-            "node": "Send Pre-Bill Review Email To Attorney",
+            "node": "Send Pre-Bill Review Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Daily Pre-Bill Nudge Trigger": {
+    "When Daily Pre-Bill Nudge Runs": {
       "main": [
         [
           {
@@ -874,94 +874,94 @@
       "main": [
         [
           {
-            "node": "Compute Pre-Bill Ages And Filter To Due Today",
+            "node": "Compute Ages And Filter Due Pre-Bills",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Pre-Bill Ages And Filter To Due Today": {
+    "Compute Ages And Filter Due Pre-Bills": {
       "main": [
         [
           {
-            "node": "If Has Bills Due For Nudge Today",
+            "node": "If Pre-Bills Due For Nudge",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Has Bills Due For Nudge Today": {
+    "If Pre-Bills Due For Nudge": {
       "main": [
         [
           {
-            "node": "Split Due Bills Into Items",
+            "node": "Split Due Pre-Bills Into Items",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip No Bills Due For Nudge Today",
+            "node": "Skip When No Pre-Bills Due For Nudge",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Split Due Bills Into Items": {
+    "Split Due Pre-Bills Into Items": {
       "main": [
         [
           {
-            "node": "If Tier Is Overdue",
+            "node": "If Pre-Bill Tier Is Overdue",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Tier Is Overdue": {
+    "If Pre-Bill Tier Is Overdue": {
       "main": [
         [
           {
-            "node": "Group Overdue Bills By Attorney",
+            "node": "Group Overdue Pre-Bills By Attorney",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Group Nudge Bills By Attorney",
+            "node": "Group Nudge Pre-Bills By Attorney",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Group Overdue Bills By Attorney": {
+    "Group Overdue Pre-Bills By Attorney": {
       "main": [
         [
           {
-            "node": "Build Partner Escalation For Laggard",
+            "node": "Build Partner Escalation Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Partner Escalation For Laggard": {
+    "Build Partner Escalation Email": {
       "main": [
         [
           {
-            "node": "Log Escalation To Compliance",
+            "node": "Log Escalation Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Escalation To Compliance": {
+    "Log Escalation Workflow": {
       "main": [
         [
           {
@@ -972,29 +972,29 @@
         ]
       ]
     },
-    "Group Nudge Bills By Attorney": {
+    "Group Nudge Pre-Bills By Attorney": {
       "main": [
         [
           {
-            "node": "Build Attorney Nudge Email",
+            "node": "Build Attorney Nudge Email Content",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Attorney Nudge Email": {
+    "Build Attorney Nudge Email Content": {
       "main": [
         [
           {
-            "node": "Log Nudge To Compliance",
+            "node": "Log Nudge Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Nudge To Compliance": {
+    "Log Nudge Workflow": {
       "main": [
         [
           {
