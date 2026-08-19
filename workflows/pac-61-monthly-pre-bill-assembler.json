@@ -1,0 +1,1047 @@
+{
+  "name": "Monthly Pre-Bill Assembler",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Monthly Pre-Bill Assembler\n\n### How it works\n\n**Compile & route (once a month):**\n1. On your firm's compile day, pulls every draft pre-bill from Clio and groups them by each matter's responsible attorney.\n2. Emails each attorney one message listing every pre-bill they need to review this cycle — matter, client, amount — with a link straight to Clio.\n\n**Nudge laggards (daily, only on specific days):**\n3. Checks in on specific days relative to your firm's billing deadline (3 days before, 1 day before, on the deadline, and a few days after) — not every single day, so nobody gets spammed.\n4. Re-fetches draft pre-bills from Clio. Anything still in draft has genuinely not been reviewed yet — Clio drops a pre-bill from this list the moment an attorney finalizes it, so the nudge list is always accurate with no extra tracking needed.\n5. Attorneys still short of the deadline get a reminder; anyone still outstanding on or after the deadline gets the managing partner looped in directly.\n\n### Setup steps\n\n- [ ] Set CLIO_BASE_URL and connect the Clio OAuth2 credential (reuse if already deployed for PAC-18/20/55/57/58/59).\n- [ ] Set FIRM_BILLING_DEADLINE_DAY to the day of the month pre-bills must be finalized by (pick 28 or earlier — days above 28 don't exist in every month).\n- [ ] Set FIRM_NAME, FIRM_FROM_EMAIL, FIRM_PARTNER_EMAIL, GUARDRAIL_WORKFLOW_ID, and optionally FIRM_CLIO_BILLING_URL.\n- [ ] In Clio, confirm every matter has a responsible attorney assigned with a valid email — matters without one are silently excluded (nobody to email).\n- [ ] Connect the SMTP credential.\n\n### Customization\n\nAdjust the compile-day cron on 'Monthly Pre-Bill Compile Trigger' to run a few days before your deadline. Edit the nudge offsets directly in 'Compute Nudge Tier For Today' if your firm wants a different cadence.",
+        "width": 480,
+        "height": 940
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -500
+      ],
+      "id": "sticky-main",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Compile and route\n\nOnce a month, fetches every draft pre-bill from Clio, groups them by responsible attorney, and emails each attorney their own review list.",
+        "width": 1568,
+        "height": 420,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -160
+      ],
+      "id": "sticky-1",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Nudge trigger and window check\n\nRuns daily but only takes action on specific days relative to the firm's billing deadline — 3 days before, 1 day before, on the deadline, and a couple of follow-ups after. Every other day is a no-op, so this never spams anyone.",
+        "width": 900,
+        "height": 380,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        320
+      ],
+      "id": "sticky-2",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Re-check outstanding pre-bills\n\nRe-fetches draft pre-bills the same way the compile step did. Anything still in draft state genuinely hasn't been reviewed — Clio removes a pre-bill from this list the moment it's finalized, so no separate tracking is needed.",
+        "width": 1120,
+        "height": 380,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        320
+      ],
+      "id": "sticky-3",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Reminder vs. partner escalation\n\nAttorneys still ahead of the deadline get a reminder email. Anyone still outstanding on or after the deadline routes to the managing partner instead — same escalation shape as the Invoice Reminder Ladder (PAC-18).",
+        "width": 1568,
+        "height": 460,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        320
+      ],
+      "id": "sticky-4",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 25 * *"
+            }
+          ]
+        }
+      },
+      "id": "6100aa00-0061-4000-a000-000000000001",
+      "name": "Monthly Pre-Bill Compile Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Fires once a month, on the 25th at 8am (n8n server timezone) by default. Set this a few days before FIRM_BILLING_DEADLINE_DAY so attorneys have time to review before the nudge phase kicks in.\n\nThis is the only thing that starts a compile run — nothing else in this half of the workflow fires on its own."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/bills.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "draft"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,number,total,matter{id,display_number,description,responsible_attorney{id,name,email}},client{id,name}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6100aa00-0061-4000-a000-000000000002",
+      "name": "Fetch Draft Pre-Bills From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Pulls every draft pre-bill in one request. Same bills.json endpoint and 'status' query parameter as the Invoice Reminder Ladder (PAC-18), which already confirmed this works against a live Clio account — 'draft' as the specific status value follows the same convention as PAC-18's 'overdue' but hasn't itself been independently confirmed live, so check your first real run's output matches what you see in Clio's own pre-bill list.\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59 — reuse it if already deployed.\n\nReturns up to 200 pre-bills per run. If your firm regularly has more in draft at once, add a loop over the 'page' parameter.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Groups draft pre-bills by the matter's responsible attorney -- each attorney gets one review\n// email listing everything they need to review this cycle, rather than one email per bill.\nconst bills = $input.first().json.data || [];\nconst groups = {};\n\nfor (const bill of bills) {\n  const attorney = (bill.matter && bill.matter.responsible_attorney) || {};\n  const key = attorney.email || 'unassigned';\n  if (!groups[key]) {\n    groups[key] = { attorney_name: attorney.name || 'Unassigned', attorney_email: attorney.email || '', bills: [] };\n  }\n  groups[key].bills.push({\n    bill_id: bill.id,\n    bill_number: bill.number || '',\n    total: Number(bill.total || 0),\n    matter_ref: (bill.matter && bill.matter.display_number) || '',\n    matter_description: (bill.matter && bill.matter.description) || '',\n    client_name: (bill.client && bill.client.name) || '',\n  });\n}\n\nconst unassigned_count = (groups['unassigned'] || { bills: [] }).bills.length;\nconst attorney_groups = Object.entries(groups)\n  .filter(([key]) => key !== 'unassigned')\n  .map(([, g]) => g);\n\nreturn [{ json: {\n  attorney_groups,\n  has_draft_prebills: attorney_groups.length > 0,\n  unassigned_count,\n} }];"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000003",
+      "name": "Group Pre-Bills By Attorney",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Bills whose matter has no responsible attorney (or no email on file) are counted in unassigned_count but excluded from attorney_groups — there's nobody to send them to. Check unassigned_count in execution history periodically; a nonzero value means a matter in Clio needs a responsible attorney assigned."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_prebills",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.has_draft_prebills }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6100aa00-0061-4000-a000-000000000004",
+      "name": "If Has Draft Pre-Bills",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Yes (at least one attorney has draft pre-bills) → route review emails.\nNo (nothing in draft — an unusually clean cycle, or nothing billed yet) → route to Skip.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "6100aa00-0061-4000-a000-000000000005",
+      "name": "Skip No Pre-Bills To Compile",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        896,
+        200
+      ],
+      "notes": "No draft pre-bills found this cycle — nothing to route. No emails sent."
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.first().json.attorney_groups.map(g => ({ json: g }));"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000006",
+      "name": "Split Into One Item Per Attorney",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Fans out into one item per attorney with draft pre-bills — everything downstream through the send step processes one attorney's review bundle at a time."
+    },
+    {
+      "parameters": {
+        "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\nconst DEADLINE_DAY = $vars.FIRM_BILLING_DEADLINE_DAY || '28';\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nfunction ordinal(n) {\n  n = Number(n);\n  const s = ['th', 'st', 'nd', 'rd'];\n  const v = n % 100;\n  return n + (s[(v - 20) % 10] || s[v] || s[0]);\n}\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst lines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)}${b.matter_description ? ' (' + b.matter_description + ')' : ''}`);\n\nconst subject = `${bills.length} pre-bill(s) ready for your review — billing closes on the ${ordinal(DEADLINE_DAY)}`;\nconst body = `Hi ${item.attorney_name},\n\nYou have ${bills.length} draft pre-bill(s) ready for your review this cycle (total $${total.toFixed(2)}):\n\n${lines.join('\\n')}\n\nReview, edit, and finalize each one directly in Clio:\n${BILLING_URL}\n\nPlease finish your review by the ${ordinal(DEADLINE_DAY)} so bills can go out to clients on time.\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000007",
+      "name": "Build Pre-Bill Review Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "Builds one review email per attorney listing every draft pre-bill assigned to them, with a direct link into Clio's billing view. This is an internal firm email — no client is ever contacted by this workflow.\n\nFIRM_CLIO_BILLING_URL is optional — falls back to a generic Clio drafts URL if unset."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "={{ $json.channel }}",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "={{ $json.template_id }}",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "6100aa00-0061-4000-a000-000000000008",
+      "name": "Log Pre-Bill Routing To Compliance",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "Logs the routing event to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33). This is internal record-keeping, not a message to a client — opt-out checking doesn't apply here, same as PAC-18's partner escalation and PAC-59/60's internal notifications.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Build Pre-Bill Review Email').item.json.from_email }}",
+        "toEmail": "={{ $('Build Pre-Bill Review Email').item.json.recipient }}",
+        "subject": "={{ $('Build Pre-Bill Review Email').item.json.subject }}",
+        "emailType": "text",
+        "text": "={{ $('Build Pre-Bill Review Email').item.json.message }}",
+        "options": {}
+      },
+      "id": "6100aa00-0061-4000-a000-000000000009",
+      "name": "Send Pre-Bill Review Email To Attorney",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Delivers the review bundle to the attorney. Reads all fields explicitly from 'Build Pre-Bill Review Email' rather than $json — the guardrail call immediately upstream replaced the item's json with its own response.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "6100aa00-0061-4000-a000-000000000010",
+      "name": "Daily Pre-Bill Nudge Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        480
+      ],
+      "notes": "Fires every day at 8am (n8n server timezone) — but the very next node decides whether today is actually a nudge day, so most runs do nothing. Running daily (not just on the known offsets) means the correct day is never missed even if the server restarts or a run is delayed."
+    },
+    {
+      "parameters": {
+        "jsCode": "// The firm has ONE shared billing deadline each month (not a per-bill due date like\n// invoices), so the nudge tier is computed once per run and applied to every outstanding\n// pre-bill alike.\nconst DEADLINE_DAY = Number($vars.FIRM_BILLING_DEADLINE_DAY) || 28;\n\n// Formats a Date using its LOCAL year/month/day -- not .toISOString(), which converts to UTC\n// and silently shifts the date by one whenever the n8n server's timezone isn't UTC exactly (e.g.\n// UTC+1 turns local midnight into 11pm the previous day in UTC). Confirmed live: without this,\n// deadline_date came back one day early in a UTC+1 environment.\nfunction toLocalYMD(d) {\n  const y = d.getFullYear();\n  const m = String(d.getMonth() + 1).padStart(2, '0');\n  const dd = String(d.getDate()).padStart(2, '0');\n  return `${y}-${m}-${dd}`;\n}\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n// JS Date auto-rolls a day number past the end of the month into the next month (e.g. day 31\n// in a 30-day month becomes the 1st of next month) -- pick a deadline day of 28 or lower to avoid this.\nconst deadline = new Date(today.getFullYear(), today.getMonth(), DEADLINE_DAY);\ndeadline.setHours(0, 0, 0, 0);\n\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst daysUntilDeadline = Math.round((deadline - today) / msPerDay);\n\n// Specific offsets only, not a continuous range -- avoids nudging every single day. Mirrors the\n// discrete-window ladder the Invoice Reminder Ladder (PAC-18) uses, just anchored to one shared\n// firm deadline instead of a per-invoice due date.\nlet tier = 'none';\nif      (daysUntilDeadline === 3)  tier = 'reminder';\nelse if (daysUntilDeadline === 1)  tier = 'urgent';\nelse if (daysUntilDeadline === 0)  tier = 'overdue';\nelse if (daysUntilDeadline === -3) tier = 'overdue';\nelse if (daysUntilDeadline === -7) tier = 'overdue';\n\nreturn [{ json: {\n  tier,\n  is_nudge_day: tier !== 'none',\n  days_until_deadline: daysUntilDeadline,\n  deadline_date: toLocalYMD(deadline),\n} }];"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000011",
+      "name": "Compute Nudge Tier For Today",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        480
+      ],
+      "notes": "Edit the offsets directly in this node's code to change the nudge cadence — e.g. add a -14 entry for a second monthly check-in, or remove the -7 entry if one partner escalation is enough. 'overdue' tier routes to the managing partner instead of the attorney; 'reminder'/'urgent' go to the attorney directly."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_is_nudge_day",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_nudge_day }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6100aa00-0061-4000-a000-000000000012",
+      "name": "If Nudge Tier Is Active Today",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        480
+      ],
+      "notes": "Yes (today matches one of the configured offsets) → check Clio for outstanding pre-bills.\nNo (any other day) → route to Skip without even calling the Clio API.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "6100aa00-0061-4000-a000-000000000013",
+      "name": "Skip Not A Nudge Day",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        672,
+        680
+      ],
+      "notes": "Today doesn't match a configured nudge offset — nothing to check, no API call made. Expected for most days of the month."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/bills.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "draft"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,number,total,matter{id,display_number,description,responsible_attorney{id,name,email}},client{id,name}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6100aa00-0061-4000-a000-000000000014",
+      "name": "Fetch Outstanding Draft Pre-Bills",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        480
+      ],
+      "notes": "Same query as the compile step's 'Fetch Draft Pre-Bills From Clio' — re-run fresh each nudge day. Anything still in draft genuinely hasn't been finalized yet; Clio drops a pre-bill from this list the instant it's reviewed and finalized, so this list is always accurate without this workflow needing to track review state itself.\n\nSame Clio OAuth2 credential as the compile step.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Same grouping logic as 'Group Pre-Bills By Attorney' in the compile half of this workflow,\n// plus the nudge tier carried forward explicitly since the Clio API call above replaced the\n// item's json.\nconst tierInfo = $('Compute Nudge Tier For Today').item.json;\nconst bills = $input.first().json.data || [];\nconst groups = {};\n\nfor (const bill of bills) {\n  const attorney = (bill.matter && bill.matter.responsible_attorney) || {};\n  const key = attorney.email || 'unassigned';\n  if (!groups[key]) {\n    groups[key] = { attorney_name: attorney.name || 'Unassigned', attorney_email: attorney.email || '', bills: [] };\n  }\n  groups[key].bills.push({\n    bill_id: bill.id,\n    bill_number: bill.number || '',\n    total: Number(bill.total || 0),\n    matter_ref: (bill.matter && bill.matter.display_number) || '',\n    matter_description: (bill.matter && bill.matter.description) || '',\n    client_name: (bill.client && bill.client.name) || '',\n  });\n}\n\nconst attorney_groups = Object.entries(groups)\n  .filter(([key]) => key !== 'unassigned')\n  .map(([, g]) => g);\n\nreturn [{ json: {\n  attorney_groups,\n  has_draft_prebills: attorney_groups.length > 0,\n  tier: tierInfo.tier,\n  days_until_deadline: tierInfo.days_until_deadline,\n} }];"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000015",
+      "name": "Group Outstanding Pre-Bills By Attorney",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        480
+      ],
+      "notes": "Same grouping as the compile step, plus tier and days_until_deadline carried forward explicitly from 'Compute Nudge Tier For Today' by node reference, since the Clio API call immediately upstream replaced the item's json. Unassigned bills (no responsible attorney email) are excluded here too, same as the compile step."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_outstanding",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.has_draft_prebills }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6100aa00-0061-4000-a000-000000000016",
+      "name": "If Has Outstanding Pre-Bills",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        480
+      ],
+      "notes": "Yes (someone still has draft pre-bills on a nudge day) → send reminders/escalations.\nNo (everything was finalized before this check ran — the good outcome) → route to Skip.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "6100aa00-0061-4000-a000-000000000017",
+      "name": "Skip No Outstanding Pre-Bills",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        680
+      ],
+      "notes": "Every pre-bill was finalized before this nudge check ran. No reminders needed — this is the workflow working as intended, not a failure to detect anything."
+    },
+    {
+      "parameters": {
+        "jsCode": "const { attorney_groups, has_draft_prebills, ...meta } = $input.first().json;\nreturn attorney_groups.map(g => ({ json: { ...meta, ...g } }));"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000018",
+      "name": "Split Outstanding Into One Item Per Attorney",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        480
+      ],
+      "notes": "Fans out into one item per attorney still holding draft pre-bills, carrying the shared tier/days_until_deadline forward onto every item."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_is_overdue",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.tier }}",
+              "rightValue": "overdue"
+            }
+          ]
+        }
+      },
+      "id": "6100aa00-0061-4000-a000-000000000019",
+      "name": "If Tier Is Overdue",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1568,
+        480
+      ],
+      "notes": "Yes (today is the deadline or a follow-up day past it) → escalate straight to the managing partner instead of nudging the attorney again.\nNo ('reminder' or 'urgent' tier, still ahead of the deadline) → send the attorney a direct reminder.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst PARTNER_EMAIL = $vars.FIRM_PARTNER_EMAIL;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\n\nif (!PARTNER_EMAIL) throw new Error('FIRM_PARTNER_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst lines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)}`);\nconst overdueDays = item.days_until_deadline < 0 ? Math.abs(item.days_until_deadline) : 0;\n\nconst subject = `Billing deadline${overdueDays > 0 ? ' passed' : ' reached'}: ${item.attorney_name} has ${bills.length} unreviewed pre-bill(s)`;\nconst body = `${item.attorney_name} (${item.attorney_email}) still has ${bills.length} draft pre-bill(s) unreviewed${overdueDays > 0 ? ', ' + overdueDays + ' day(s) past' : ' as of'} this month's billing deadline (${item.deadline_date || ''}).\n\nOutstanding pre-bills (total $${total.toFixed(2)}):\n${lines.join('\\n')}\n\nReview directly in Clio:\n${BILLING_URL}\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: PARTNER_EMAIL,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000020",
+      "name": "Build Partner Escalation For Laggard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        320
+      ],
+      "notes": "Builds the escalation email for the managing partner — same 'internal email, bypass client-facing guardrail approval' pattern as PAC-18's 60-day overdue-invoice escalation. FIRM_PARTNER_EMAIL reuses the same n8n Variable PAC-18 already uses, so if that template is deployed this needs no new configuration."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "={{ $json.channel }}",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "={{ $json.template_id }}",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "6100aa00-0061-4000-a000-000000000021",
+      "name": "Log Escalation To Compliance",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2016,
+        320
+      ],
+      "notes": "Logs the escalation to the OPS1 compliance audit sheet — internal record-keeping only, same as the compile step's logging call."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Build Partner Escalation For Laggard').item.json.from_email }}",
+        "toEmail": "={{ $('Build Partner Escalation For Laggard').item.json.recipient }}",
+        "subject": "={{ $('Build Partner Escalation For Laggard').item.json.subject }}",
+        "emailType": "text",
+        "text": "={{ $('Build Partner Escalation For Laggard').item.json.message }}",
+        "options": {}
+      },
+      "id": "6100aa00-0061-4000-a000-000000000022",
+      "name": "Send Partner Escalation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        320
+      ],
+      "notes": "Delivers the escalation to the managing partner. Reads all fields explicitly from 'Build Partner Escalation For Laggard' — the guardrail call immediately upstream replaced the item's json.\n\nCredential: same 'Email account (SMTP)' credential as the compile step.",
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\n\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst lines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)}`);\n\nconst TIER_COPY = {\n  reminder: { label: 'Reminder', tone: `Billing closes in ${item.days_until_deadline} day(s).` },\n  urgent:   { label: 'Urgent',   tone: 'Billing closes tomorrow.' },\n};\nconst copy = TIER_COPY[item.tier] || TIER_COPY.reminder;\n\nconst subject = `${copy.label}: ${bills.length} pre-bill(s) still need your review`;\nconst body = `Hi ${item.attorney_name},\n\n${copy.tone} You still have ${bills.length} draft pre-bill(s) waiting for your review (total $${total.toFixed(2)}):\n\n${lines.join('\\n')}\n\nReview and finalize in Clio:\n${BILLING_URL}\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000023",
+      "name": "Build Attorney Nudge Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        640
+      ],
+      "notes": "Builds the reminder email for 'reminder' (3 days out) and 'urgent' (1 day out) tiers — tone escalates slightly between the two, same idea as PAC-18's day1→day30 tone ladder."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "={{ $json.channel }}",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "={{ $json.template_id }}",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "6100aa00-0061-4000-a000-000000000024",
+      "name": "Log Nudge To Compliance",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2016,
+        640
+      ],
+      "notes": "Logs the nudge to the OPS1 compliance audit sheet — internal record-keeping only, same as the compile step's logging call."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Build Attorney Nudge Email').item.json.from_email }}",
+        "toEmail": "={{ $('Build Attorney Nudge Email').item.json.recipient }}",
+        "subject": "={{ $('Build Attorney Nudge Email').item.json.subject }}",
+        "emailType": "text",
+        "text": "={{ $('Build Attorney Nudge Email').item.json.message }}",
+        "options": {}
+      },
+      "id": "6100aa00-0061-4000-a000-000000000025",
+      "name": "Send Attorney Nudge Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        640
+      ],
+      "notes": "Delivers the reminder to the attorney directly. Reads all fields explicitly from 'Build Attorney Nudge Email' — the guardrail call immediately upstream replaced the item's json.\n\nCredential: same 'Email account (SMTP)' credential as the rest of this workflow.",
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "Monthly Pre-Bill Compile Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-08-25T08:00:00.000Z",
+          "Readable date": "August 25th 2026, 8:00:00 am"
+        }
+      }
+    ],
+    "Fetch Draft Pre-Bills From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 5501,
+              "number": "DRAFT-2026-101",
+              "total": 3200.0,
+              "matter": {
+                "id": 301,
+                "display_number": "2026-CH-042",
+                "description": "Custody Modification",
+                "responsible_attorney": {
+                  "id": 21,
+                  "name": "A. Attorney",
+                  "email": "attorney@smithlaw.com"
+                }
+              },
+              "client": {
+                "id": 501,
+                "name": "Margaret Chen"
+              }
+            },
+            {
+              "id": 5502,
+              "number": "DRAFT-2026-102",
+              "total": 1875.5,
+              "matter": {
+                "id": 295,
+                "display_number": "2026-AV-039",
+                "description": "Business Contract Dispute",
+                "responsible_attorney": {
+                  "id": 22,
+                  "name": "B. Barrister",
+                  "email": "b.barrister@smithlaw.com"
+                }
+              },
+              "client": {
+                "id": 498,
+                "name": "Robert Avila"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ],
+    "Daily Pre-Bill Nudge Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-08-25T08:00:00.000Z",
+          "Readable date": "August 25th 2026, 8:00:00 am"
+        }
+      }
+    ],
+    "Fetch Outstanding Draft Pre-Bills": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 5501,
+              "number": "DRAFT-2026-101",
+              "total": 3200.0,
+              "matter": {
+                "id": 301,
+                "display_number": "2026-CH-042",
+                "description": "Custody Modification",
+                "responsible_attorney": {
+                  "id": 21,
+                  "name": "A. Attorney",
+                  "email": "attorney@smithlaw.com"
+                }
+              },
+              "client": {
+                "id": 501,
+                "name": "Margaret Chen"
+              }
+            },
+            {
+              "id": 5502,
+              "number": "DRAFT-2026-102",
+              "total": 1875.5,
+              "matter": {
+                "id": 295,
+                "display_number": "2026-AV-039",
+                "description": "Business Contract Dispute",
+                "responsible_attorney": {
+                  "id": 22,
+                  "name": "B. Barrister",
+                  "email": "b.barrister@smithlaw.com"
+                }
+              },
+              "client": {
+                "id": 498,
+                "name": "Robert Avila"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ]
+  },
+  "settings": {
+    "availableInMCP": false,
+    "executionOrder": "v1",
+    "executionTimeout": 120,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "Monthly Pre-Bill Compile Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Draft Pre-Bills From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Draft Pre-Bills From Clio": {
+      "main": [
+        [
+          {
+            "node": "Group Pre-Bills By Attorney",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group Pre-Bills By Attorney": {
+      "main": [
+        [
+          {
+            "node": "If Has Draft Pre-Bills",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Draft Pre-Bills": {
+      "main": [
+        [
+          {
+            "node": "Split Into One Item Per Attorney",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip No Pre-Bills To Compile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into One Item Per Attorney": {
+      "main": [
+        [
+          {
+            "node": "Build Pre-Bill Review Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Pre-Bill Review Email": {
+      "main": [
+        [
+          {
+            "node": "Log Pre-Bill Routing To Compliance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Pre-Bill Routing To Compliance": {
+      "main": [
+        [
+          {
+            "node": "Send Pre-Bill Review Email To Attorney",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Pre-Bill Nudge Trigger": {
+      "main": [
+        [
+          {
+            "node": "Compute Nudge Tier For Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Nudge Tier For Today": {
+      "main": [
+        [
+          {
+            "node": "If Nudge Tier Is Active Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Nudge Tier Is Active Today": {
+      "main": [
+        [
+          {
+            "node": "Fetch Outstanding Draft Pre-Bills",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Not A Nudge Day",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Outstanding Draft Pre-Bills": {
+      "main": [
+        [
+          {
+            "node": "Group Outstanding Pre-Bills By Attorney",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group Outstanding Pre-Bills By Attorney": {
+      "main": [
+        [
+          {
+            "node": "If Has Outstanding Pre-Bills",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Outstanding Pre-Bills": {
+      "main": [
+        [
+          {
+            "node": "Split Outstanding Into One Item Per Attorney",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip No Outstanding Pre-Bills",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Outstanding Into One Item Per Attorney": {
+      "main": [
+        [
+          {
+            "node": "If Tier Is Overdue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Tier Is Overdue": {
+      "main": [
+        [
+          {
+            "node": "Build Partner Escalation For Laggard",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Attorney Nudge Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Partner Escalation For Laggard": {
+      "main": [
+        [
+          {
+            "node": "Log Escalation To Compliance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Escalation To Compliance": {
+      "main": [
+        [
+          {
+            "node": "Send Partner Escalation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Attorney Nudge Email": {
+      "main": [
+        [
+          {
+            "node": "Log Nudge To Compliance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Nudge To Compliance": {
+      "main": [
+        [
+          {
+            "node": "Send Attorney Nudge Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Compiles every draft pre-bill in Clio once a month, groups them by responsible attorney, and routes each attorney a single review email with a link straight into Clio. A separate daily check (active only on specific days relative to the firm's billing deadline) re-fetches outstanding drafts and nudges attorneys still behind, escalating straight to the managing partner once the deadline is reached or passed. Replaces the manual chasing that stalls the monthly billing cycle. Logs every routing and every escalation to the OPS1 compliance audit sheet — entirely internal, no client is ever contacted."
+}
