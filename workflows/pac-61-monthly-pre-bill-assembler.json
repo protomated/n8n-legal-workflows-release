@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Monthly Pre-Bill Assembler\n\n### How it works\n\n1. The workflow compiles draft pre-bills monthly, grouping them by responsible attorney.\n2. Claude adds a short, dollar-and-age-only priority tip to each attorney's list (never legal commentary — falls back to no tip if the AI call fails, so it never blocks the email).\n3. A styled review email is built, logged for audit, and sent to each attorney.\n4. A daily process fetches outstanding draft pre-bills, computes each one's own age, and filters to whatever hit a reminder/urgent/overdue threshold today.\n5. Reminder/urgent-tier bills route to a styled attorney nudge; overdue-tier bills route to a styled managing-partner escalation instead — grouped by attorney either way, one email per person per run.\n\n### Setup steps\n\n- [ ] Configure Clio API credentials with the CLIO_BASE_URL variable set appropriately.\n- [ ] Configure an Anthropic API key credential for the priority-tip generator (reuse from another deployed template if you have one).\n- [ ] Set up SMTP credentials for the emailSend nodes to dispatch emails.\n- [ ] Point the executeWorkflow nodes at your Bar-Compliance Guardrail (NTC-33) via GUARDRAIL_WORKFLOW_ID.\n\n### Customization\n\nThe code nodes that build email content and group pre-bills can be customized to alter messaging or grouping logic. Scheduling triggers can be adjusted for timing preferences.",
+        "content": "## Monthly Pre-Bill Assembler\n\n### How it works\n\n1. The workflow triggers monthly and daily schedules to compile and nudge draft pre-bills from a legal billing system (Clio).\n2. It fetches draft pre-bills and groups them by the responsible attorney for prioritization and review.\n3. For monthly runs, it generates operational priority insights via an AI service and sends review emails to attorneys.\n4. For daily nudges, it computes draft ages, filters due pre-bills, and conditionally sends reminder or escalation emails based on pre-bill tier status.\n5. Each email sending action logs the workflow execution and uses sub-workflows for routing and notification.\n\n\n### Setup steps\n\n- [ ] Configure credentials for Clio API access with appropriate API keys or tokens.\n- [ ] Provide authentication credentials for the AI service (Anthropic Claude) used for generating priority insights.\n- [ ] Set email sending service credentials (SMTP or integrated service) for sending notification emails.\n- [ ] Configure the scheduling triggers for monthly and daily runs according to your needs.\n\n### Customization\n\nYou can customize the AI-generated priority insight prompt content and email templates in the respective code nodes. Adjust filtering criteria and timing thresholds for nudges in the code node that computes ages and filtering.",
         "width": 480,
         "height": 896
       },
@@ -12,94 +12,142 @@
       "typeVersion": 1,
       "position": [
         -608,
-        -128
+        -160
       ],
-      "id": "7c3f545d-0c6b-4929-a565-4b57e5efe9b5",
+      "id": "c84b8979-8fd0-48bf-8ec6-fa1513467c6d",
       "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Monthly pre-bill trigger and fetch\n\nStarts monthly compilation by triggering and fetching draft pre-bills from Clio, then grouping by attorney.",
-        "width": 864,
-        "height": 304,
+        "content": "## Monthly pre-bill trigger and fetch\n\nScheduled trigger initiates monthly run and fetches draft pre-bills from Clio for processing.",
+        "width": 416,
+        "height": 320,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -128
+        -160
       ],
-      "id": "090b4ef2-cfc0-4bcd-9c54-73792da5939f",
+      "id": "99a39692-cb0a-47b5-ab49-b70e8628d2f8",
       "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Monthly pre-bill processing and emailing\n\nProcesses draft pre-bills if they exist, adds a Claude-generated priority tip, builds a styled review email, logs the workflow, and sends it to each attorney.",
-        "width": 1700,
+        "content": "## Group and check draft pre-bills\n\nGroups draft pre-bills by attorney and conditionally branches depending on existence of draft bills.",
+        "width": 640,
         "height": 496,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        848,
+        400,
         -128
       ],
-      "id": "ef407fde-c458-4149-b73e-213247a7015a",
+      "id": "e5af9c1e-1592-48b7-85f1-7b6258bb2806",
       "name": "Sticky Note2"
     },
     {
       "parameters": {
-        "content": "## Daily pre-bill nudge trigger and fetch\n\nTriggers daily pre-bill nudge process, fetches outstanding drafts, computes their ages, and filters those due for nudging.",
-        "width": 864,
+        "content": "## Generate priority insights\n\nBuilds prompt and calls AI service to generate operational priority advice on pre-bills.",
+        "width": 640,
         "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -128
+      ],
+      "id": "5a789f95-b475-4ca3-b462-7ba06f469dc2",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Build and send review emails\n\nPrepares email content, logs process, and sends pre-bill review emails to attorneys.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        -128
+      ],
+      "id": "8bfab393-43c4-443c-8465-95465e73a1c7",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Daily pre-bill nudge trigger and fetch\n\nScheduled trigger for daily run and fetches outstanding draft pre-bills for nudge processing.",
+        "width": 416,
+        "height": 320,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        352
+        320
       ],
-      "id": "d9726d4a-f8e1-4075-8d69-9e0c33bf3d33",
-      "name": "Sticky Note3"
-    },
-    {
-      "parameters": {
-        "content": "## Nudge handling and splitting\n\nSplits due pre-bills into items for processing and branches based on the urgency tier (overdue or reminder).",
-        "width": 416,
-        "height": 512,
-        "color": 7
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        848,
-        400
-      ],
-      "id": "22dc4961-000b-4daf-af65-5a5947456d60",
-      "name": "Sticky Note4"
-    },
-    {
-      "parameters": {
-        "content": "## Partner escalation processing\n\nHandles overdue pre-bills grouping by attorney, builds escalation email content, logs escalation, and sends partner emails.",
-        "width": 864,
-        "height": 304,
-        "color": 7
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1296,
-        400
-      ],
-      "id": "6fd4caee-c255-40e2-8e25-19835883396d",
+      "id": "29f0ffb3-16c9-4e67-9c1d-3f0d10771474",
       "name": "Sticky Note5"
     },
     {
       "parameters": {
-        "content": "## Attorney nudge processing\n\nHandles reminder-tier pre-bills grouped by attorney, builds nudge email content, logs nudge, and sends reminder emails.",
+        "content": "## Filter and check due pre-bills\n\nComputes age of drafts, filters due pre-bills, and conditionally branches based on due status.",
+        "width": 640,
+        "height": 592,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        400
+      ],
+      "id": "8be7a470-0609-4931-a7db-039f2524febd",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Split and tier pre-bills\n\nSplits due pre-bills into individual items and branches on their overdue tier status.",
+        "width": 416,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        432
+      ],
+      "id": "59ac2b5a-f3b8-41de-85d6-7556d46ff237",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## Handle overdue pre-bills\n\nGroups overdue pre-bills by attorney, builds escalation emails, logs workflow, and sends emails to partners.",
+        "width": 864,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        400
+      ],
+      "id": "6ba7041c-d597-4754-800d-6beb3ae8c06a",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "## Handle nudge pre-bills\n\nGroups reminder-tier pre-bills, builds nudge email content, logs, and sends nudge emails to attorneys.",
         "width": 864,
         "height": 304,
         "color": 7
@@ -108,10 +156,10 @@
       "typeVersion": 1,
       "position": [
         1296,
-        736
+        768
       ],
-      "id": "e9c12aeb-9f4b-42ae-a61c-0578e2ed50f9",
-      "name": "Sticky Note6"
+      "id": "2bc409a9-42f4-4184-9682-090152354cdb",
+      "name": "Sticky Note9"
     },
     {
       "parameters": {
@@ -125,7 +173,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000001",
-      "name": "When Monthly Pre-Bill Compilation Runs",
+      "name": "When Monthly Pre-Bill Runs",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -160,7 +208,7 @@
         "options": {}
       },
       "id": "6100aa00-0061-4000-a000-000000000002",
-      "name": "Fetch Draft Pre-Bills From Clio",
+      "name": "Fetch Draft Pre-Bills From Clio API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -228,7 +276,7 @@
     {
       "parameters": {},
       "id": "6100aa00-0061-4000-a000-000000000005",
-      "name": "Skip When No Draft Pre-Bills",
+      "name": "Skip If No Draft Pre-Bills",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -287,7 +335,7 @@
         "options": {}
       },
       "id": "6100aa00-0061-4000-a000-000000000029",
-      "name": "Generate Priority Insight",
+      "name": "Post Priority Insight Request",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -308,7 +356,7 @@
         "jsCode": "// Recovers the original item (attorney_name, bills, etc.) via node reference, since this node's\n// own $json is either Claude's raw response or an error object depending on which output fired\n// on 'Generate Priority Insight'. Any failure here (API error, bad JSON, safety flag, keyword\n// match) falls back to insight: '' -- the review email always sends; the AI tip is a bonus,\n// never a blocker.\nconst item = $('Build Priority Insight Prompt').item.json;\nconst raw = $input.first().json;\n\nfunction withInsight(insight) {\n  const { claude_request, ...rest } = item;\n  return [{ json: { ...rest, priority_insight: insight } }];\n}\n\nconst rawText = (raw.content && raw.content[0] && raw.content[0].text) ? raw.content[0].text.trim() : '';\nif (!rawText) return withInsight('');\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```(?:json)?\\n?/, '').replace(/\\n?```$/, '');\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  return withInsight('');\n}\n\nif (parsed.is_operational_safe === false) return withInsight('');\n\nlet insight = String(parsed.insight || '').trim();\nif (!insight) return withInsight('');\n\n// Post-hoc keyword scan -- same \"operational only\" guardrail used across this catalog's\n// AI-enriched templates (PAC-60, PAC-62). Catches legal-sounding language Claude didn't self-flag.\nconst UNSAFE_RE = /\\b(attorney.client|work.product|privileged|legal.advice|legal.opinion|you should|we advise|we recommend|pursuant to|under\\s+[§\\d]|case law|statute|court held|court ruled|ruling|liable|liability|negligence)\\b/i;\nif (UNSAFE_RE.test(insight)) return withInsight('');\n\nif (insight.length > 180) insight = insight.slice(0, 179) + '…';\n\nreturn withInsight(insight);"
       },
       "id": "6100aa00-0061-4000-a000-000000000030",
-      "name": "Extract Priority Insight",
+      "name": "Parse Priority Insight Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -322,7 +370,7 @@
         "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\nconst REMINDER_DAYS = $vars.FIRM_PREBILL_REMINDER_DAYS || '5';\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n}\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst textLines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)}${b.matter_description ? ' (' + b.matter_description + ')' : ''}`);\n\nconst insightHtml = item.priority_insight ? `\n    <div style=\"background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:14px 16px;margin-bottom:22px;\">\n      <div style=\"font-size:11px;font-weight:700;color:#0e7490;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;\">Priority tip</div>\n      <div style=\"color:#155e75;font-size:14px;\">${escapeHtml(item.priority_insight)}</div>\n    </div>` : '';\n\nconst rowsHtml = bills.map(b => `\n    <div style=\"border-bottom:1px solid #e2e8f0;padding:12px 0;\">\n      <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(b.matter_ref)} — ${escapeHtml(b.client_name)}</div>\n      ${b.matter_description ? `<div style=\"font-size:13px;color:#64748b;\">${escapeHtml(b.matter_description)}</div>` : ''}\n      <div style=\"font-size:14px;color:#0f172a;font-weight:600;margin-top:2px;\">$${b.total.toFixed(2)}</div>\n    </div>`).join('');\n\nconst subject = `${bills.length} pre-bill(s) ready for your review`;\n\nconst bodyHtml = `\n    <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">Hi ${escapeHtml(item.attorney_name)}, you have ${bills.length} draft pre-bill(s) ready for your review (total $${total.toFixed(2)}):</div>\n    ${insightHtml}\n    ${rowsHtml}\n    <a href=\"${BILLING_URL}\" style=\"display:inline-block;background:#02BDAD;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:6px;margin-top:22px;\">Review in Clio →</a>\n    <div style=\"margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\">Please review these promptly — an automatic reminder follows for anything still outstanding after ${REMINDER_DAYS} days.</div>`;\n\nconst textBody = `Hi ${item.attorney_name},\n\nYou have ${bills.length} draft pre-bill(s) ready for your review this cycle (total $${total.toFixed(2)}):\n\n${item.priority_insight ? 'Priority tip: ' + item.priority_insight + '\\n\\n' : ''}${textLines.join('\\n')}\n\nReview, edit, and finalize each one directly in Clio:\n${BILLING_URL}\n\nPlease review these promptly — an automatic reminder will follow for anything still outstanding after ${REMINDER_DAYS} days.\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: textBody,\n  email_html: emailShell('#02BDAD', 'Monthly Pre-Bill Review', subject, bodyHtml),\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000007",
-      "name": "Build Pre-Bill Review Email Content",
+      "name": "Build Pre-Bill Review Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -355,7 +403,7 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000008",
-      "name": "Log Pre-Bill Routing Workflow",
+      "name": "Log Pre-Bill Routing Event",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -366,13 +414,13 @@
     },
     {
       "parameters": {
-        "fromEmail": "={{ $('Build Pre-Bill Review Email Content').item.json.from_email }}",
-        "toEmail": "={{ $('Build Pre-Bill Review Email Content').item.json.recipient }}",
-        "subject": "={{ $('Build Pre-Bill Review Email Content').item.json.subject }}",
+        "fromEmail": "={{ $('Build Pre-Bill Review Email').item.json.from_email }}",
+        "toEmail": "={{ $('Build Pre-Bill Review Email').item.json.recipient }}",
+        "subject": "={{ $('Build Pre-Bill Review Email').item.json.subject }}",
         "emailType": "html",
-        "text": "={{ $('Build Pre-Bill Review Email Content').item.json.message }}",
+        "text": "={{ $('Build Pre-Bill Review Email').item.json.message }}",
         "options": {},
-        "html": "={{ $('Build Pre-Bill Review Email Content').item.json.email_html }}"
+        "html": "={{ $('Build Pre-Bill Review Email').item.json.email_html }}"
       },
       "id": "6100aa00-0061-4000-a000-000000000009",
       "name": "Send Pre-Bill Review Email",
@@ -462,7 +510,7 @@
       "typeVersion": 2,
       "position": [
         448,
-        480
+        528
       ],
       "notes": "The one node to edit for a different review cadence — change REMINDER_DAYS/URGENT_DAYS/ESCALATE_DAYS/ESCALATE_REPEAT_DAYS directly here, or set the matching n8n Variables instead. Two bills for the same attorney can land in this list at different tiers on the same day if they were created on different dates — each bill is judged entirely on its own age."
     },
@@ -497,7 +545,7 @@
       "typeVersion": 2.3,
       "position": [
         672,
-        480
+        528
       ],
       "notes": "Yes (at least one bill hit a threshold today) → send reminders/escalations.\nNo (every outstanding bill is younger than the reminder threshold, or none hit an exact match today) → route to Skip. This is the normal, expected result on most days.",
       "onError": "continueErrorOutput"
@@ -505,12 +553,12 @@
     {
       "parameters": {},
       "id": "6100aa00-0061-4000-a000-000000000017",
-      "name": "Skip When No Pre-Bills Due",
+      "name": "Skip If No Pre-Bills Due",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
         896,
-        768
+        816
       ],
       "notes": "Nothing hit a reminder/urgent/overdue threshold today. Expected for most days — this is the workflow behaving correctly, not a failure to detect anything."
     },
@@ -523,7 +571,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        896,
+        1120,
         560
       ],
       "notes": "Fans out into one item per bill that's due for a nudge today — each item still carries its own tier and days_in_draft."
@@ -557,7 +605,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1120,
+        1344,
         560
       ],
       "notes": "Yes (this bill has passed the escalate threshold) → route to the managing partner instead of the attorney.\nNo ('reminder' or 'urgent' tier) → route to a direct attorney nudge. Each bill is routed individually before grouping, so one attorney can end up with some bills going to them directly and others escalated to the partner in the same run.",
@@ -572,7 +620,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1344,
+        1568,
         528
       ],
       "notes": "Run Once for All Items (the default) is required here — this needs to see every overdue bill from this run together to group them correctly, not one at a time."
@@ -586,7 +634,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1568,
+        1792,
         528
       ],
       "notes": "Builds the styled escalation email for the managing partner — same 'internal email, bypass client-facing guardrail approval' pattern as PAC-18's 60-day overdue-invoice escalation. FIRM_PARTNER_EMAIL reuses the same n8n Variable PAC-18 already uses, so if that template is deployed this needs no new configuration."
@@ -615,11 +663,11 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000022",
-      "name": "Log Partner Escalation Workflow",
+      "name": "Log Partner Escalation Event",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        1792,
+        2016,
         528
       ],
       "notes": "Logs the escalation to the OPS1 compliance audit sheet — internal record-keeping only, same as the compile step's logging call."
@@ -639,7 +687,7 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2016,
+        2240,
         528
       ],
       "notes": "Delivers the escalation to the managing partner. Reads all fields explicitly from 'Build Partner Escalation For Laggard' — the guardrail call immediately upstream replaced the item's json.\n\nCredential: same 'Email account (SMTP)' credential as the compile step.",
@@ -660,7 +708,7 @@
       "typeVersion": 2,
       "position": [
         1344,
-        864
+        896
       ],
       "notes": "An attorney's bill list here can be a mix of 'reminder' and 'urgent' tier bills — the next step labels the email by whichever tier is more urgent."
     },
@@ -669,12 +717,12 @@
         "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\n\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n}\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst textLines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)} — in draft ${b.days_in_draft} day(s)`);\n\n// This attorney's bills can be a mix of 'reminder' and 'urgent' tier -- label the email by the\n// most urgent tier present so the subject and header color reflect the most pressing item.\nconst mostUrgent = bills.some(b => b.tier === 'urgent') ? 'urgent' : 'reminder';\nconst TIER_COPY = { reminder: 'A friendly nudge', urgent: 'An urgent reminder' };\nconst headerColor = mostUrgent === 'urgent' ? '#ea580c' : '#f59e0b';\n\nconst rowsHtml = bills.map(b => `\n    <div style=\"border-bottom:1px solid #e2e8f0;padding:12px 0;\">\n      <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(b.matter_ref)} — ${escapeHtml(b.client_name)}</div>\n      <div style=\"font-size:13px;color:#64748b;\">In draft ${b.days_in_draft} day(s) — $${b.total.toFixed(2)}</div>\n    </div>`).join('');\n\nconst subject = `${TIER_COPY[mostUrgent]}: ${bills.length} pre-bill(s) still need your review`;\n\nconst bodyHtml = `\n    <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">Hi ${escapeHtml(item.attorney_name)}, you have ${bills.length} draft pre-bill(s) still waiting for your review (total $${total.toFixed(2)}):</div>\n    ${rowsHtml}\n    <a href=\"${BILLING_URL}\" style=\"display:inline-block;background:${headerColor};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:6px;margin-top:22px;\">Review and finalize in Clio →</a>`;\n\nconst textBody = `Hi ${item.attorney_name},\n\nYou have ${bills.length} draft pre-bill(s) still waiting for your review (total $${total.toFixed(2)}):\n\n${textLines.join('\\n')}\n\nReview and finalize in Clio:\n${BILLING_URL}\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: textBody,\n  email_html: emailShell(headerColor, TIER_COPY[mostUrgent], subject, bodyHtml),\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000025",
-      "name": "Build Attorney Nudge Email Content",
+      "name": "Build Attorney Nudge Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1568,
-        864
+        896
       ],
       "notes": "Builds the styled reminder email for attorneys with 'reminder' and/or 'urgent' tier bills — header color and subject escalate based on the most urgent bill present, same idea as PAC-18's day1→day30 tone ladder."
     },
@@ -702,24 +750,24 @@
         }
       },
       "id": "6100aa00-0061-4000-a000-000000000026",
-      "name": "Log Attorney Nudge Workflow",
+      "name": "Log Attorney Nudge Event",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
         1792,
-        864
+        896
       ],
       "notes": "Logs the nudge to the OPS1 compliance audit sheet — internal record-keeping only, same as the compile step's logging call."
     },
     {
       "parameters": {
-        "fromEmail": "={{ $('Build Attorney Nudge Email Content').item.json.from_email }}",
-        "toEmail": "={{ $('Build Attorney Nudge Email Content').item.json.recipient }}",
-        "subject": "={{ $('Build Attorney Nudge Email Content').item.json.subject }}",
+        "fromEmail": "={{ $('Build Attorney Nudge Email').item.json.from_email }}",
+        "toEmail": "={{ $('Build Attorney Nudge Email').item.json.recipient }}",
+        "subject": "={{ $('Build Attorney Nudge Email').item.json.subject }}",
         "emailType": "html",
-        "text": "={{ $('Build Attorney Nudge Email Content').item.json.message }}",
+        "text": "={{ $('Build Attorney Nudge Email').item.json.message }}",
         "options": {},
-        "html": "={{ $('Build Attorney Nudge Email Content').item.json.email_html }}"
+        "html": "={{ $('Build Attorney Nudge Email').item.json.email_html }}"
       },
       "id": "6100aa00-0061-4000-a000-000000000027",
       "name": "Send Attorney Nudge Email",
@@ -727,7 +775,7 @@
       "typeVersion": 2,
       "position": [
         2016,
-        864
+        896
       ],
       "notes": "Delivers the reminder to the attorney directly. Reads all fields explicitly from 'Build Attorney Nudge Email' — the guardrail call immediately upstream replaced the item's json.\n\nCredential: same 'Email account (SMTP)' credential as the rest of this workflow.",
       "credentials": {
@@ -740,7 +788,7 @@
   ],
   "active": false,
   "pinData": {
-    "When Monthly Pre-Bill Compilation Runs": [
+    "When Monthly Pre-Bill Runs": [
       {
         "json": {
           "timestamp": "2026-08-25T08:00:00.000Z",
@@ -748,7 +796,7 @@
         }
       }
     ],
-    "Fetch Draft Pre-Bills From Clio": [
+    "Fetch Draft Pre-Bills From Clio API": [
       {
         "json": {
           "data": [
@@ -876,18 +924,18 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "When Monthly Pre-Bill Compilation Runs": {
+    "When Monthly Pre-Bill Runs": {
       "main": [
         [
           {
-            "node": "Fetch Draft Pre-Bills From Clio",
+            "node": "Fetch Draft Pre-Bills From Clio API",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Draft Pre-Bills From Clio": {
+    "Fetch Draft Pre-Bills From Clio API": {
       "main": [
         [
           {
@@ -920,7 +968,7 @@
         ],
         [
           {
-            "node": "Skip When No Draft Pre-Bills",
+            "node": "Skip If No Draft Pre-Bills",
             "type": "main",
             "index": 0
           }
@@ -938,18 +986,18 @@
         ]
       ]
     },
-    "Build Pre-Bill Review Email Content": {
+    "Build Pre-Bill Review Email": {
       "main": [
         [
           {
-            "node": "Log Pre-Bill Routing Workflow",
+            "node": "Log Pre-Bill Routing Event",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Pre-Bill Routing Workflow": {
+    "Log Pre-Bill Routing Event": {
       "main": [
         [
           {
@@ -1004,7 +1052,7 @@
         ],
         [
           {
-            "node": "Skip When No Pre-Bills Due",
+            "node": "Skip If No Pre-Bills Due",
             "type": "main",
             "index": 0
           }
@@ -1055,14 +1103,14 @@
       "main": [
         [
           {
-            "node": "Log Partner Escalation Workflow",
+            "node": "Log Partner Escalation Event",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Partner Escalation Workflow": {
+    "Log Partner Escalation Event": {
       "main": [
         [
           {
@@ -1077,25 +1125,25 @@
       "main": [
         [
           {
-            "node": "Build Attorney Nudge Email Content",
+            "node": "Build Attorney Nudge Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Attorney Nudge Email Content": {
+    "Build Attorney Nudge Email": {
       "main": [
         [
           {
-            "node": "Log Attorney Nudge Workflow",
+            "node": "Log Attorney Nudge Event",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Attorney Nudge Workflow": {
+    "Log Attorney Nudge Event": {
       "main": [
         [
           {
@@ -1110,36 +1158,36 @@
       "main": [
         [
           {
-            "node": "Generate Priority Insight",
+            "node": "Post Priority Insight Request",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate Priority Insight": {
+    "Post Priority Insight Request": {
       "main": [
         [
           {
-            "node": "Extract Priority Insight",
+            "node": "Parse Priority Insight Response",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Extract Priority Insight",
+            "node": "Parse Priority Insight Response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract Priority Insight": {
+    "Parse Priority Insight Response": {
       "main": [
         [
           {
-            "node": "Build Pre-Bill Review Email Content",
+            "node": "Build Pre-Bill Review Email",
             "type": "main",
             "index": 0
           }
