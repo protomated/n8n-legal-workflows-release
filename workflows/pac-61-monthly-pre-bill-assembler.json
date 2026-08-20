@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Monthly Pre-Bill Assembler\n\n### How it works\n\n1. The workflow compiles draft pre-bills monthly, grouping them by responsible attorney and sending review emails.\n2. It conditionally processes drafts only if they exist and logs the routing for audit.\n3. A daily process fetches outstanding draft pre-bills, filtering them by age for nudging or escalation.\n4. Depending on the urgency, it groups pre-bills for either attorney nudges or partner escalations, building corresponding email content.\n5. The workflow logs each nudge or escalation event and sends the appropriate reminder or escalation emails via email nodes.\n\n### Setup steps\n\n- [ ] Configure credentials for Clio API access with the CLIO_BASE_URL variable set appropriately.\n- [ ] Set up email sending credentials for the emailSend nodes to dispatch emails.\n- [ ] Verify and configure any sub-workflows used in executeWorkflow nodes to ensure proper logging and workflow chaining.\n\n### Customization\n\nThe code nodes that build email content and group pre-bills can be customized to alter messaging or grouping logic. Scheduling triggers can be adjusted for timing preferences.",
+        "content": "## Monthly Pre-Bill Assembler\n\n### How it works\n\n1. The workflow compiles draft pre-bills monthly, grouping them by responsible attorney.\n2. Claude adds a short, dollar-and-age-only priority tip to each attorney's list (never legal commentary — falls back to no tip if the AI call fails, so it never blocks the email).\n3. A styled review email is built, logged for audit, and sent to each attorney.\n4. A daily process fetches outstanding draft pre-bills, computes each one's own age, and filters to whatever hit a reminder/urgent/overdue threshold today.\n5. Reminder/urgent-tier bills route to a styled attorney nudge; overdue-tier bills route to a styled managing-partner escalation instead — grouped by attorney either way, one email per person per run.\n\n### Setup steps\n\n- [ ] Configure Clio API credentials with the CLIO_BASE_URL variable set appropriately.\n- [ ] Configure an Anthropic API key credential for the priority-tip generator (reuse from another deployed template if you have one).\n- [ ] Set up SMTP credentials for the emailSend nodes to dispatch emails.\n- [ ] Point the executeWorkflow nodes at your Bar-Compliance Guardrail (NTC-33) via GUARDRAIL_WORKFLOW_ID.\n\n### Customization\n\nThe code nodes that build email content and group pre-bills can be customized to alter messaging or grouping logic. Scheduling triggers can be adjusted for timing preferences.",
         "width": 480,
         "height": 896
       },
@@ -35,8 +35,8 @@
     },
     {
       "parameters": {
-        "content": "## Monthly pre-bill processing and emailing\n\nProcesses draft pre-bills if they exist, builds review email content, logs workflow, and sends emails to attorneys.",
-        "width": 864,
+        "content": "## Monthly pre-bill processing and emailing\n\nProcesses draft pre-bills if they exist, adds a Claude-generated priority tip, builds a styled review email, logs the workflow, and sends it to each attorney.",
+        "width": 1700,
         "height": 496,
         "color": 7
       },
@@ -177,7 +177,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Groups draft pre-bills by the matter's responsible attorney -- each attorney gets one review\n// email listing everything they need to review this cycle, rather than one email per bill.\nconst bills = $input.first().json.data || [];\nconst groups = {};\n\nfor (const bill of bills) {\n  const attorney = (bill.matter && bill.matter.responsible_attorney) || {};\n  const key = attorney.email || 'unassigned';\n  if (!groups[key]) {\n    groups[key] = { attorney_name: attorney.name || 'Unassigned', attorney_email: attorney.email || '', bills: [] };\n  }\n  groups[key].bills.push({\n    bill_id: bill.id,\n    bill_number: bill.number || '',\n    total: Number(bill.total || 0),\n    matter_ref: (bill.matter && bill.matter.display_number) || '',\n    matter_description: (bill.matter && bill.matter.description) || '',\n    client_name: (bill.client && bill.client.name) || '',\n  });\n}\n\nconst unassigned_count = (groups['unassigned'] || { bills: [] }).bills.length;\nconst attorney_groups = Object.entries(groups)\n  .filter(([key]) => key !== 'unassigned')\n  .map(([, g]) => g);\n\nreturn [{ json: {\n  attorney_groups,\n  has_draft_prebills: attorney_groups.length > 0,\n  unassigned_count,\n} }];"
+        "jsCode": "// Groups draft pre-bills by the matter's responsible attorney -- each attorney gets one review\n// email listing everything they need to review this cycle, rather than one email per bill.\nconst bills = $input.first().json.data || [];\nconst groups = {};\n\nfor (const bill of bills) {\n  const attorney = (bill.matter && bill.matter.responsible_attorney) || {};\n  const key = attorney.email || 'unassigned';\n  if (!groups[key]) {\n    groups[key] = { attorney_name: attorney.name || 'Unassigned', attorney_email: attorney.email || '', bills: [] };\n  }\n  groups[key].bills.push({\n    bill_id: bill.id,\n    bill_number: bill.number || '',\n    total: Number(bill.total || 0),\n    matter_ref: (bill.matter && bill.matter.display_number) || '',\n    matter_description: (bill.matter && bill.matter.description) || '',\n    client_name: (bill.client && bill.client.name) || '',\n    created_at: bill.created_at || '',\n  });\n}\n\nconst unassigned_count = (groups['unassigned'] || { bills: [] }).bills.length;\nconst attorney_groups = Object.entries(groups)\n  .filter(([key]) => key !== 'unassigned')\n  .map(([, g]) => g);\n\nreturn [{ json: {\n  attorney_groups,\n  has_draft_prebills: attorney_groups.length > 0,\n  unassigned_count,\n} }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000003",
       "name": "Group Draft Pre-Bills By Attorney",
@@ -253,17 +253,83 @@
     },
     {
       "parameters": {
-        "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\nconst REMINDER_DAYS = $vars.FIRM_PREBILL_REMINDER_DAYS || '5';\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst lines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)}${b.matter_description ? ' (' + b.matter_description + ')' : ''}`);\n\nconst subject = `${bills.length} pre-bill(s) ready for your review`;\nconst body = `Hi ${item.attorney_name},\n\nYou have ${bills.length} draft pre-bill(s) ready for your review this cycle (total $${total.toFixed(2)}):\n\n${lines.join('\\n')}\n\nReview, edit, and finalize each one directly in Clio:\n${BILLING_URL}\n\nPlease review these promptly — an automatic reminder will follow for anything still outstanding after ${REMINDER_DAYS} days.\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
+        "jsCode": "// Builds a short, purely operational prioritization tip via Claude -- never legal commentary,\n// just \"which of these is worth tackling first\" based on dollar amount and how long each has\n// been sitting in draft. Failure anywhere downstream falls back to no insight line; it's a\n// bonus on top of the review list, never a blocker for the email itself.\nconst item = $input.first().json;\nconst bills = item.bills;\n\nconst billLines = bills.map(b => {\n  const opened = b.created_at ? new Date(b.created_at) : null;\n  const daysOpen = opened ? Math.floor((Date.now() - opened.getTime()) / 86400000) : null;\n  return `- ${b.matter_ref}: $${b.total.toFixed(2)}${daysOpen !== null ? `, opened ${daysOpen} day(s) ago` : ''}`;\n}).join('\\n');\n\nconst prompt = `You are an internal billing operations assistant for a law firm -- not a legal assistant. You never comment on case merits, legal strategy, or client matters in a legal sense. You only look at dollar amounts and how long a bill has been sitting unreviewed.\n\nAn attorney has these draft pre-bills waiting for review:\n${billLines}\n\nWrite ONE short, friendly sentence (under 180 characters) suggesting which to review first, based only on amount and age. No legal commentary of any kind.\n\nReturn ONLY a valid JSON object, no markdown fences:\n{\"insight\": \"...\", \"is_operational_safe\": true}\n\nIf you cannot produce a purely operational, non-legal sentence, return only: {\"is_operational_safe\": false, \"safety_note\": \"brief reason\"}`;\n\nreturn [{ json: {\n  ...item,\n  claude_request: {\n    model: 'claude-sonnet-4-6',\n    max_tokens: 300,\n    messages: [{ role: 'user', content: prompt }],\n  },\n} }];"
       },
-      "id": "6100aa00-0061-4000-a000-000000000007",
-      "name": "Build Pre-Bill Review Email Content",
+      "id": "6100aa00-0061-4000-a000-000000000028",
+      "name": "Build Priority Insight Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1120,
         0
       ],
-      "notes": "Builds one review email per attorney listing every draft pre-bill assigned to them, with a direct link into Clio's billing view. This is an internal firm email — no client is ever contacted by this workflow.\n\nFIRM_CLIO_BILLING_URL is optional — falls back to a generic Clio drafts URL if unset. The 'automatic reminder' line references FIRM_PREBILL_REMINDER_DAYS so this email and the nudge phase's actual behavior always say the same number."
+      "notes": "Prepares the prompt for a short, dollar-and-age-only prioritization tip that gets added to the top of the attorney's review email. Explicitly instructed to never comment on case merits or legal strategy -- this is operational billing triage, not legal judgment (ABA Op. 512)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.claude_request) }}",
+        "options": {}
+      },
+      "id": "6100aa00-0061-4000-a000-000000000029",
+      "name": "Generate Priority Insight",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "Calls Claude to generate the priority tip. Errors here (missing credential, rate limit, network) are caught and continue down the error output rather than failing the whole compile run -- 'Extract Priority Insight' treats a failure the same as an empty response and just omits the tip.\n\nCredential: reuse your existing 'Anthropic API key' credential if PAC-31, PAC-50, PAC-60, or PAC-62 is already deployed. Otherwise: Credentials → New → Header Auth → Header Name x-api-key, Header Value your key from console.anthropic.com.",
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "Anthropic API key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recovers the original item (attorney_name, bills, etc.) via node reference, since this node's\n// own $json is either Claude's raw response or an error object depending on which output fired\n// on 'Generate Priority Insight'. Any failure here (API error, bad JSON, safety flag, keyword\n// match) falls back to insight: '' -- the review email always sends; the AI tip is a bonus,\n// never a blocker.\nconst item = $('Build Priority Insight Prompt').item.json;\nconst raw = $input.first().json;\n\nfunction withInsight(insight) {\n  const { claude_request, ...rest } = item;\n  return [{ json: { ...rest, priority_insight: insight } }];\n}\n\nconst rawText = (raw.content && raw.content[0] && raw.content[0].text) ? raw.content[0].text.trim() : '';\nif (!rawText) return withInsight('');\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```(?:json)?\\n?/, '').replace(/\\n?```$/, '');\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  return withInsight('');\n}\n\nif (parsed.is_operational_safe === false) return withInsight('');\n\nlet insight = String(parsed.insight || '').trim();\nif (!insight) return withInsight('');\n\n// Post-hoc keyword scan -- same \"operational only\" guardrail used across this catalog's\n// AI-enriched templates (PAC-60, PAC-62). Catches legal-sounding language Claude didn't self-flag.\nconst UNSAFE_RE = /\\b(attorney.client|work.product|privileged|legal.advice|legal.opinion|you should|we advise|we recommend|pursuant to|under\\s+[§\\d]|case law|statute|court held|court ruled|ruling|liable|liability|negligence)\\b/i;\nif (UNSAFE_RE.test(insight)) return withInsight('');\n\nif (insight.length > 180) insight = insight.slice(0, 179) + '…';\n\nreturn withInsight(insight);"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000030",
+      "name": "Extract Priority Insight",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Two-layer safety check on the AI tip, same pattern as PAC-60/PAC-62: Claude's own is_operational_safe self-report, then an independent keyword scan for legal-sounding language. Either layer failing -- or the API call itself failing -- just means no tip line, never a blocked email."
+    },
+    {
+      "parameters": {
+        "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\nconst REMINDER_DAYS = $vars.FIRM_PREBILL_REMINDER_DAYS || '5';\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n}\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst textLines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)}${b.matter_description ? ' (' + b.matter_description + ')' : ''}`);\n\nconst insightHtml = item.priority_insight ? `\n    <div style=\"background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:14px 16px;margin-bottom:22px;\">\n      <div style=\"font-size:11px;font-weight:700;color:#0e7490;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;\">Priority tip</div>\n      <div style=\"color:#155e75;font-size:14px;\">${escapeHtml(item.priority_insight)}</div>\n    </div>` : '';\n\nconst rowsHtml = bills.map(b => `\n    <div style=\"border-bottom:1px solid #e2e8f0;padding:12px 0;\">\n      <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(b.matter_ref)} — ${escapeHtml(b.client_name)}</div>\n      ${b.matter_description ? `<div style=\"font-size:13px;color:#64748b;\">${escapeHtml(b.matter_description)}</div>` : ''}\n      <div style=\"font-size:14px;color:#0f172a;font-weight:600;margin-top:2px;\">$${b.total.toFixed(2)}</div>\n    </div>`).join('');\n\nconst subject = `${bills.length} pre-bill(s) ready for your review`;\n\nconst bodyHtml = `\n    <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">Hi ${escapeHtml(item.attorney_name)}, you have ${bills.length} draft pre-bill(s) ready for your review (total $${total.toFixed(2)}):</div>\n    ${insightHtml}\n    ${rowsHtml}\n    <a href=\"${BILLING_URL}\" style=\"display:inline-block;background:#02BDAD;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:6px;margin-top:22px;\">Review in Clio →</a>\n    <div style=\"margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\">Please review these promptly — an automatic reminder follows for anything still outstanding after ${REMINDER_DAYS} days.</div>`;\n\nconst textBody = `Hi ${item.attorney_name},\n\nYou have ${bills.length} draft pre-bill(s) ready for your review this cycle (total $${total.toFixed(2)}):\n\n${item.priority_insight ? 'Priority tip: ' + item.priority_insight + '\\n\\n' : ''}${textLines.join('\\n')}\n\nReview, edit, and finalize each one directly in Clio:\n${BILLING_URL}\n\nPlease review these promptly — an automatic reminder will follow for anything still outstanding after ${REMINDER_DAYS} days.\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: textBody,\n  email_html: emailShell('#02BDAD', 'Monthly Pre-Bill Review', subject, bodyHtml),\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
+      },
+      "id": "6100aa00-0061-4000-a000-000000000007",
+      "name": "Build Pre-Bill Review Email Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "Builds one styled review email per attorney listing every draft pre-bill assigned to them, with a Claude-generated priority tip at the top (falls back to no tip if the AI call didn't produce one) and a direct link into Clio's billing view. This is an internal firm email — no client is ever contacted by this workflow.\n\nFIRM_CLIO_BILLING_URL is optional — falls back to a generic Clio drafts URL if unset. The 'automatic reminder' line references FIRM_PREBILL_REMINDER_DAYS so this email and the nudge phase's actual behavior always say the same number."
     },
     {
       "parameters": {
@@ -293,7 +359,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        1344,
+        2016,
         0
       ],
       "notes": "Logs the routing event to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33). This is internal record-keeping, not a message to a client — opt-out checking doesn't apply here, same as PAC-18's partner escalation and PAC-59/60's internal notifications.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable."
@@ -303,16 +369,17 @@
         "fromEmail": "={{ $('Build Pre-Bill Review Email Content').item.json.from_email }}",
         "toEmail": "={{ $('Build Pre-Bill Review Email Content').item.json.recipient }}",
         "subject": "={{ $('Build Pre-Bill Review Email Content').item.json.subject }}",
-        "emailType": "text",
+        "emailType": "html",
         "text": "={{ $('Build Pre-Bill Review Email Content').item.json.message }}",
-        "options": {}
+        "options": {},
+        "html": "={{ $('Build Pre-Bill Review Email Content').item.json.email_html }}"
       },
       "id": "6100aa00-0061-4000-a000-000000000009",
       "name": "Send Pre-Bill Review Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        1568,
+        2240,
         0
       ],
       "notes": "Delivers the review bundle to the attorney. Reads all fields explicitly from 'Build Pre-Bill Review Email' rather than $json — the guardrail call immediately upstream replaced the item's json with its own response.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
@@ -512,7 +579,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst PARTNER_EMAIL = $vars.FIRM_PARTNER_EMAIL;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\n\nif (!PARTNER_EMAIL) throw new Error('FIRM_PARTNER_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst lines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)} — in draft ${b.days_in_draft} day(s)`);\n\nconst subject = `${item.attorney_name} has ${bills.length} pre-bill(s) stuck in draft`;\nconst body = `${item.attorney_name} (${item.attorney_email}) has ${bills.length} draft pre-bill(s) that have been sitting unreviewed for a while (total $${total.toFixed(2)}):\n\n${lines.join('\\n')}\n\nReview directly in Clio:\n${BILLING_URL}\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: PARTNER_EMAIL,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
+        "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst PARTNER_EMAIL = $vars.FIRM_PARTNER_EMAIL;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\n\nif (!PARTNER_EMAIL) throw new Error('FIRM_PARTNER_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n}\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst textLines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)} — in draft ${b.days_in_draft} day(s)`);\n\nconst rowsHtml = bills.map(b => `\n    <div style=\"border-bottom:1px solid #e2e8f0;padding:12px 0;\">\n      <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(b.matter_ref)} — ${escapeHtml(b.client_name)}</div>\n      <div style=\"font-size:13px;color:#64748b;\">In draft ${b.days_in_draft} day(s) — $${b.total.toFixed(2)}</div>\n    </div>`).join('');\n\nconst subject = `${item.attorney_name} has ${bills.length} pre-bill(s) stuck in draft`;\n\nconst bodyHtml = `\n    <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">${escapeHtml(item.attorney_name)} (${escapeHtml(item.attorney_email)}) has ${bills.length} draft pre-bill(s) that have been sitting unreviewed for a while (total $${total.toFixed(2)}):</div>\n    ${rowsHtml}\n    <a href=\"${BILLING_URL}\" style=\"display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:6px;margin-top:22px;\">Review in Clio →</a>`;\n\nconst textBody = `${item.attorney_name} (${item.attorney_email}) has ${bills.length} draft pre-bill(s) that have been sitting unreviewed for a while (total $${total.toFixed(2)}):\n\n${textLines.join('\\n')}\n\nReview directly in Clio:\n${BILLING_URL}\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: PARTNER_EMAIL,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: textBody,\n  email_html: emailShell('#dc2626', 'Escalation', subject, bodyHtml),\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000021",
       "name": "Build Partner Escalation Email",
@@ -522,7 +589,7 @@
         1568,
         528
       ],
-      "notes": "Builds the escalation email for the managing partner — same 'internal email, bypass client-facing guardrail approval' pattern as PAC-18's 60-day overdue-invoice escalation. FIRM_PARTNER_EMAIL reuses the same n8n Variable PAC-18 already uses, so if that template is deployed this needs no new configuration."
+      "notes": "Builds the styled escalation email for the managing partner — same 'internal email, bypass client-facing guardrail approval' pattern as PAC-18's 60-day overdue-invoice escalation. FIRM_PARTNER_EMAIL reuses the same n8n Variable PAC-18 already uses, so if that template is deployed this needs no new configuration."
     },
     {
       "parameters": {
@@ -562,9 +629,10 @@
         "fromEmail": "={{ $('Build Partner Escalation Email').item.json.from_email }}",
         "toEmail": "={{ $('Build Partner Escalation Email').item.json.recipient }}",
         "subject": "={{ $('Build Partner Escalation Email').item.json.subject }}",
-        "emailType": "text",
+        "emailType": "html",
         "text": "={{ $('Build Partner Escalation Email').item.json.message }}",
-        "options": {}
+        "options": {},
+        "html": "={{ $('Build Partner Escalation Email').item.json.email_html }}"
       },
       "id": "6100aa00-0061-4000-a000-000000000023",
       "name": "Send Partner Escalation Email",
@@ -598,7 +666,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\n\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst lines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)} — in draft ${b.days_in_draft} day(s)`);\n\n// This attorney's bills can be a mix of 'reminder' and 'urgent' tier -- label the email by the\n// most urgent tier present so the subject reflects the most pressing item.\nconst mostUrgent = bills.some(b => b.tier === 'urgent') ? 'urgent' : 'reminder';\nconst TIER_COPY = { reminder: 'A friendly nudge', urgent: 'An urgent reminder' };\n\nconst subject = `${TIER_COPY[mostUrgent]}: ${bills.length} pre-bill(s) still need your review`;\nconst body = `Hi ${item.attorney_name},\n\nYou have ${bills.length} draft pre-bill(s) still waiting for your review (total $${total.toFixed(2)}):\n\n${lines.join('\\n')}\n\nReview and finalize in Clio:\n${BILLING_URL}\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
+        "jsCode": "const FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst BILLING_URL = $vars.FIRM_CLIO_BILLING_URL || 'https://app.clio.com/bills?status=draft';\n\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n}\n\nconst item = $input.first().json;\nconst bills = item.bills;\nconst total = bills.reduce((s, b) => s + b.total, 0);\nconst textLines = bills.map(b => `  • ${b.matter_ref} — ${b.client_name} — $${b.total.toFixed(2)} — in draft ${b.days_in_draft} day(s)`);\n\n// This attorney's bills can be a mix of 'reminder' and 'urgent' tier -- label the email by the\n// most urgent tier present so the subject and header color reflect the most pressing item.\nconst mostUrgent = bills.some(b => b.tier === 'urgent') ? 'urgent' : 'reminder';\nconst TIER_COPY = { reminder: 'A friendly nudge', urgent: 'An urgent reminder' };\nconst headerColor = mostUrgent === 'urgent' ? '#ea580c' : '#f59e0b';\n\nconst rowsHtml = bills.map(b => `\n    <div style=\"border-bottom:1px solid #e2e8f0;padding:12px 0;\">\n      <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(b.matter_ref)} — ${escapeHtml(b.client_name)}</div>\n      <div style=\"font-size:13px;color:#64748b;\">In draft ${b.days_in_draft} day(s) — $${b.total.toFixed(2)}</div>\n    </div>`).join('');\n\nconst subject = `${TIER_COPY[mostUrgent]}: ${bills.length} pre-bill(s) still need your review`;\n\nconst bodyHtml = `\n    <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">Hi ${escapeHtml(item.attorney_name)}, you have ${bills.length} draft pre-bill(s) still waiting for your review (total $${total.toFixed(2)}):</div>\n    ${rowsHtml}\n    <a href=\"${BILLING_URL}\" style=\"display:inline-block;background:${headerColor};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:6px;margin-top:22px;\">Review and finalize in Clio →</a>`;\n\nconst textBody = `Hi ${item.attorney_name},\n\nYou have ${bills.length} draft pre-bill(s) still waiting for your review (total $${total.toFixed(2)}):\n\n${textLines.join('\\n')}\n\nReview and finalize in Clio:\n${BILLING_URL}\n\n— ${FIRM_NAME} Billing System`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: textBody,\n  email_html: emailShell(headerColor, TIER_COPY[mostUrgent], subject, bodyHtml),\n  template_id: 'PAC-61',\n  matter_id: '',\n} }];"
       },
       "id": "6100aa00-0061-4000-a000-000000000025",
       "name": "Build Attorney Nudge Email Content",
@@ -608,7 +676,7 @@
         1568,
         864
       ],
-      "notes": "Builds the reminder email for attorneys with 'reminder' and/or 'urgent' tier bills — tone escalates slightly based on the most urgent bill present, same idea as PAC-18's day1→day30 tone ladder."
+      "notes": "Builds the styled reminder email for attorneys with 'reminder' and/or 'urgent' tier bills — header color and subject escalate based on the most urgent bill present, same idea as PAC-18's day1→day30 tone ladder."
     },
     {
       "parameters": {
@@ -648,9 +716,10 @@
         "fromEmail": "={{ $('Build Attorney Nudge Email Content').item.json.from_email }}",
         "toEmail": "={{ $('Build Attorney Nudge Email Content').item.json.recipient }}",
         "subject": "={{ $('Build Attorney Nudge Email Content').item.json.subject }}",
-        "emailType": "text",
+        "emailType": "html",
         "text": "={{ $('Build Attorney Nudge Email Content').item.json.message }}",
-        "options": {}
+        "options": {},
+        "html": "={{ $('Build Attorney Nudge Email Content').item.json.email_html }}"
       },
       "id": "6100aa00-0061-4000-a000-000000000027",
       "name": "Send Attorney Nudge Email",
@@ -862,7 +931,7 @@
       "main": [
         [
           {
-            "node": "Build Pre-Bill Review Email Content",
+            "node": "Build Priority Insight Prompt",
             "type": "main",
             "index": 0
           }
@@ -1031,6 +1100,46 @@
         [
           {
             "node": "Send Attorney Nudge Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Priority Insight Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Priority Insight",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Priority Insight": {
+      "main": [
+        [
+          {
+            "node": "Extract Priority Insight",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Priority Insight",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Priority Insight": {
+      "main": [
+        [
+          {
+            "node": "Build Pre-Bill Review Email Content",
             "type": "main",
             "index": 0
           }
