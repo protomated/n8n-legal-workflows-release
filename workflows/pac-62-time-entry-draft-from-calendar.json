@@ -1,0 +1,1290 @@
+{
+  "name": "Time-Entry Draft from Calendar",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Time-Entry Draft from Calendar\n\n### How it works\n\n1. Every morning, reads yesterday's calendar events and picks out the ones tagged with a matter reference — type the Clio matter's display number in square brackets anywhere in the event title, e.g. '[2026-CH-042] Settlement call with opposing counsel'. Untagged events (lunch, personal appointments, internal standups) are never touched.\n2. Looks up each matter reference in Clio. If it doesn't match a real matter, that event is flagged in the digest for manual entry instead of guessed.\n3. Claude drafts a factual billing narrative using ONLY the event's title, description, attendees, and duration — never anything from a linked document or email body. An independent keyword scan re-checks the draft before it's allowed into the digest.\n4. One digest email goes out listing every draft, each with an Approve button. Nothing is logged to Clio until the attorney clicks it.\n5. Approving is a two-step confirmation (click → review page → confirm), not a single one-click link — a bare GET link would let email security scanners that pre-fetch links (Microsoft Defender, Proofpoint, etc.) accidentally create real billable time entries nobody actually approved.\n\n### Setup steps\n\n- [ ] Set CLIO_BASE_URL and connect the Clio OAuth2 credential (reuse if already deployed for PAC-18/20/55/57/58/59/61).\n- [ ] Connect a Google Calendar OAuth2 credential and set FIRM_ATTORNEY_CALENDAR_ID (use 'primary' for the connected account's own calendar).\n- [ ] Set FIRM_ATTORNEY_CLIO_USER_ID to the attorney's Clio user ID (Clio → Settings → Users) — this attributes created time entries to the right person.\n- [ ] Set FIRM_ATTORNEY_EMAIL (digest recipient), FIRM_NAME, FIRM_FROM_EMAIL, and GUARDRAIL_WORKFLOW_ID.\n- [ ] Get an Anthropic API key and connect it as a Header Auth credential (reuse from PAC-31/50/60 if already deployed).\n- [ ] Connect the SMTP credential.\n- [ ] Multi-attorney firms: deploy one copy of this workflow per attorney (separate calendar, Clio user ID, and digest recipient each time).\n\n### Customization\n\nAdjust the narrative style or length limit directly in 'Build Time Entry Narrative Prompt'. The bracket convention itself can be changed in 'Extract Billable Events With Matter Reference' if your firm prefers a different tag format.",
+        "width": 480,
+        "height": 1040
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -500
+      ],
+      "id": "sticky-main",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Fetch and filter yesterday's events\n\nPulls yesterday's calendar events and keeps only the ones with a '[matter-ref]' tag in the title — that tag is the entire filter, so nothing else needs a keyword blocklist.",
+        "width": 1120,
+        "height": 420,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -160
+      ],
+      "id": "sticky-1",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Match to a Clio matter\n\nLooks up each tagged reference in Clio. A reference that doesn't match a real matter is flagged for manual entry rather than guessed at.",
+        "width": 896,
+        "height": 420,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -160
+      ],
+      "id": "sticky-2",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Draft and safety-check the narrative\n\nClaude drafts a factual billing narrative from calendar metadata only, then an independent keyword scan re-checks it before it's allowed into the digest — same two-layer approach as PAC-31/50/60.",
+        "width": 1120,
+        "height": 420,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2064,
+        -160
+      ],
+      "id": "sticky-3",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Compile and send the digest\n\nCombines every event's outcome (ready to approve, flagged, or unmatched) into one daily email with an Approve link per entry.",
+        "width": 900,
+        "height": 420,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3232,
+        -160
+      ],
+      "id": "sticky-4",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Approve — step 1 of 2\n\nClicking Approve in the email opens a review page instead of immediately creating the entry — this is what stops email security scanners that pre-fetch links from accidentally approving something nobody actually reviewed.",
+        "width": 900,
+        "height": 340,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        480
+      ],
+      "id": "sticky-5",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Approve — step 2 of 2\n\nOnly a real button click (a POST, not a pre-fetchable GET) reaches this webhook and actually creates the Clio time entry.",
+        "width": 1344,
+        "height": 340,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        480
+      ],
+      "id": "sticky-6",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000001",
+      "name": "Daily Time Entry Digest Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Fires every morning at 7am (n8n server timezone) and covers all of the previous calendar day — running daily (including weekends) rather than weekday-only means a Monday run still picks up anything from Sunday, and nothing is ever skipped because of which day it happened to fall on.\n\nThis is the only thing that starts a digest run."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the UTC start/end of yesterday for the Calendar API's timeMin/timeMax. Server\n// timezone dependent, same caveat as every other date-boundary calculation in this catalog --\n// if your n8n server isn't in the firm's own timezone, events right at midnight can land in\n// the wrong day's digest. Confirm your n8n server timezone matches (or is close enough to) the\n// firm's if this matters for your deployment.\nconst now = new Date();\nconst yesterday = new Date(now);\nyesterday.setUTCDate(yesterday.getUTCDate() - 1);\n\nconst start = new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate(), 0, 0, 0));\nconst end = new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate(), 23, 59, 59));\n\nreturn [{ json: {\n  time_min: start.toISOString(),\n  time_max: end.toISOString(),\n  entry_date: start.toISOString().slice(0, 10),\n} }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000002",
+      "name": "Compute Yesterday Date Range",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "entry_date is used later as the date on the Clio time entry itself — it's yesterday's calendar date, not today's (the day the digest actually arrives)."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ $vars.FIRM_ATTORNEY_CALENDAR_ID || 'primary' }}/events",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeMin",
+              "value": "={{ $json.time_min }}"
+            },
+            {
+              "name": "timeMax",
+              "value": "={{ $json.time_max }}"
+            },
+            {
+              "name": "singleEvents",
+              "value": "true"
+            },
+            {
+              "name": "orderBy",
+              "value": "startTime"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6200aa00-0062-4000-a000-000000000003",
+      "name": "Fetch Yesterdays Calendar Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Reads yesterday's events from the connected Google Calendar — same Calendar API and 'Predefined Credential Type' / googleCalendarOAuth2Api pattern the Court Deadline Calculator (NTC-16) already uses for writing events, just GET instead of POST.\n\nCredential: project → Credentials tab → New → search 'Google Calendar OAuth2 API' → connect the attorney's Google account → save as 'Google Calendar account' (reuse NTC-16's if already deployed).\n\nFIRM_ATTORNEY_CALENDAR_ID defaults to 'primary' (the connected account's own calendar) — set it to a specific calendar ID/email if the firm uses a shared or delegated calendar instead.",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// The '[matter-ref]' bracket in the event title IS the entire filter -- an attorney opts an\n// event into billing just by tagging it, so no keyword blocklist (lunch/personal/OOO/etc) is\n// needed at all. All-day events are skipped since they carry no meaningful duration.\nconst events = $input.first().json.items || [];\nconst results = [];\n\nfor (const ev of events) {\n  if (!ev.start || !ev.start.dateTime || !ev.end || !ev.end.dateTime) continue; // all-day or malformed\n  const title = String(ev.summary || '');\n  const match = title.match(/\\[([^\\]]+)\\]/);\n  if (!match) continue; // no matter reference tagged -- not billable\n\n  const matter_ref = match[1].trim();\n  const clean_title = title.replace(match[0], '').trim().replace(/^[-–—:]\\s*/, '');\n\n  const start = new Date(ev.start.dateTime);\n  const end = new Date(ev.end.dateTime);\n  const durationHours = Math.round(((end - start) / 3600000) * 10) / 10; // nearest 0.1 hr\n  if (durationHours <= 0) continue;\n\n  const attendees = (ev.attendees || [])\n    .filter(a => !a.self && !a.resource)\n    .map(a => a.displayName || a.email)\n    .filter(Boolean);\n\n  results.push({\n    event_id: ev.id,\n    matter_ref,\n    event_title: clean_title || title,\n    event_description: String(ev.description || '').trim(),\n    attendees,\n    duration_hours: durationHours,\n  });\n}\n\nreturn [{ json: { billable_events: results, has_billable_events: results.length > 0 } }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000004",
+      "name": "Extract Billable Events With Matter Reference",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Any '[...]' bracket found anywhere in the title is treated as the matter reference — put it at the start (e.g. '[2026-CH-042] Client call') for readability, but position doesn't matter to the parser. An event with no bracket, or an all-day event, is silently excluded -- not flagged as an error, since most calendar events are never meant to be billable."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_events",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.has_billable_events }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000005",
+      "name": "If Has Billable Events",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Yes (at least one tagged event yesterday) → process each one.\nNo (nothing tagged — a day with no billable calendar activity, or the attorney forgot to tag anything) → route to Skip.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "6200aa00-0062-4000-a000-000000000006",
+      "name": "Skip No Billable Events Yesterday",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        200
+      ],
+      "notes": "No calendar events were tagged with a matter reference yesterday. No digest sent — an empty digest every day would train the attorney to ignore it."
+    },
+    {
+      "parameters": {
+        "jsCode": "const { billable_events } = $input.first().json;\nconst meta = $('Compute Yesterday Date Range').first().json;\nreturn billable_events.map(ev => ({ json: { ...ev, entry_date: meta.entry_date } }));"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000007",
+      "name": "Split Into One Item Per Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "Fans out into one item per tagged event — everything downstream through the digest email processes one event's draft time entry at a time."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.matter_ref }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description,client{name}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6200aa00-0062-4000-a000-000000000008",
+      "name": "Search Clio Matter By Reference",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "Clio's query parameter is a broad text search, not an exact match — same pattern as PAC-58's contact lookup — the next step filters down to an exact display_number match before trusting anything.\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59/61 — reuse it if already deployed.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "2",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Confirms an exact (case-insensitive) display_number match against Clio's broad search results\n// -- a partial match here risks logging time to the wrong matter, which is worse than flagging\n// it for manual entry.\nconst meta = $('Split Into One Item Per Event').item.json;\nconst response = $input.first().json;\nconst matters = response.data || [];\n\nconst match = matters.find(m => String(m.display_number || '').trim().toLowerCase() === meta.matter_ref.toLowerCase());\n\nreturn [{ json: {\n  ...meta,\n  matter_id: match ? match.id : null,\n  matter_display_number: match ? match.display_number : null,\n  client_name: match && match.client ? match.client.name : '',\n  is_matter_found: !!match,\n} }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000009",
+      "name": "Filter Exact Matter Match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Reads event metadata from 'Split Into One Item Per Event' explicitly, not $json, since the matters.json call above replaced the item's data with its own response."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_matter_found",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_matter_found }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000010",
+      "name": "If Matter Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "Yes (the bracket tag matched exactly one real Clio matter) → draft a narrative.\nNo (no exact match — likely a typo in the tag) → flag it in the digest for manual entry instead of guessing which matter was meant.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{ json: {\n  status: 'unmatched',\n  event_title: item.event_title,\n  matter_ref: item.matter_ref,\n  duration_hours: item.duration_hours,\n  reason: `No Clio matter found matching \"${item.matter_ref}\" — check the tag for a typo and log this one manually.`,\n} }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000011",
+      "name": "Build Unmatched Matter Note",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        200
+      ],
+      "notes": "No Clio API call, no narrative, no approve link — just a note in the digest so the attorney knows this event needs manual attention instead of it silently vanishing."
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst attendeeLine = item.attendees && item.attendees.length\n  ? `Attendees: ${item.attendees.join(', ')}`\n  : 'Attendees: none listed';\n\nconst prompt = `You are drafting a factual time-entry narrative for a law firm's billing records, based ONLY on the calendar information below.\n\nRules you must follow — no exceptions:\n- Use ONLY the information given below. Do not invent case details, legal reasoning, strategy, or outcomes not present in the input.\n- No legal advice, legal opinions, or characterization of the legal merits of anything.\n- Write in standard legal billing-narrative style: concise, factual, professional (e.g. \"Telephone conference with client regarding case status.\" or \"Prepared for and attended settlement conference.\").\n- Maximum 200 characters.\n\nEvent title: ${item.event_title}\nEvent description: ${item.event_description || 'none provided'}\n${attendeeLine}\nDuration: ${item.duration_hours} hour(s)\nMatter: ${item.matter_display_number}${item.client_name ? ' — ' + item.client_name : ''}\n\nReturn ONLY a valid JSON object — no markdown fences, no preamble. Keys required:\n- narrative: the billing narrative described above\n- is_narrative_safe: true\n\nIf you cannot produce a factual narrative without inventing information not given above, return only: {\"is_narrative_safe\": false, \"safety_note\": \"brief reason\"}`;\n\nreturn [{ json: {\n  ...item,\n  claude_request: {\n    model: 'claude-sonnet-4-6',\n    max_tokens: 300,\n    messages: [{ role: 'user', content: prompt }],\n  },\n} }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000012",
+      "name": "Build Time Entry Narrative Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        -160
+      ],
+      "notes": "Deliberately metadata-only — the prompt never has access to a linked document or email body, only what's already visible on the calendar event itself (title, description, attendees, duration). Model: claude-sonnet-4-6; switch to claude-haiku-4-5-20251001 to reduce cost."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.claude_request) }}",
+        "options": {}
+      },
+      "id": "6200aa00-0062-4000-a000-000000000013",
+      "name": "Generate Time Entry Narrative",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2240,
+        -160
+      ],
+      "notes": "Sends the prompt to Claude (Anthropic) and receives the narrative as JSON.\n\nCredential: project → Credentials tab → New → search 'Header Auth' → Name: 'Anthropic API key' → Header Name: 'x-api-key' → Header Value: your key from console.anthropic.com. Reuse the same credential as PAC-31/50/60 if already deployed.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "Anthropic API key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parses Claude's JSON response and runs an independent post-hoc keyword scan -- Claude's\n// self-report is Layer 1, this scan is Layer 2. is_narrative_safe is true only if both pass.\n// References 'Build Time Entry Narrative Prompt' for the event's metadata.\nconst prep = $('Build Time Entry Narrative Prompt').item.json;\n\nconst rawResponse = $input.first().json;\nconst rawText = (rawResponse.content && rawResponse.content[0] && rawResponse.content[0].text)\n  ? rawResponse.content[0].text.trim()\n  : '';\n\nif (!rawText) {\n  throw new Error('Claude API returned an empty response. Check the Anthropic API key, usage quota, and rate limits at console.anthropic.com.');\n}\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```(?:json)?\\n?/, '').replace(/\\n?```$/, '');\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Claude did not return valid JSON. Raw response: ' + rawText.slice(0, 400));\n}\n\nfunction flaggedResult(reason) {\n  return [{ json: {\n    status: 'flagged',\n    event_title: prep.event_title,\n    matter_ref: prep.matter_display_number,\n    duration_hours: prep.duration_hours,\n    reason: 'Narrative needs a human rewrite: ' + reason,\n  } }];\n}\n\nif (parsed.is_narrative_safe === false) {\n  return flaggedResult(parsed.safety_note || 'Claude flagged this narrative as unsafe to generate.');\n}\n\nlet narrative = String(parsed.narrative || '').trim();\n\n// Post-hoc keyword scan -- catches legal-advice-sounding language that slipped past Claude's\n// self-check, same pattern as PAC-31/50/60.\nconst UNSAFE_RE = /\\b(attorney.client|work.product|privileged|legal.advice|legal.opinion|you should|we advise|we recommend|guarantee|will win|malpractice|pursuant to|under\\s+[§\\d]|case law|statute|court held|court ruled|ruling)\\b/i;\n\nif (!narrative) return flaggedResult('Claude returned an empty narrative.');\nif (UNSAFE_RE.test(narrative)) return flaggedResult('Post-hoc scan found legal-advice-sounding language in the draft.');\n\nconst LIMIT = 200;\nif (narrative.length > LIMIT) narrative = narrative.slice(0, LIMIT - 1) + '…';\n\nreturn [{ json: {\n  ...prep,\n  status: 'ready',\n  narrative,\n} }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000014",
+      "name": "Extract And Safety Check Narrative",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        -160
+      ],
+      "notes": "Two-layer safety check, same pattern as PAC-31/50/60: Claude's own self-report is Layer 1, an independent keyword regex scan is Layer 2. Also enforces a 200-character cap so narratives stay concise and don't get silently truncated by Clio's own field limits later."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_is_ready",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "ready"
+            }
+          ]
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000032",
+      "name": "If Narrative Is Ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2688,
+        -160
+      ],
+      "notes": "Yes (both safety layers passed) → build the approve link.\nNo (flagged by either layer) → the item already has everything 'Aggregate Digest Entries' needs (event_title, duration_hours, reason) — it skips straight to the merge with no approve link, since there's nothing safe to approve yet.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the digest line for a ready-to-approve entry, including the Approve link. Every\n// field the confirmation page needs is encoded directly in the URL's query string -- stateless\n// by design, so approving still works correctly even if the digest email sits unread for days\n// and workflow static data was never involved.\nconst item = $input.first().json;\n\nconst params = new URLSearchParams({\n  matter_id: String(item.matter_id),\n  matter_display_number: item.matter_display_number,\n  entry_date: item.entry_date,\n  duration_hours: String(item.duration_hours),\n  narrative: item.narrative,\n  event_title: item.event_title,\n});\nconst approve_url = `${$vars.N8N_PUBLIC_URL || ''}/webhook/approve-time-entry?${params.toString()}`;\n\nreturn [{ json: {\n  status: item.status,\n  event_title: item.event_title,\n  matter_ref: item.matter_display_number,\n  duration_hours: item.duration_hours,\n  narrative: item.narrative,\n  approve_url,\n} }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000015",
+      "name": "Build Approve Link And Digest Entry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        -160
+      ],
+      "notes": "N8N_PUBLIC_URL should be your n8n instance's public base URL (e.g. 'https://your-n8n.example.com', no trailing slash) — needed because this link goes into an email and has to be a full absolute URL, not a relative path. If unset, the link will be missing its domain and won't work; set this Variable before activating."
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "6200aa00-0062-4000-a000-000000000016",
+      "name": "Merge Digest Branches",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        3136,
+        -160
+      ],
+      "notes": "Waits for every event's outcome — unmatched, flagged, or ready to approve — before the digest is assembled. Without this, the digest could be built and sent before every event's branch has finished, silently dropping whichever ran slowest (same risk PAC-57's notes describe for its DocuSign/Google Docs branches)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Runs once for every event's outcome from this run (Run Once for All Items) and builds one\n// digest email covering all of them, grouped by status.\nconst items = $input.all().map(i => i.json);\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst ready = items.filter(i => i.status === 'ready');\nconst needsAttention = items.filter(i => i.status !== 'ready');\n\nconst readyRowsText = ready.map(i => `  • [${i.matter_ref}] ${i.event_title} — ${i.duration_hours}h\\n    \"${i.narrative}\"\\n    Approve: ${i.approve_url}`);\nconst attentionRowsText = needsAttention.map(i => `  • ${i.event_title} — ${i.duration_hours}h — ${i.reason}`);\n\nconst email_subject = `${ready.length} draft time entr${ready.length === 1 ? 'y' : 'ies'} ready for review — ${new Date().toLocaleDateString('en-US')}`;\n\nconst email_body = [\n  `Yesterday's calendar produced ${items.length} tagged event(s).`,\n  '',\n  ready.length > 0 ? `READY TO APPROVE (${ready.length}):` : 'Nothing ready to approve today.',\n  ...readyRowsText,\n  '',\n  needsAttention.length > 0 ? `NEEDS ATTENTION (${needsAttention.length}):` : '',\n  ...attentionRowsText,\n].filter(l => l !== '').join('\\n');\n\nconst readyRowsHtml = ready.map(i => `\n    <div style=\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px;\">\n      <div style=\"font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;\">[${escapeHtml(i.matter_ref)}] ${escapeHtml(i.duration_hours)}h</div>\n      <div style=\"font-size:14px;color:#0f172a;font-weight:600;margin-bottom:6px;\">${escapeHtml(i.event_title)}</div>\n      <div style=\"font-size:14px;color:#334155;font-style:italic;margin-bottom:10px;\">\"${escapeHtml(i.narrative)}\"</div>\n      <a href=\"${i.approve_url}\" style=\"display:inline-block;background:#02BDAD;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 16px;border-radius:6px;\">Review & Approve →</a>\n    </div>`).join('');\n\nconst attentionRowsHtml = needsAttention.map(i => `\n    <div style=\"border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:12px;\">\n      <div style=\"font-size:14px;color:#0f172a;font-weight:600;margin-bottom:4px;\">${escapeHtml(i.event_title)} — ${escapeHtml(i.duration_hours)}h</div>\n      <div style=\"font-size:13px;color:#92400e;\">${escapeHtml(i.reason)}</div>\n    </div>`).join('');\n\nconst email_html = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:#02BDAD;padding:28px 32px;\">\n      <div style=\"color:#e6fffb;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;\">Daily Time Entry Digest</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;\">${items.length} tagged event(s) from yesterday</div>\n    </div>\n    <div style=\"padding:28px 32px;\">\n      ${ready.length > 0 ? `<div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;\">Ready To Approve</div>${readyRowsHtml}` : ''}\n      ${needsAttention.length > 0 ? `<div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin:20px 0 12px;\">Needs Attention</div>${attentionRowsHtml}` : ''}\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { email_subject, email_body, email_html, ready_count: ready.length, flagged_count: needsAttention.length } }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000017",
+      "name": "Aggregate Digest Entries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        -160
+      ],
+      "notes": "Splits every event's outcome into a 'Ready To Approve' section (with working Approve buttons) and a 'Needs Attention' section (unmatched matter tags or flagged narratives, no button since there's nothing to approve yet). Builds both a styled HTML version and a plain-text fallback."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "message": "={{ $json.ready_count + ' ready, ' + $json.flagged_count + ' flagged out of yesterday\\'s tagged calendar events.' }}",
+            "matter_id": "",
+            "recipient": "={{ $vars.FIRM_ATTORNEY_EMAIL }}",
+            "template_id": "PAC-62"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000018",
+      "name": "Log Digest Compilation To Compliance",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3584,
+        -160
+      ],
+      "notes": "Logs the digest compilation to the OPS1 compliance audit sheet. This is internal record-keeping, not a client message — opt-out checking doesn't apply here. The actual time-entry creation gets its own separate audit log entry when approved."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $vars.FIRM_ATTORNEY_EMAIL }}",
+        "subject": "={{ $('Aggregate Digest Entries').item.json.email_subject }}",
+        "html": "={{ $('Aggregate Digest Entries').item.json.email_html }}",
+        "text": "={{ $('Aggregate Digest Entries').item.json.email_body }}",
+        "emailType": "html",
+        "options": {}
+      },
+      "id": "6200aa00-0062-4000-a000-000000000019",
+      "name": "Send Daily Time Entry Digest Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        3808,
+        -160
+      ],
+      "notes": "Delivers the digest to the attorney with both a styled HTML version and a plain-text fallback. Reads explicitly from 'Aggregate Digest Entries' by name rather than $json — the guardrail call immediately upstream replaced the item's json.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
+      "credentials": {
+        "smtp": {
+          "id": "4",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "approve-time-entry",
+        "options": {},
+        "httpMethod": "GET",
+        "responseMode": "responseNode"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000020",
+      "name": "When Approve Link Clicked",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        640
+      ],
+      "notes": "Entry point when the attorney clicks 'Review & Approve' in the digest email. Deliberately does NOT create the time entry on this GET request — it only shows a review page. This is what protects against email security scanners (Microsoft Defender Safe Links, Proofmark, Proofpoint, etc.) that automatically pre-fetch every link in an inbound email — if this step created the entry directly, those scanners would silently 'approve' every draft before the attorney ever saw it.\n\nActivate the workflow, then copy this node's Production URL's domain into the N8N_PUBLIC_URL Variable.",
+      "webhookId": "c2-approve-time-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the review page shown after clicking Approve -- a real form the attorney submits\n// (a POST), not something that happens automatically on page load. Every field needed to\n// create the time entry is carried through as hidden form fields, read straight from this\n// request's own query string -- nothing is looked up or stored between steps.\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst q = $input.first().json.query || {};\nconst required = ['matter_id', 'matter_display_number', 'entry_date', 'duration_hours', 'narrative'];\nconst missing = required.filter(f => !q[f]);\n\nif (missing.length > 0) {\n  return [{ json: { html_response: `<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body style=\"font-family:sans-serif;text-align:center;padding:80px 20px;\"><div style=\"font-size:40px;\">⚠️</div><h2>This link looks broken</h2><p>Missing: ${missing.join(', ')}. Nothing was created.</p></body></html>` } }];\n}\n\nconst hiddenFields = required.map(f => `<input type=\"hidden\" name=\"${f}\" value=\"${escapeHtml(q[f])}\">`).join('\\n');\n\nconst html_response = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:0;\">\n  <div style=\"max-width:480px;margin:60px auto;background:#ffffff;border-radius:12px;padding:36px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:16px;\">Review Time Entry</div>\n    <div style=\"font-size:13px;color:#64748b;margin-bottom:4px;\">Matter</div>\n    <div style=\"font-size:15px;color:#0f172a;font-weight:600;margin-bottom:16px;\">${escapeHtml(q.matter_display_number)}</div>\n    <div style=\"font-size:13px;color:#64748b;margin-bottom:4px;\">Date & Duration</div>\n    <div style=\"font-size:15px;color:#0f172a;margin-bottom:16px;\">${escapeHtml(q.entry_date)} — ${escapeHtml(q.duration_hours)} hour(s)</div>\n    <div style=\"font-size:13px;color:#64748b;margin-bottom:4px;\">Narrative</div>\n    <div style=\"font-size:15px;color:#0f172a;font-style:italic;margin-bottom:24px;padding:12px 14px;background:#f8fafc;border-radius:8px;\">\"${escapeHtml(q.narrative)}\"</div>\n    <form method=\"POST\" action=\"confirm-time-entry\">\n      ${hiddenFields}\n      <button type=\"submit\" style=\"width:100%;background:#02BDAD;color:#ffffff;border:none;font-size:15px;font-weight:600;padding:12px;border-radius:8px;cursor:pointer;\">Confirm & Log This Time Entry</button>\n    </form>\n    <div style=\"font-size:12px;color:#94a3b8;margin-top:16px;text-align:center;\">Nothing has been logged to Clio yet — click the button above to confirm.</div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { html_response } }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000021",
+      "name": "Build Confirmation Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        640
+      ],
+      "notes": "'action=\"confirm-time-entry\"' is a relative URL, resolved by the browser against this page's own address — no need to hardcode the n8n domain a second time here."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html_response }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html"
+              }
+            ]
+          }
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000022",
+      "name": "Respond With Confirmation Page",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        640
+      ],
+      "notes": "Returns the review page. Same pattern as PAC-55's dismiss-confirmation page."
+    },
+    {
+      "parameters": {
+        "path": "confirm-time-entry",
+        "options": {},
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000023",
+      "name": "When Time Entry Confirmed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        672,
+        640
+      ],
+      "notes": "Only a real button click reaches this webhook — the review page's form submits here via POST, which pre-fetch scanners don't do. This is the only place in the whole workflow that actually writes a time entry to Clio.",
+      "webhookId": "c2-confirm-time-entry"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst required = ['matter_id', 'entry_date', 'duration_hours', 'narrative'];\nconst missing = required.filter(f => !body[f]);\n\nreturn [{ json: {\n  ...body,\n  is_valid: missing.length === 0,\n  missing_fields: missing,\n} }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000024",
+      "name": "Validate Confirm Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        640
+      ],
+      "notes": "Guards against a malformed or tampered form submission reaching the Clio API call. A genuine submission from 'Build Confirmation Page' will always have every required field, since they're all hidden inputs carried through unchanged."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_is_valid",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_valid }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000025",
+      "name": "If Confirm Request Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        640
+      ],
+      "notes": "Yes → create the real Clio time entry.\nNo (missing fields — a broken or tampered request) → show an error page instead. Nothing is written to Clio either way until this passes.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst html_response = `<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body style=\"font-family:sans-serif;text-align:center;padding:80px 20px;\"><div style=\"font-size:40px;\">⚠️</div><h2>Something looks off</h2><p>Missing: ${item.missing_fields.join(', ')}. Nothing was logged to Clio.</p></body></html>`;\nreturn [{ json: { html_response } }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000026",
+      "name": "Build Invalid Request Error Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        800
+      ],
+      "notes": "No Clio entry is ever created for an invalid request — this page just explains why."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html_response }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html"
+              }
+            ]
+          }
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000027",
+      "name": "Respond With Error Page",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        800
+      ],
+      "notes": "Returns the error page built by 'Build Invalid Request Error Page'. Same pattern as PAC-55's dismiss-confirmation page."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/activities.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { type: 'TimeEntry', matter: { id: Number($json.matter_id) }, date: $json.entry_date, quantity: Math.round(Number($json.duration_hours) * 3600), note: $json.narrative, user: { id: Number($vars.FIRM_ATTORNEY_CLIO_USER_ID) } } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000028",
+      "name": "Create Clio Time Entry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        480
+      ],
+      "notes": "Creates the real billable time entry in Clio. The Activities API's exact shape here (type: 'TimeEntry', quantity in seconds, the user/matter sub-object format) follows Clio's general v4 REST conventions but hasn't been independently confirmed against a live account during authoring — check developer.clio.com and your first real confirmation before relying on this, and verify the created entry's duration matches what was shown on the review page (quantity is assumed to be seconds, not hours).\n\nFIRM_ATTORNEY_CLIO_USER_ID: find this in Clio under Settings → Users.\n\nCredential: same Clio OAuth2 credential as the rest of this workflow.\n\n'Never Error' is on so a failed create still shows the attorney a clear result (via the next step reading this response) rather than a raw HTTP error page.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "2",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "message": "={{ $('Validate Confirm Request').item.json.narrative }}",
+            "matter_id": "={{ $('Validate Confirm Request').item.json.matter_display_number || String($('Validate Confirm Request').item.json.matter_id) }}",
+            "recipient": "={{ $vars.FIRM_ATTORNEY_EMAIL }}",
+            "template_id": "PAC-62"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000029",
+      "name": "Log Time Entry Approval To Compliance",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        480
+      ],
+      "notes": "Logs the approval to the OPS1 compliance audit sheet. Reads explicitly from 'Validate Confirm Request' rather than $json, since the Clio API call immediately upstream replaced the item's json with its own response."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\nconst item = $('Validate Confirm Request').item.json;\nconst html_response = `<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body style=\"font-family:sans-serif;text-align:center;padding:80px 20px;\"><div style=\"font-size:40px;\">✅</div><h2>Time entry logged</h2><p>${escapeHtml(item.duration_hours)} hour(s) on ${escapeHtml(item.matter_display_number || item.matter_id)} — you can close this tab.</p></body></html>`;\nreturn [{ json: { html_response } }];"
+      },
+      "id": "6200aa00-0062-4000-a000-000000000030",
+      "name": "Build Success Confirmation Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        480
+      ],
+      "notes": "Reads explicitly from 'Validate Confirm Request' by name — both the Clio create call and the compliance-log call in between replaced the item's json with their own responses."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html_response }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html"
+              }
+            ]
+          }
+        }
+      },
+      "id": "6200aa00-0062-4000-a000-000000000031",
+      "name": "Respond With Success Page",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2016,
+        480
+      ],
+      "notes": "Returns the success page built by 'Build Success Confirmation Page' -- this is the very last step, after the Clio time entry has actually been created and logged to compliance."
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "Daily Time Entry Digest Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-08-19T07:00:00.000Z",
+          "Readable date": "August 19th 2026, 7:00:00 am"
+        }
+      }
+    ],
+    "Fetch Yesterdays Calendar Events": [
+      {
+        "json": {
+          "kind": "calendar#events",
+          "items": [
+            {
+              "id": "evt_001",
+              "summary": "[2026-CH-042] Settlement call with opposing counsel",
+              "description": "Discuss custody schedule modification terms.",
+              "start": {
+                "dateTime": "2026-08-18T14:00:00-04:00"
+              },
+              "end": {
+                "dateTime": "2026-08-18T14:45:00-04:00"
+              },
+              "attendees": [
+                {
+                  "email": "attorney@smithlaw.com",
+                  "self": true
+                },
+                {
+                  "email": "opposing.counsel@example.com",
+                  "displayName": "Jordan Lee"
+                }
+              ]
+            },
+            {
+              "id": "evt_002",
+              "summary": "Team lunch",
+              "start": {
+                "dateTime": "2026-08-18T12:00:00-04:00"
+              },
+              "end": {
+                "dateTime": "2026-08-18T13:00:00-04:00"
+              }
+            },
+            {
+              "id": "evt_003",
+              "summary": "[2026-AV-039] Client status update call",
+              "start": {
+                "dateTime": "2026-08-18T16:00:00-04:00"
+              },
+              "end": {
+                "dateTime": "2026-08-18T16:20:00-04:00"
+              },
+              "attendees": [
+                {
+                  "email": "attorney@smithlaw.com",
+                  "self": true
+                },
+                {
+                  "email": "r.avila@example.com",
+                  "displayName": "Robert Avila"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "When Approve Link Clicked": [
+      {
+        "json": {
+          "query": {
+            "matter_id": "301",
+            "matter_display_number": "2026-CH-042",
+            "entry_date": "2026-08-18",
+            "duration_hours": "0.8",
+            "narrative": "Telephone conference with opposing counsel regarding settlement terms.",
+            "event_title": "Settlement call with opposing counsel"
+          },
+          "headers": {},
+          "params": {},
+          "webhookUrl": "https://your-n8n.example.com/webhook/approve-time-entry",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "When Time Entry Confirmed": [
+      {
+        "json": {
+          "body": {
+            "matter_id": "301",
+            "matter_display_number": "2026-CH-042",
+            "entry_date": "2026-08-18",
+            "duration_hours": "0.8",
+            "narrative": "Telephone conference with opposing counsel regarding settlement terms."
+          },
+          "headers": {},
+          "params": {},
+          "webhookUrl": "https://your-n8n.example.com/webhook/confirm-time-entry",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "availableInMCP": false,
+    "executionOrder": "v1",
+    "executionTimeout": 120,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "Daily Time Entry Digest Trigger": {
+      "main": [
+        [
+          {
+            "node": "Compute Yesterday Date Range",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Yesterday Date Range": {
+      "main": [
+        [
+          {
+            "node": "Fetch Yesterdays Calendar Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Yesterdays Calendar Events": {
+      "main": [
+        [
+          {
+            "node": "Extract Billable Events With Matter Reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Billable Events With Matter Reference": {
+      "main": [
+        [
+          {
+            "node": "If Has Billable Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Billable Events": {
+      "main": [
+        [
+          {
+            "node": "Split Into One Item Per Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip No Billable Events Yesterday",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into One Item Per Event": {
+      "main": [
+        [
+          {
+            "node": "Search Clio Matter By Reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Clio Matter By Reference": {
+      "main": [
+        [
+          {
+            "node": "Filter Exact Matter Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Exact Matter Match": {
+      "main": [
+        [
+          {
+            "node": "If Matter Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Matter Found": {
+      "main": [
+        [
+          {
+            "node": "Build Time Entry Narrative Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Unmatched Matter Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Time Entry Narrative Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Time Entry Narrative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Time Entry Narrative": {
+      "main": [
+        [
+          {
+            "node": "Extract And Safety Check Narrative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract And Safety Check Narrative": {
+      "main": [
+        [
+          {
+            "node": "If Narrative Is Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Unmatched Matter Note": {
+      "main": [
+        [
+          {
+            "node": "Merge Digest Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Approve Link And Digest Entry": {
+      "main": [
+        [
+          {
+            "node": "Merge Digest Branches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Digest Branches": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Digest Entries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Digest Entries": {
+      "main": [
+        [
+          {
+            "node": "Log Digest Compilation To Compliance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Digest Compilation To Compliance": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Time Entry Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Approve Link Clicked": {
+      "main": [
+        [
+          {
+            "node": "Build Confirmation Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Confirmation Page": {
+      "main": [
+        [
+          {
+            "node": "Respond With Confirmation Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Time Entry Confirmed": {
+      "main": [
+        [
+          {
+            "node": "Validate Confirm Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Confirm Request": {
+      "main": [
+        [
+          {
+            "node": "If Confirm Request Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Confirm Request Valid": {
+      "main": [
+        [
+          {
+            "node": "Create Clio Time Entry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Invalid Request Error Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Invalid Request Error Page": {
+      "main": [
+        [
+          {
+            "node": "Respond With Error Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Clio Time Entry": {
+      "main": [
+        [
+          {
+            "node": "Log Time Entry Approval To Compliance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Time Entry Approval To Compliance": {
+      "main": [
+        [
+          {
+            "node": "Build Success Confirmation Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Success Confirmation Page": {
+      "main": [
+        [
+          {
+            "node": "Respond With Success Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Narrative Is Ready": {
+      "main": [
+        [
+          {
+            "node": "Build Approve Link And Digest Entry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Digest Branches",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Reads yesterday's calendar events tagged with a '[matter-ref]' in the title, matches each to a Clio matter, and drafts a factual billing narrative from the event's metadata only (title, description, attendees, duration -- never a linked document or email body) using the same two-layer safety check as the Content Repurposer (PAC-31). One daily digest email lists every draft with an Approve button; approving is a two-step confirmation (review page, then a real button click) rather than a single GET link, so email security scanners that pre-fetch links can't accidentally create a real billable time entry nobody reviewed. Replaces manual time entry and native partial-capture tools. Logs every digest and every approval to the OPS1 compliance audit sheet."
+}
