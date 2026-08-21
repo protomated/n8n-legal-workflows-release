@@ -938,9 +938,9 @@
         "subject": "={{ $('Build Matter Setup Summary Report').item.json.summary_subject }}",
         "toEmail": "={{ $vars.FIRM_STAFF_EMAIL || $vars.FIRM_EMAIL }}",
         "options": {},
-        "emailType": "html",
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "html": "={{ $('Build Matter Setup Summary Report').item.json.summary_html }}"
+        "html": "={{ $('Build Matter Setup Summary Report').item.json.summary_html }}",
+        "emailFormat": "html"
       },
       "id": "5900aa00-0059-4000-a000-000000000034",
       "name": "Notify Staff Matter Setup Complete Email",

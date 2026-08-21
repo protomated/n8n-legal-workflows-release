@@ -417,10 +417,10 @@
         "fromEmail": "={{ $('Build Pre-Bill Review Email').item.json.from_email }}",
         "toEmail": "={{ $('Build Pre-Bill Review Email').item.json.recipient }}",
         "subject": "={{ $('Build Pre-Bill Review Email').item.json.subject }}",
-        "emailType": "html",
         "text": "={{ $('Build Pre-Bill Review Email').item.json.message }}",
         "options": {},
-        "html": "={{ $('Build Pre-Bill Review Email').item.json.email_html }}"
+        "html": "={{ $('Build Pre-Bill Review Email').item.json.email_html }}",
+        "emailFormat": "html"
       },
       "id": "6100aa00-0061-4000-a000-000000000009",
       "name": "Send Pre-Bill Review Email",
@@ -677,10 +677,10 @@
         "fromEmail": "={{ $('Build Partner Escalation Email').item.json.from_email }}",
         "toEmail": "={{ $('Build Partner Escalation Email').item.json.recipient }}",
         "subject": "={{ $('Build Partner Escalation Email').item.json.subject }}",
-        "emailType": "html",
         "text": "={{ $('Build Partner Escalation Email').item.json.message }}",
         "options": {},
-        "html": "={{ $('Build Partner Escalation Email').item.json.email_html }}"
+        "html": "={{ $('Build Partner Escalation Email').item.json.email_html }}",
+        "emailFormat": "html"
       },
       "id": "6100aa00-0061-4000-a000-000000000023",
       "name": "Send Partner Escalation Email",
@@ -764,10 +764,10 @@
         "fromEmail": "={{ $('Build Attorney Nudge Email').item.json.from_email }}",
         "toEmail": "={{ $('Build Attorney Nudge Email').item.json.recipient }}",
         "subject": "={{ $('Build Attorney Nudge Email').item.json.subject }}",
-        "emailType": "html",
         "text": "={{ $('Build Attorney Nudge Email').item.json.message }}",
         "options": {},
-        "html": "={{ $('Build Attorney Nudge Email').item.json.email_html }}"
+        "html": "={{ $('Build Attorney Nudge Email').item.json.email_html }}",
+        "emailFormat": "html"
       },
       "id": "6100aa00-0061-4000-a000-000000000027",
       "name": "Send Attorney Nudge Email",
