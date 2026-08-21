@@ -500,7 +500,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Runs once for every event's outcome from this run (Run Once for All Items) and builds one\n// digest email covering all of them, grouped by status.\nconst items = $input.all().map(i => i.json);\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst ready = items.filter(i => i.status === 'ready');\nconst needsAttention = items.filter(i => i.status !== 'ready');\n\nconst readyRowsText = ready.map(i => `  • [${i.matter_ref}] ${i.event_title} — ${i.duration_hours}h\\n    \"${i.narrative}\"\\n    Approve: ${i.approve_url}`);\nconst attentionRowsText = needsAttention.map(i => `  • ${i.event_title} — ${i.duration_hours}h — ${i.reason}`);\n\nconst email_subject = `${ready.length} draft time entr${ready.length === 1 ? 'y' : 'ies'} ready for review — ${new Date().toLocaleDateString('en-US')}`;\n\nconst email_body = [\n  `Yesterday's calendar produced ${items.length} tagged event(s).`,\n  '',\n  ready.length > 0 ? `READY TO APPROVE (${ready.length}):` : 'Nothing ready to approve today.',\n  ...readyRowsText,\n  '',\n  needsAttention.length > 0 ? `NEEDS ATTENTION (${needsAttention.length}):` : '',\n  ...attentionRowsText,\n].filter(l => l !== '').join('\\n');\n\nconst readyRowsHtml = ready.map(i => `\n    <div style=\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px;\">\n      <div style=\"font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;\">[${escapeHtml(i.matter_ref)}] ${escapeHtml(i.duration_hours)}h</div>\n      <div style=\"font-size:14px;color:#0f172a;font-weight:600;margin-bottom:6px;\">${escapeHtml(i.event_title)}</div>\n      <div style=\"font-size:14px;color:#334155;font-style:italic;margin-bottom:10px;\">\"${escapeHtml(i.narrative)}\"</div>\n      <a href=\"${i.approve_url}\" style=\"display:inline-block;background:#02BDAD;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 16px;border-radius:6px;\">Review & Approve →</a>\n    </div>`).join('');\n\nconst attentionRowsHtml = needsAttention.map(i => `\n    <div style=\"border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:12px;\">\n      <div style=\"font-size:14px;color:#0f172a;font-weight:600;margin-bottom:4px;\">${escapeHtml(i.event_title)} — ${escapeHtml(i.duration_hours)}h</div>\n      <div style=\"font-size:13px;color:#92400e;\">${escapeHtml(i.reason)}</div>\n    </div>`).join('');\n\nconst email_html = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:#02BDAD;padding:28px 32px;\">\n      <div style=\"color:#e6fffb;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;\">Daily Time Entry Digest</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;\">${items.length} tagged event(s) from yesterday</div>\n    </div>\n    <div style=\"padding:28px 32px;\">\n      ${ready.length > 0 ? `<div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;\">Ready To Approve</div>${readyRowsHtml}` : ''}\n      ${needsAttention.length > 0 ? `<div style=\"font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.6px;margin:20px 0 12px;\">Needs Attention</div>${attentionRowsHtml}` : ''}\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { email_subject, email_body, email_html, ready_count: ready.length, flagged_count: needsAttention.length } }];"
+        "jsCode": "// Runs once for every event's outcome from this run (Run Once for All Items) and builds one\n// digest email covering all of them, grouped by status.\nconst items = $input.all().map(i => i.json);\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\nfunction pill(bg, text, label) {\n  return `<span style=\"display:inline-block;background:${bg};color:${text};font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;\">${label}</span>`;\n}\n\nconst ready = items.filter(i => i.status === 'ready');\nconst needsAttention = items.filter(i => i.status !== 'ready');\n\nconst readyRowsText = ready.map(i => `  • [${i.matter_ref}] ${i.event_title} — ${i.duration_hours}h\\n    \"${i.narrative}\"\\n    Approve: ${i.approve_url}`);\nconst attentionRowsText = needsAttention.map(i => `  • ${i.event_title} — ${i.duration_hours}h — ${i.reason}`);\n\nconst email_subject = `${ready.length} draft time entr${ready.length === 1 ? 'y' : 'ies'} ready for review — ${new Date().toLocaleDateString('en-US')}`;\n\nconst email_body = [\n  `Yesterday's calendar produced ${items.length} tagged event(s).`,\n  '',\n  ready.length > 0 ? `READY TO APPROVE (${ready.length}):` : 'Nothing ready to approve today.',\n  ...readyRowsText,\n  '',\n  needsAttention.length > 0 ? `NEEDS ATTENTION (${needsAttention.length}):` : '',\n  ...attentionRowsText,\n].filter(l => l !== '').join('\\n');\n\n// Flat card + pill-badge language, same as the Duplicate-Contact Watchdog (PAC-55) alert email --\n// no banner header, one bordered card per item, a colored status pill, a light content row, and\n// a single accent-colored action button. Inline styles throughout since email clients strip\n// <style> blocks unreliably.\nconst readyCardsHtml = ready.map(i => `\n    <div style=\"border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:16px;\">\n      <div style=\"margin-bottom:12px;\">\n        ${pill('#dcfce7', '#166534', 'Ready to approve')}\n        <span style=\"font-size:13px;color:#64748b;margin-left:8px;\">[${escapeHtml(i.matter_ref)}] &middot; ${escapeHtml(i.duration_hours)}h</span>\n      </div>\n      <div style=\"font-weight:600;color:#0f172a;font-size:14px;margin-bottom:10px;\">${escapeHtml(i.event_title)}</div>\n      <div style=\"padding:10px 14px;background:#f8fafc;border-radius:6px;margin-bottom:14px;\">\n        <div style=\"font-size:13px;color:#334155;font-style:italic;\">\"${escapeHtml(i.narrative)}\"</div>\n      </div>\n      <a href=\"${i.approve_url}\" style=\"display:inline-block;padding:8px 16px;background:#02BDAD;color:#ffffff;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;\">Review &amp; Approve →</a>\n    </div>`).join('');\n\nconst attentionCardsHtml = needsAttention.map(i => `\n    <div style=\"border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:16px;\">\n      <div style=\"margin-bottom:12px;\">\n        ${pill('#fef3c7', '#92400e', 'Needs attention')}\n        <span style=\"font-size:13px;color:#64748b;margin-left:8px;\">${escapeHtml(i.duration_hours)}h</span>\n      </div>\n      <div style=\"font-weight:600;color:#0f172a;font-size:14px;margin-bottom:10px;\">${escapeHtml(i.event_title)}</div>\n      <div style=\"padding:10px 14px;background:#fffbeb;border-radius:6px;\">\n        <div style=\"font-size:13px;color:#92400e;\">${escapeHtml(i.reason)}</div>\n      </div>\n    </div>`).join('');\n\nconst email_html = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px 16px;color:#1e293b;\">\n  <div style=\"max-width:600px;margin:0 auto;\">\n    <p style=\"font-size:15px;margin-top:0;\">Yesterday's calendar produced ${items.length} tagged event${items.length === 1 ? '' : 's'} — ${ready.length} ready to approve${needsAttention.length ? `, ${needsAttention.length} needing attention` : ''}.</p>\n    ${readyCardsHtml}\n    ${attentionCardsHtml}\n    <p style=\"font-size:12px;color:#94a3b8;margin-top:24px;\">Narratives are drafted from calendar metadata only — title, description, attendees, and duration. Nothing is logged to Clio until you click Approve and confirm on the review page.</p>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { email_subject, email_body, email_html, ready_count: ready.length, flagged_count: needsAttention.length } }];"
       },
       "id": "6200aa00-0062-4000-a000-000000000017",
       "name": "Aggregate Digest Entries",
@@ -552,8 +552,8 @@
         "subject": "={{ $('Aggregate Digest Entries').item.json.email_subject }}",
         "html": "={{ $('Aggregate Digest Entries').item.json.email_html }}",
         "text": "={{ $('Aggregate Digest Entries').item.json.email_body }}",
-        "emailType": "html",
-        "options": {}
+        "options": {},
+        "emailFormat": "html"
       },
       "id": "6200aa00-0062-4000-a000-000000000019",
       "name": "Send Daily Time Entry Digest Email",
@@ -888,26 +888,6 @@
               "end": {
                 "dateTime": "2026-08-18T13:00:00-04:00"
               }
-            },
-            {
-              "id": "evt_003",
-              "summary": "[2026-AV-039] Client status update call",
-              "start": {
-                "dateTime": "2026-08-18T16:00:00-04:00"
-              },
-              "end": {
-                "dateTime": "2026-08-18T16:20:00-04:00"
-              },
-              "attendees": [
-                {
-                  "email": "attorney@smithlaw.com",
-                  "self": true
-                },
-                {
-                  "email": "r.avila@example.com",
-                  "displayName": "Robert Avila"
-                }
-              ]
             }
           ]
         }
@@ -945,6 +925,45 @@
           "params": {},
           "webhookUrl": "https://your-n8n.example.com/webhook/confirm-time-entry",
           "executionMode": "production"
+        }
+      }
+    ],
+    "Search Clio Matter By Reference": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 44210,
+              "display_number": "2026-CH-042",
+              "description": "Custody Modification",
+              "client": {
+                "name": "Margaret Chen"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 1
+          }
+        }
+      }
+    ],
+    "Generate Time Entry Narrative": [
+      {
+        "json": {
+          "id": "msg_01SampleNarrative",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-4-6",
+          "stop_reason": "end_turn",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"narrative\": \"Telephone conference with opposing counsel regarding custody schedule modification terms.\", \"is_narrative_safe\": true}"
+            }
+          ]
         }
       }
     ]

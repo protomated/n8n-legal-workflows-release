@@ -18,6 +18,8 @@ Get value in under 15 minutes. Every morning, the workflow reads yesterday's cal
 
 **The Clio time-entry creation call (`activities.json`) hasn't been independently confirmed live** — the endpoint, the `type: "TimeEntry"` discriminator, and `quantity` being in seconds all follow Clio's general v4 REST conventions but weren't tested against a live account during authoring. Verify your first real approval creates an entry with the correct duration before relying on this for real billing.
 
+**"Yesterday" is computed from the n8n server's own clock and timezone, not the attorney's.** If your n8n server isn't running in the firm's own timezone, "yesterday" can be off by a full day for several hours around each day's boundary — e.g. a server in America/New_York and a firm in Africa/Lagos disagree on what day it is for 5 hours out of every 24. Confirm your n8n server's timezone (check any trigger node's timestamp output) matches, or is close enough to, the firm's before relying on the daily digest timing.
+
 ---
 
 ## What you need before you start
@@ -65,20 +67,17 @@ Toggle the workflow to **Active**. The compile trigger runs every morning at 7am
 
 ## Step 4 — Test
 
-The workflow ships with pinned sample data on all four trigger/fetch nodes (three sample calendar events — two tagged, one untagged lunch — plus sample Approve/Confirm webhook payloads), so you can test the whole pipeline without waiting for a real morning run or a real calendar event.
+**One-click full run:** the digest compile path is pinned end to end — the calendar fetch, the Clio matter search, and the Claude narrative call all ship with realistic canned sample data. That means anyone on the team can open the workflow and click **Execute workflow** and it runs all the way through to a real digest email in your inbox, with zero live Google Calendar, Clio, or Anthropic credentials required for this test path (SMTP and your Bar-Compliance Guardrail connection still need to be live, since those two are what actually deliver and log the result). This is the fastest way to confirm the whole pipeline and the email styling both work before doing a real end-to-end test against live accounts.
 
-**Digest compile path:**
-1. Run **"Fetch Yesterdays Calendar Events"** → **"Extract Billable Events With Matter Reference"** and confirm exactly the two tagged events survive — the untagged "Team lunch" should be silently excluded, not flagged as an error.
-2. Continue through **"Search Clio Matter By Reference"** and **"Filter Exact Matter Match"** — confirm at least one of your pinned matter references matches a real matter in your Clio account (edit the pinned data's `matter_ref` values to match real matters if needed for a clean test).
-3. Continue through to **"Extract And Safety Check Narrative"** and confirm `status: "ready"` with a factual-sounding narrative under 200 characters.
-4. Run all the way to **"Send Daily Time Entry Digest Email"** and confirm you receive a styled digest with a working "Review & Approve" button per ready entry.
+1. Open the workflow and click **Execute workflow**.
+2. Confirm you receive a digest email with one **Ready to approve** card (`[2026-CH-042] Settlement call with opposing counsel`, a Claude-drafted narrative, and a working Review & Approve button) — the untagged "Team lunch" event should not appear anywhere, not even as an error.
+3. Click **Review & Approve** and confirm you land on a review page showing the matter, date, duration, and narrative — **not** a Clio entry created yet.
+4. Click **Confirm & Log This Time Entry** and confirm you land on a success page, then check Clio directly to confirm the entry was created with the correct matter, date, duration, and narrative.
+5. **Test the scanner-safety behavior directly:** open the Approve link's URL in a plain `curl` request or a second browser without clicking the confirm button, and verify no Clio entry gets created just from that GET request alone.
 
-**Approve path:**
-1. Click the Approve button from a real test digest (or run **"When Approve Link Clicked"** manually with its pinned query data) and confirm you see a review page showing the matter, date, duration, and narrative — **not** a Clio entry created yet.
-2. Click **"Confirm & Log This Time Entry"** on that page and confirm you land on a success page, then check Clio directly to confirm the entry was created with the correct matter, date, duration, and narrative.
-3. **Test the scanner-safety behavior directly:** open the Approve link's URL in a plain `curl` request or a second browser without clicking the confirm button, and verify no Clio entry gets created just from that GET request alone.
+**Test with your own live calendar and Clio account:** once the pinned run above looks right, do one real pass to confirm the actual integrations work — unpin **"Fetch Yesterdays Calendar Events"**, **"Search Clio Matter By Reference"**, and **"Generate Time Entry Narrative"** (or just delete their pinned data if you don't need it going forward), then create a real Google Calendar event dated for whatever day your n8n server currently considers "yesterday." Check that day against the server's own clock — open **"Daily Time Entry Digest Trigger"**'s last output, not your own device's calendar — since a firm's local timezone and the n8n server's system timezone can disagree on what day it currently is. See "Before you start" above for why this matters for your actual deployment, not just testing.
 
-**Test the flagged path:** temporarily point a pinned event's tag at a matter reference that doesn't exist in your Clio account, run the digest compile, and confirm it shows up under "Needs Attention" in the digest instead of silently disappearing.
+**Test the flagged path:** temporarily edit the pinned calendar event's matter tag to something that doesn't exist in your Clio account (or unpin and use a real mismatched tag), run the digest compile, and confirm it shows up under "Needs attention" in the digest instead of silently disappearing.
 
 ---
 
