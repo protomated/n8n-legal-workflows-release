@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Time-Entry Draft from Calendar\n\n### How it works\n\n1. Trigger event initiates the workflow.\n2. Data is fetched or received from external sources.\n3. Data is processed or transformed as needed.\n4. Results are saved or sent to external systems.\n5. Errors and exceptions are handled to maintain workflow stability.\n\n### Setup steps\n\n- [ ] Configure the trigger node with the correct event source and credentials.\n- [ ] Set up credentials for external data sources or APIs.\n- [ ] Configure any database or storage nodes with access credentials.\n- [ ] Ensure error handling nodes are set to log or notify appropriately.\n\n### Customization\n\nAdjust node configurations to accommodate different data inputs or destinations. Customize error handling to fit specific operational requirements.",
+        "content": "## Time-Entry Draft from Calendar\n\n### How it works\n\n1. Every morning, reads yesterday's calendar events and picks out the ones tagged with a matter reference — type the Clio matter's display number in square brackets anywhere in the event title, e.g. '[2026-CH-042] Settlement call with opposing counsel'. Untagged events (lunch, personal appointments, internal standups) are never touched.\n2. Looks up each matter reference in Clio. If it doesn't match a real matter, that event is flagged in the digest for manual entry instead of guessed.\n3. Claude drafts a factual billing narrative using ONLY the event's title, description, attendees, and duration — never anything from a linked document or email body. An independent keyword scan re-checks the draft before it's allowed into the digest.\n4. One digest email goes out listing every draft, each with an Approve button. Nothing is logged to Clio until the attorney clicks it.\n5. Approving is a two-step confirmation (click → review page → confirm), not a single one-click link — a bare GET link would let email security scanners that pre-fetch links (Microsoft Defender, Proofpoint, etc.) accidentally create real billable time entries nobody actually approved.\n\n### Setup steps\n\n- [ ] Set CLIO_BASE_URL and connect the Clio OAuth2 credential (reuse if already deployed for PAC-18/20/55/57/58/59/61).\n- [ ] Connect a Google Calendar OAuth2 credential and set FIRM_ATTORNEY_CALENDAR_ID (use 'primary' for the connected account's own calendar).\n- [ ] Set FIRM_ATTORNEY_CLIO_USER_ID to the attorney's Clio user ID (Clio → Settings → Users) — this attributes created time entries to the right person.\n- [ ] Set FIRM_ATTORNEY_EMAIL (digest recipient), FIRM_NAME, FIRM_FROM_EMAIL, and GUARDRAIL_WORKFLOW_ID.\n- [ ] Get an Anthropic API key and connect it as a Header Auth credential (reuse from PAC-31/50/60 if already deployed).\n- [ ] Connect the SMTP credential.\n- [ ] Multi-attorney firms: deploy one copy of this workflow per attorney (separate calendar, Clio user ID, and digest recipient each time).\n\n### Customization\n\nAdjust the narrative style or length limit directly in 'Build Narrative Prompt for Entry'. The bracket convention itself can be changed in 'Extract Billable Events with Matter Ref' if your firm prefers a different tag format.",
         "width": 480,
         "height": 720
       },
@@ -745,6 +745,102 @@
         480
       ],
       "notes": "Returns the success page built by 'Build Success Confirmation Page' -- this is the very last step, after the Clio time entry has actually been created and logged to compliance."
+    },
+    {
+      "parameters": {
+        "content": "## Fetch and filter yesterday's events\n\nPulls yesterday's calendar events and keeps only the ones with a '[matter-ref]' tag in the title — that tag is the entire filter, so nothing else needs a keyword blocklist.",
+        "width": 1320,
+        "height": 300,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -170
+      ],
+      "id": "b9f1f933-54bd-4f29-b560-e9ce394403ba",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Match to a Clio matter\n\nLooks up each tagged reference in Clio. A reference that doesn't match a real matter is flagged for manual entry rather than guessed at.",
+        "width": 900,
+        "height": 470,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        -170
+      ],
+      "id": "4b22b9bb-acd6-4e25-9254-fce584229dac",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Draft and safety-check the narrative\n\nClaude drafts a factual billing narrative from calendar metadata only, then an independent keyword scan re-checks it before it's allowed into the digest — same two-layer approach as PAC-31/50/60.",
+        "width": 900,
+        "height": 200,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1990,
+        -380
+      ],
+      "id": "a3755388-020c-4060-99ea-bafca3ff8caf",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Compile and send the digest\n\nCombines every event's outcome (ready to approve, flagged, or unmatched) into one daily email with an Approve link per entry.",
+        "width": 1150,
+        "height": 200,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2886,
+        -380
+      ],
+      "id": "6aa6f454-949f-40ff-8b1e-235db19dc3e1",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Approve — step 1 of 2\n\nClicking Approve in the email opens a review page instead of immediately creating the entry — this is what stops email security scanners that pre-fetch links from accidentally approving something nobody actually reviewed.",
+        "width": 700,
+        "height": 300,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        480
+      ],
+      "id": "152b5660-dd7b-47ab-a39e-6b7df0a55504",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Approve — step 2 of 2\n\nOnly a real button click (a POST, not a pre-fetchable GET) reaches this webhook and actually creates the Clio time entry.",
+        "width": 1550,
+        "height": 650,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        648,
+        340
+      ],
+      "id": "797c3129-49af-4a0d-b2f9-c9ec83a7aeaf",
+      "name": "Sticky Note6"
     }
   ],
   "active": false,
