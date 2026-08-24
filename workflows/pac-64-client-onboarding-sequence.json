@@ -1,0 +1,499 @@
+{
+  "name": "Client Onboarding Sequence",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Client Onboarding Sequence\n\n### How it works\n\n1. Triggers daily and pulls every open Clio matter.\n2. Computes how many days it's been since each matter opened, purely from Clio's own open date — no separate tracking of what's already been sent.\n3. A matter hits exactly one of four sequence days: Day 0 (portal access), Day 1 (what to expect), Day 3 (document checklist), Day 7 (first-bill explainer). Anything not on one of those days is skipped for today.\n4. The matching email is built, checked against the compliance guardrail (opt-out + disclaimer), then sent if approved.\n5. Skips silently — no email, no error — on a day with no matter due for a stage.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing email here goes through it for opt-out checking, disclaimer, and audit logging.\n- [ ] Configure Clio OAuth2 credentials with matter read access.\n- [ ] Configure SMTP credentials for sending.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally set FIRM_CLIENT_PORTAL_URL, FIRM_BILLING_EMAIL, FIRM_RESPONSE_TIME_DAYS, FIRM_PAYMENT_TERMS_DAYS, FIRM_ONBOARDING_CHECKLIST.\n\n### Customization\n\nEdit the four stages' subject/body copy in 'Build Onboarding Stage Email' — one node handles all four, same pattern as the Invoice Reminder Ladder (PAC-18). Change which days trigger a stage by editing the STAGE_DAYS map in 'Compute Onboarding Stage For Each Matter'.",
+        "width": 480,
+        "height": 760
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Fetch matters and determine today's stage\n\nPulls every open matter, then works out — purely from each matter's own open date — whether today is one of the four sequence days for it.",
+        "width": 928,
+        "height": 320,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Build, check, and send\n\nBuilds the right stage's email, routes it through the compliance guardrail for opt-out checking and the required disclaimer, then sends it if approved.",
+        "width": 928,
+        "height": 320,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "6400aa00-0064-4000-a000-000000000001",
+      "name": "When Onboarding Check Runs",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Fires every day at 9am (n8n server timezone). Every open matter is re-checked on every run — there's no separate list of 'already sent' to maintain, because each matter's own open date tells this workflow exactly which stage (if any) is due today."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "Open"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description,open_date,client{id,name,primary_email_address}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6400aa00-0064-4000-a000-000000000002",
+      "name": "Fetch Open Matters From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Pulls every open matter — the next node filters down to the ones actually due for a sequence email today. Same matters.json endpoint and 'status=Open' value as the New Matter Setup Bot (PAC-59).\n\n'primary_email_address' as the nested field for a matter's client is the field name this catalog's Review Request Engine (NTC-17) already uses for Clio contact payloads elsewhere — reused here on the assumption Contacts (unlike Users) expose email through nested field selection on this endpoint, which the Daily Case Priorities Digest (PAC-63) confirmed live is NOT true for Users on tasks.json. This hasn't itself been independently confirmed on matters.json specifically — check your first real run's output and adjust the field name if Clio rejects it or returns it under a different key.\n\n'Never Error' is on, and downstream filtering treats a missing/empty 'data' array the same as zero matters — a Clio outage degrades this to a quiet skip rather than failing the run.\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59/61/63 — reuse it if already deployed.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determines which onboarding-sequence stage (if any) is due today for each open matter, based\n// purely on how many days it's been since the matter opened in Clio -- no external tracking of\n// what's already been sent, same 'compute the age, match an exact day' approach as PAC-18's\n// invoice ladder and PAC-61's pre-bill compile step. A matter opened exactly 3 days ago gets the\n// document-checklist stage today and nothing else, regardless of how many times this workflow has\n// run since it opened.\nconst matters = $input.first().json.data || [];\nconst results = [];\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\n\nconst STAGE_DAYS = { 0: 'day0', 1: 'day1', 3: 'day3', 7: 'day7' };\n\nfor (const matter of matters) {\n  const client = matter.client || {};\n  if (!client.primary_email_address) continue; // nobody to email\n  if (!matter.open_date) continue; // no anchor date to compute from\n\n  const openDate = new Date(matter.open_date + 'T12:00:00Z');\n  openDate.setHours(0, 0, 0, 0);\n  const daysSinceOpen = Math.floor((today - openDate) / msPerDay);\n\n  const stage = STAGE_DAYS[daysSinceOpen];\n  if (!stage) continue; // not one of the four sequence days\n\n  results.push({\n    json: {\n      matter_id: matter.id,\n      matter_ref: matter.display_number || '',\n      matter_description: matter.description || '',\n      client_name: client.name || '',\n      client_email: client.primary_email_address,\n      days_since_open: daysSinceOpen,\n      stage,\n      is_actionable: true,\n    },\n  });\n}\n\nif (results.length === 0) {\n  return [{ json: { is_actionable: false, stage: 'none', reason: 'No matter hit an onboarding-sequence day today' } }];\n}\n\nreturn results;"
+      },
+      "id": "6400aa00-0064-4000-a000-000000000003",
+      "name": "Compute Onboarding Stage For Each Matter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Matters with no client email on file, or no open date, are silently excluded — there's nobody to email or no date to compute from. A matter can hit at most one stage per run since the four sequence days (0, 1, 3, 7) don't overlap."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_is_actionable",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_actionable }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6400aa00-0064-4000-a000-000000000004",
+      "name": "If Onboarding Stage Due Today",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Yes (at least one matter hit a sequence day today) → build and send.\nNo (nothing due — most days, for most firms) → route to Skip. No email sent.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "6400aa00-0064-4000-a000-000000000005",
+      "name": "Skip — No Onboarding Stage Due Today",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        896,
+        200
+      ],
+      "notes": "No open matter hit one of the four sequence days today. Expected on most days — this is normal, not a failure."
+    },
+    {
+      "parameters": {
+        "jsCode": "// One node handles all four onboarding-sequence stages -- same pattern as the Invoice Reminder\n// Ladder's (PAC-18) single build node keyed by ladder step -- so there's one place to edit copy\n// instead of four near-duplicate nodes. Every stage is purely operational: portal access, process\n// expectations, a document checklist, and how billing works. None of it comments on the matter's\n// substance or gives legal guidance (ABA Op. 512).\nconst item = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_EMAIL = $vars.FIRM_EMAIL;\nconst PORTAL_URL = $vars.FIRM_CLIENT_PORTAL_URL || '';\nconst BILLING_EMAIL = $vars.FIRM_BILLING_EMAIL || FIRM_EMAIL;\nconst RESPONSE_DAYS = $vars.FIRM_RESPONSE_TIME_DAYS || '1-2';\nconst PAYMENT_TERMS_DAYS = $vars.FIRM_PAYMENT_TERMS_DAYS || '30';\nconst CHECKLIST = ($vars.FIRM_ONBOARDING_CHECKLIST || 'A government-issued photo ID\\nYour signed engagement letter, if not already returned\\nAny prior correspondence related to this matter\\nContact information for anyone else involved')\n  .split('\\n').map(s => s.trim()).filter(Boolean).map(s => `- ${s}`).join('\\n');\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL) throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst matterLabel = item.matter_ref + (item.matter_description ? ' (' + item.matter_description + ')' : '');\n\nconst STAGES = {\n  day0: {\n    subject: `Welcome to ${FIRM_NAME} — here's what happens next`,\n    body: `Hi ${item.client_name},\\n\\nWelcome, and thank you for choosing ${FIRM_NAME} for your matter (${matterLabel}).\\n\\n${PORTAL_URL ? `You can track your matter and message us anytime through our client portal:\\n${PORTAL_URL}\\n\\nIf you haven't received separate login instructions yet, just let us know and we'll get you set up.` : `We'll follow up shortly with instructions for accessing your client portal.`}\\n\\nOver the next week you'll hear from us with a quick overview of what to expect, a short document checklist, and an explanation of how billing works — no action needed from you yet.\\n\\nQuestions in the meantime? Reach us at ${FIRM_EMAIL}.\\n\\n${FIRM_NAME}`,\n  },\n  day1: {\n    subject: `What to expect while we work on your matter`,\n    body: `Hi ${item.client_name},\\n\\nA quick note on how we'll work together on ${matterLabel}:\\n\\n- We'll reach out whenever we need information or a decision from you — no need to check in for status updates.\\n- Most emails get a response within ${RESPONSE_DAYS} business day(s).\\n- Any documents we need from you will come with clear instructions on how to send them.\\n- You can always reach us at ${FIRM_EMAIL} with questions.\\n\\nWe'll follow up in a couple of days with a short checklist of documents that help us get started.\\n\\n${FIRM_NAME}`,\n  },\n  day3: {\n    subject: `A few documents that will help us get started`,\n    body: `Hi ${item.client_name},\\n\\nTo keep things moving on ${matterLabel}, it helps to have the following on hand:\\n\\n${CHECKLIST}\\n\\nYou don't need to send everything at once — whatever you have is a good start, and we'll follow up on anything still missing.\\n\\n${PORTAL_URL ? `You can upload documents directly through the client portal: ${PORTAL_URL}` : `Reply to this email or contact us at ${FIRM_EMAIL} to send these over.`}\\n\\n${FIRM_NAME}`,\n  },\n  day7: {\n    subject: `How billing works for your matter`,\n    body: `Hi ${item.client_name},\\n\\nNow that we're underway on ${matterLabel}, here's a quick note on billing so nothing catches you by surprise:\\n\\n- Invoices are sent by email${PORTAL_URL ? ' and available in the client portal' : ''}.\\n- You'll see an itemized breakdown of the time and work performed.\\n- Payment is due within ${PAYMENT_TERMS_DAYS} days of the invoice date.\\n- Questions about a bill? Contact us at ${BILLING_EMAIL} any time — we're happy to walk through it.\\n\\nThanks again for trusting ${FIRM_NAME} with your matter.\\n\\n${FIRM_NAME}`,\n  },\n};\n\nconst content = STAGES[item.stage];\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.client_email,\n  subject: content.subject,\n  message: content.body,\n  template_id: 'PAC-64-client-onboarding',\n  matter_id: String(item.matter_id || ''),\n} }];"
+      },
+      "id": "6400aa00-0064-4000-a000-000000000006",
+      "name": "Build Onboarding Stage Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Do not add an opt-out footer here — the compliance guardrail (next node) appends it automatically and logs the send attempt.\n\nFIRM_CLIENT_PORTAL_URL is optional — copy adapts gracefully if unset (no dead link, no broken sentence). FIRM_ONBOARDING_CHECKLIST is a newline-separated list of items; leave unset for a sensible generic default."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "={{ $json.channel }}",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "={{ $json.template_id }}",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "6400aa00-0064-4000-a000-000000000007",
+      "name": "Check Compliance Before Sending",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "Checks whether this client has opted out of firm emails. If not, appends the required unsubscribe footer and logs the send attempt to the audit sheet — same pattern as the Invoice Reminder Ladder (PAC-18), since this is a genuine client-facing message, unlike PAC-61/63's internal-only notifications.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6400aa00-0064-4000-a000-000000000008",
+      "name": "If Onboarding Email Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "Yes (client hasn't opted out) → send.\nNo (client has opted out of firm emails) → route to Skip. The suppression is already logged by the guardrail.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $('Build Onboarding Stage Email').item.json.subject }}",
+        "text": "={{ $json.message_out }}",
+        "options": {},
+        "emailFormat": "text"
+      },
+      "id": "6400aa00-0064-4000-a000-000000000009",
+      "name": "Send Onboarding Stage Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Sends the compliance-approved onboarding email to the client. Uses message_out from the guardrail, which carries the required unsubscribe footer — plain text only, since the footer is only guaranteed to be present in the text version the guardrail returns. Subject is read from 'Build Onboarding Stage Email' since the guardrail doesn't touch subjects.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "6400aa00-0064-4000-a000-000000000010",
+      "name": "Skip — Client Opted Out",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        200
+      ],
+      "notes": "This client has opted out of firm emails. The suppression is already logged by the guardrail workflow. No email is sent."
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When Onboarding Check Runs": [
+      {
+        "json": {
+          "timestamp": "2026-08-24T09:00:00.000Z",
+          "Readable date": "August 24th 2026, 9:00:00 am"
+        }
+      }
+    ],
+    "Fetch Open Matters From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 41001,
+              "display_number": "2026-CH-050",
+              "description": "Custody Modification",
+              "open_date": "2026-08-24",
+              "client": {
+                "id": 601,
+                "name": "Jane Doe",
+                "primary_email_address": "jane.doe@example.com"
+              }
+            },
+            {
+              "id": 41002,
+              "display_number": "2026-AV-051",
+              "description": "Business Contract Dispute",
+              "open_date": "2026-08-23",
+              "client": {
+                "id": 602,
+                "name": "John Smith",
+                "primary_email_address": "john.smith@example.com"
+              }
+            },
+            {
+              "id": 41003,
+              "display_number": "2026-PB-052",
+              "description": "Estate Administration",
+              "open_date": "2026-08-21",
+              "client": {
+                "id": 603,
+                "name": "Alice Wong",
+                "primary_email_address": "alice.wong@example.com"
+              }
+            },
+            {
+              "id": 41004,
+              "display_number": "2026-FL-053",
+              "description": "Uncontested Divorce",
+              "open_date": "2026-08-17",
+              "client": {
+                "id": 604,
+                "name": "Bob Lee",
+                "primary_email_address": "bob.lee@example.com"
+              }
+            },
+            {
+              "id": 41005,
+              "display_number": "2026-CH-049",
+              "description": "Guardianship",
+              "open_date": "2026-08-14",
+              "client": {
+                "id": 605,
+                "name": "Carla Reyes",
+                "primary_email_address": "carla.reyes@example.com"
+              }
+            },
+            {
+              "id": 41006,
+              "display_number": "2026-AV-054",
+              "description": "Partnership Dissolution",
+              "open_date": "2026-08-24",
+              "client": {
+                "id": 606,
+                "name": "No Email On File"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 6
+          }
+        }
+      }
+    ]
+  },
+  "settings": {
+    "availableInMCP": false,
+    "executionOrder": "v1",
+    "executionTimeout": 120,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When Onboarding Check Runs": {
+      "main": [
+        [
+          {
+            "node": "Fetch Open Matters From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Open Matters From Clio": {
+      "main": [
+        [
+          {
+            "node": "Compute Onboarding Stage For Each Matter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Onboarding Stage For Each Matter": {
+      "main": [
+        [
+          {
+            "node": "If Onboarding Stage Due Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Onboarding Stage Due Today": {
+      "main": [
+        [
+          {
+            "node": "Build Onboarding Stage Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — No Onboarding Stage Due Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Onboarding Stage Email": {
+      "main": [
+        [
+          {
+            "node": "Check Compliance Before Sending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Compliance Before Sending": {
+      "main": [
+        [
+          {
+            "node": "If Onboarding Email Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Onboarding Email Approved": {
+      "main": [
+        [
+          {
+            "node": "Send Onboarding Stage Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Client Opted Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Fires daily and pulls every open Clio matter, computing purely from each matter's own open date whether today is one of four onboarding-sequence days: Day 0 (portal access), Day 1 (what to expect), Day 3 (document checklist), Day 7 (first-bill explainer). The matching email is built, checked against the Bar-Compliance Guardrail for opt-out and disclaimer, then sent if approved. Skips silently on days with nothing due. Replaces a Lawmatics-style onboarding journey — a rocky first week is one of the top drivers of early client churn."
+}
