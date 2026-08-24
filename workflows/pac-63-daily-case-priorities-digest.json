@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Daily Case Priorities Digest\n\n### How it works\n\n1. Triggers every morning on a schedule and pulls two things from Clio in parallel: every open task, and every calendar entry (hearings, court dates, appointments) in the next few days.\n2. Each branch is split into individual records, filtered down to the ones with someone to notify and a date to sort by, then sorted chronologically — all with native n8n nodes, not custom code.\n3. The two branches are merged, then grouped by attorney into three buckets: Priorities (overdue tasks), Deadlines (upcoming calendar entries), and Follow-ups (tasks due today or this week).\n4. Skips silently if nobody has anything in any bucket — no empty emails go out.\n5. Builds one styled digest email per attorney, logs the send to the compliance audit log, then delivers it — ending with a short teaser for the full LegalContext Morning Digest.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — this template logs every digest send to it for audit purposes.\n- [ ] Configure Clio OAuth2 credentials with task and calendar read access.\n- [ ] Configure SMTP credentials for sending the digest email.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Adjust the morning schedule to match your firm's start of day.\n\n### Customization\n\nSet FIRM_DIGEST_FOLLOWUP_DAYS to widen or narrow the 'coming up this week' / calendar lookahead window (defaults to 7 days). Edit the section colors and copy in 'Build Morning Digest Email' to match your firm's branding, or change the LEGALCONTEXT_UPSELL_URL variable to point at your own booking link.",
+        "content": "## Daily Case Priorities Digest\n\n### How it works\n\n1. Triggers every morning on a schedule and pulls three things from Clio in parallel: every open task, every calendar entry (hearings, court dates, appointments) in the next few days, and the firm's user directory.\n2. The task and calendar branches are each split into individual records, filtered down to the ones with someone to notify and a date to sort by, then sorted chronologically — all with native n8n nodes, not custom code.\n3. Both branches are merged, then grouped by attorney into three buckets: Priorities (overdue tasks), Deadlines (upcoming calendar entries), and Follow-ups (tasks due today or this week). Assignee/attendee IDs are resolved to real email addresses using the user directory — Clio's tasks.json rejects requesting a User's email as a nested field directly.\n4. Skips silently if nobody has anything in any bucket — no empty emails go out.\n5. Builds one styled digest email per attorney, logs the send to the compliance audit log, then delivers it — ending with a short teaser for the full LegalContext Morning Digest.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — this template logs every digest send to it for audit purposes.\n- [ ] Configure Clio OAuth2 credentials with task and calendar read access.\n- [ ] Configure SMTP credentials for sending the digest email.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Adjust the morning schedule to match your firm's start of day.\n\n### Customization\n\nSet FIRM_DIGEST_FOLLOWUP_DAYS to widen or narrow the 'coming up this week' / calendar lookahead window (defaults to 7 days). Edit the section colors and copy in 'Build Morning Digest Email' to match your firm's branding, or change the LEGALCONTEXT_UPSELL_URL variable to point at your own booking link.",
         "width": 480,
         "height": 900
       },
@@ -47,6 +47,22 @@
       "position": [
         -48,
         180
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Resolve who to email\n\nClio's tasks.json rejects `assignee{email}` outright (confirmed live: \"assignee{email} is not a valid field\") — Users, unlike Contacts, don't expose email through nested field selection here. This fetches the firm's user directory once per run so the grouping step can resolve an assignee or attendee ID to a real email address.",
+        "width": 1104,
+        "height": 200,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000007",
+      "name": "Sticky Note6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        620
       ]
     },
     {
@@ -116,7 +132,7 @@
         0,
         100
       ],
-      "notes": "Fires every day at 7am (n8n server timezone) — before the start of the firm's business day. Feeds two parallel fetches: open Clio tasks, and upcoming Clio calendar entries. Adjust the cron expression to match when your attorneys actually want this waiting in their inbox, or restrict it to weekdays only (e.g. '0 7 * * 1-5') if a weekend digest isn't useful."
+      "notes": "Fires every day at 7am (n8n server timezone) — before the start of the firm's business day. Feeds three parallel fetches: open Clio tasks, upcoming Clio calendar entries, and the firm's user directory (used later to resolve emails). Adjust the cron expression to match when your attorneys actually want this waiting in their inbox, or restrict it to weekdays only (e.g. '0 7 * * 1-5') if a weekend digest isn't useful."
     },
     {
       "parameters": {
@@ -137,7 +153,7 @@
             },
             {
               "name": "fields",
-              "value": "id,name,due_at,priority,assignee{id,name,email},matter{id,display_number,description}"
+              "value": "id,name,due_at,priority,assignee{id,name},matter{id,display_number,description}"
             }
           ]
         },
@@ -158,7 +174,7 @@
         224,
         -80
       ],
-      "notes": "Pulls every task still marked 'pending' in Clio, regardless of attorney — the next few nodes split, filter, and sort it. Same tasks.json request pattern as PAC-59/61, with 'pending' as the status value.\n\n'due_at' and 'priority' are field names this catalog already uses when *creating* Clio tasks (see NTC-16, PAC-59) but reading them back on this endpoint's GET response hasn't independently been confirmed live — check your first real run's output and adjust the field names here if either comes back under a different key.\n\n'Never Error' is on, and downstream filtering treats a missing/empty 'data' array the same as zero tasks — a Clio outage degrades this branch gracefully instead of failing the whole digest.\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59/61 — reuse it if already deployed.\n\nReturns up to 200 tasks per run. If your firm regularly has more open at once, add a loop over the 'page' parameter.",
+      "notes": "Pulls every task still marked 'pending' in Clio, regardless of attorney — the next few nodes split, filter, and sort it. Same tasks.json request pattern as PAC-59/61, with 'pending' as the status value.\n\nConfirmed against a live Clio account: 'due_at' and 'priority' are valid fields here, but requesting 'assignee{email}' is rejected outright with 'assignee{email} is not a valid field' — Clio doesn't expose a User's email through nested field selection on this endpoint the way it does a Contact's. Only 'assignee{id,name}' is requested; email is resolved afterward by matching the assignee id against 'Fetch Firm Users From Clio'.\n\n'Never Error' is on, and downstream filtering treats a missing/empty 'data' array the same as zero tasks — a Clio outage degrades this branch gracefully instead of failing the whole digest.\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59/61 — reuse it if already deployed.\n\nReturns up to 200 tasks per run. If your firm regularly has more open at once, add a loop over the 'page' parameter.",
       "onError": "continueRegularOutput",
       "credentials": {
         "oAuth2Api": {
@@ -211,7 +227,52 @@
         224,
         340
       ],
-      "notes": "Pulls every calendar entry (hearings, court dates, client appointments) between today and the end of the follow-up window — these are the digest's 'Deadlines' section, distinct from task due dates.\n\nThis is Clio's own Calendar Entries resource (developer.clio.com), a separate resource from tasks.json. 'attendees' as the field carrying each entry's associated people, and the exact shape of 'from'/'to' as plain ISO dates, haven't independently been confirmed live — check your first real run's output and adjust if the response shape differs.\n\n'Never Error' is on, and downstream filtering treats a missing/empty 'data' array the same as zero entries — if your Clio plan doesn't expose this endpoint, the digest still sends with just the task sections.\n\nCredential: same Clio OAuth2 credential as the tasks fetch above — no separate calendar credential needed.",
+      "notes": "Pulls every calendar entry (hearings, court dates, client appointments) between today and the end of the follow-up window — these are the digest's 'Deadlines' section, distinct from task due dates.\n\nThis is Clio's own Calendar Entries resource (developer.clio.com), a separate resource from tasks.json. 'attendees{email}' is requested directly since Contacts (unlike Users) are commonly allowed to expose email through nested field selection — but this hasn't been confirmed live for this specific endpoint the way tasks.json's 'assignee{email}' was confirmed to fail. If Clio rejects it the same way, remove 'email' from the fields list here; the grouping step already falls back to resolving the attendee's id against 'Fetch Firm Users From Clio' when a direct email isn't present, so the digest keeps working either way. The exact shape of 'from'/'to' as plain ISO dates also hasn't independently been confirmed live.\n\n'Never Error' is on, and downstream filtering treats a missing/empty 'data' array the same as zero entries — if your Clio plan doesn't expose this endpoint, the digest still sends with just the task sections.\n\nCredential: same Clio OAuth2 credential as the tasks fetch above — no separate calendar credential needed.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/users.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,email,enabled"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6300aa00-0063-4000-a000-000000000018",
+      "name": "Fetch Firm Users From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        700
+      ],
+      "notes": "Fetches the firm's user directory once per run — used by 'Group Priorities Deadlines And Follow-ups By Attorney' to resolve a task's assignee id or a calendar entry's attendee id to a real email address. Requesting 'email' works here because /users.json is the primary resource, not a nested association — Clio confirmed live that 'assignee{email}' on tasks.json is rejected ('assignee{email} is not a valid field'), but a top-level field on the User resource itself is fine.\n\nThis node has no outgoing connection on the canvas — it's referenced directly by name ($('Fetch Firm Users From Clio')) from the grouping Code node further downstream, since n8n lets any node reference another node's output by name as long as both ran in the same execution.\n\nSame Clio OAuth2 credential as the other two fetches — no separate setup.\n\n'Never Error' is on; if this fetch fails, every task and calendar entry in that run will fail to resolve an email and be silently excluded from the digest — check execution history if a digest goes unexpectedly quiet.",
       "onError": "continueRegularOutput",
       "credentials": {
         "oAuth2Api": {
@@ -268,7 +329,7 @@
                 "type": "string",
                 "operation": "notEmpty"
               },
-              "leftValue": "={{ $json.assignee && $json.assignee.email }}",
+              "leftValue": "={{ $json.assignee && $json.assignee.id }}",
               "rightValue": ""
             },
             {
@@ -291,7 +352,7 @@
         672,
         -80
       ],
-      "notes": "Drops tasks with no assignee email (nobody to send it to) or no due date (nothing to sort it by). A nonzero drop rate here is worth checking in Clio periodically — it usually means a task needs an assignee or a due date set."
+      "notes": "Drops tasks with no assignee id at all, or no due date. This only catches tasks with literally nobody assigned — an assignee that can't be resolved to an email (not found in the firm's user directory) is instead dropped later, in the grouping step. A nonzero drop rate here is worth checking in Clio periodically — it usually means a task needs an assignee or a due date set."
     },
     {
       "parameters": {
@@ -311,7 +372,7 @@
                 "type": "string",
                 "operation": "notEmpty"
               },
-              "leftValue": "={{ $json.attendees && $json.attendees.length > 0 && $json.attendees[0].email ? $json.attendees[0].email : '' }}",
+              "leftValue": "={{ ($json.attendees && $json.attendees.length > 0) ? 'has_attendees' : '' }}",
               "rightValue": ""
             },
             {
@@ -334,7 +395,7 @@
         672,
         340
       ],
-      "notes": "Drops calendar entries with no attendee that has an email on file, or no start date. Only the first listed attendee is used to route the entry — a shared court date with multiple attendees currently reaches only the first one listed in Clio."
+      "notes": "Drops calendar entries with no attendee at all, or no start date. An entry whose attendee(s) can't be resolved to an email (no direct email, and no match in the firm's user directory) is instead dropped later, in the grouping step, which tries each attendee in order until one resolves."
     },
     {
       "parameters": {
@@ -398,7 +459,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Consumes the merged stream of Clio tasks and Clio calendar entries (already split, filtered,\n// and sorted upstream) and groups everything by attorney into three buckets: priorities (overdue\n// tasks), follow_ups (tasks due today or within the digest window), and deadlines (calendar\n// entries -- hearings, court dates, appointments -- within the digest window). A record is told\n// apart by shape, not by which Merge input it arrived on, since append order isn't preserved\n// per-branch once combined.\nconst FOLLOWUP_WINDOW_DAYS = Number($vars.FIRM_DIGEST_FOLLOWUP_DAYS) || 7;\nconst records = $input.all().map(i => i.json);\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst groups = {};\n\nfunction ensureGroup(email, name) {\n  if (!groups[email]) {\n    groups[email] = {\n      attorney_name: name || 'Unassigned',\n      attorney_email: email,\n      priorities: [],\n      follow_ups: [],\n      deadlines: [],\n    };\n  }\n  return groups[email];\n}\n\nfor (const rec of records) {\n  if (rec.due_at && rec.assignee) {\n    // A Clio task, already confirmed to have an assignee email and a due date upstream.\n    const email = rec.assignee.email;\n    const due = new Date(rec.due_at);\n    due.setHours(0, 0, 0, 0);\n    const daysUntilDue = Math.round((due - today) / msPerDay);\n    if (daysUntilDue > FOLLOWUP_WINDOW_DAYS) continue; // further out than the digest window\n\n    const group = ensureGroup(email, rec.assignee.name);\n    const line = {\n      task_name: rec.name || '',\n      due_at: rec.due_at,\n      matter_ref: (rec.matter && rec.matter.display_number) || '',\n      matter_description: (rec.matter && rec.matter.description) || '',\n      high_priority: rec.priority === 'high',\n    };\n    if (daysUntilDue < 0) group.priorities.push(line);\n    else group.follow_ups.push(line);\n  } else if (rec.start_at && rec.attendees) {\n    // A Clio calendar entry, already confirmed to have an attendee with an email and a start date.\n    const attendee = rec.attendees.find(a => a.email);\n    const group = ensureGroup(attendee.email, attendee.name);\n    group.deadlines.push({\n      event_name: rec.summary || '',\n      start_at: rec.start_at,\n      matter_ref: (rec.matter && rec.matter.display_number) || '',\n      matter_description: (rec.matter && rec.matter.description) || '',\n    });\n  }\n  // Anything matching neither shape would already have been dropped by the upstream Filter nodes.\n}\n\nconst attorney_groups = Object.values(groups).filter(g =>\n  g.priorities.length || g.follow_ups.length || g.deadlines.length\n);\n\nreturn [{ json: {\n  attorney_groups,\n  has_digest_items: attorney_groups.length > 0,\n} }];"
+        "jsCode": "// Consumes the merged stream of Clio tasks and Clio calendar entries (already split, filtered,\n// and sorted upstream) and groups everything by attorney into three buckets: priorities (overdue\n// tasks), follow_ups (tasks due today or within the digest window), and deadlines (calendar\n// entries -- hearings, court dates, appointments -- within the digest window). A record is told\n// apart by shape, not by which Merge input it arrived on, since append order isn't preserved\n// per-branch once combined.\n//\n// Clio's tasks.json rejects 'assignee{email}' as an invalid field (confirmed live: \"assignee{email}\n// is not a valid field\") -- Users, unlike Contacts, don't expose email through nested field\n// selection on this endpoint. So this resolves emails from a one-time fetch of the firm's user\n// directory ('Fetch Firm Users From Clio') instead, matched by id. Calendar attendees are checked\n// for a direct email first (in case that resource behaves differently) and fall back to the same\n// user-directory lookup if not.\nconst FOLLOWUP_WINDOW_DAYS = Number($vars.FIRM_DIGEST_FOLLOWUP_DAYS) || 7;\nconst records = $input.all().map(i => i.json);\n\nconst users = ($('Fetch Firm Users From Clio').first().json.data) || [];\nconst userById = {};\nfor (const u of users) {\n  if (u.id) userById[u.id] = { email: u.email || '', name: u.name || '' };\n}\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst groups = {};\n\nfunction ensureGroup(email, name) {\n  if (!groups[email]) {\n    groups[email] = {\n      attorney_name: name || 'Unassigned',\n      attorney_email: email,\n      priorities: [],\n      follow_ups: [],\n      deadlines: [],\n    };\n  }\n  return groups[email];\n}\n\nfor (const rec of records) {\n  if (rec.due_at && rec.assignee) {\n    // A Clio task, already confirmed to have an assignee id and a due date upstream.\n    const resolved = userById[rec.assignee.id];\n    if (!resolved || !resolved.email) continue; // assignee id doesn't resolve to a real email\n\n    const due = new Date(rec.due_at);\n    due.setHours(0, 0, 0, 0);\n    const daysUntilDue = Math.round((due - today) / msPerDay);\n    if (daysUntilDue > FOLLOWUP_WINDOW_DAYS) continue; // further out than the digest window\n\n    const group = ensureGroup(resolved.email, resolved.name || rec.assignee.name);\n    const line = {\n      task_name: rec.name || '',\n      due_at: rec.due_at,\n      matter_ref: (rec.matter && rec.matter.display_number) || '',\n      matter_description: (rec.matter && rec.matter.description) || '',\n      high_priority: rec.priority === 'high',\n    };\n    if (daysUntilDue < 0) group.priorities.push(line);\n    else group.follow_ups.push(line);\n  } else if (rec.start_at && rec.attendees) {\n    // A Clio calendar entry, already confirmed to have at least one attendee and a start date.\n    // Try each attendee in turn: a direct email first, then a user-directory lookup by id.\n    let attendeeEmail = '';\n    let attendeeName = '';\n    for (const a of rec.attendees) {\n      if (a.email) { attendeeEmail = a.email; attendeeName = a.name || ''; break; }\n      const resolved = a.id && userById[a.id];\n      if (resolved && resolved.email) { attendeeEmail = resolved.email; attendeeName = resolved.name || a.name || ''; break; }\n    }\n    if (!attendeeEmail) continue; // no attendee resolves to a real email\n\n    const group = ensureGroup(attendeeEmail, attendeeName);\n    group.deadlines.push({\n      event_name: rec.summary || '',\n      start_at: rec.start_at,\n      matter_ref: (rec.matter && rec.matter.display_number) || '',\n      matter_description: (rec.matter && rec.matter.description) || '',\n    });\n  }\n  // Anything matching neither shape would already have been dropped by the upstream Filter nodes.\n}\n\nconst attorney_groups = Object.values(groups).filter(g =>\n  g.priorities.length || g.follow_ups.length || g.deadlines.length\n);\n\nreturn [{ json: {\n  attorney_groups,\n  has_digest_items: attorney_groups.length > 0,\n} }];"
       },
       "id": "6300aa00-0063-4000-a000-000000000011",
       "name": "Group Priorities Deadlines And Follow-ups By Attorney",
@@ -408,7 +469,7 @@
         1344,
         140
       ],
-      "notes": "The one node that actually groups by attorney and applies the digest window — everything upstream was fetch, split, filter, and sort. Tasks whose due date is further out than FIRM_DIGEST_FOLLOWUP_DAYS are excluded; this is a morning digest, not a full task list."
+      "notes": "The one node that actually groups by attorney, resolves emails, and applies the digest window. References 'Fetch Firm Users From Clio' directly by name (not through a Merge input) to resolve assignee/attendee ids to real email addresses — a task or calendar entry whose id doesn't match anyone in the user directory is silently excluded, same as one with no assignee at all. Tasks whose due date is further out than FIRM_DIGEST_FOLLOWUP_DAYS are also excluded; this is a morning digest, not a full task list."
     },
     {
       "parameters": {
@@ -567,8 +628,7 @@
               "priority": "normal",
               "assignee": {
                 "id": 21,
-                "name": "A. Attorney",
-                "email": "attorney@smithlaw.com"
+                "name": "A. Attorney"
               },
               "matter": {
                 "id": 301,
@@ -583,8 +643,7 @@
               "priority": "high",
               "assignee": {
                 "id": 21,
-                "name": "A. Attorney",
-                "email": "attorney@smithlaw.com"
+                "name": "A. Attorney"
               },
               "matter": {
                 "id": 301,
@@ -599,8 +658,7 @@
               "priority": "normal",
               "assignee": {
                 "id": 21,
-                "name": "A. Attorney",
-                "email": "attorney@smithlaw.com"
+                "name": "A. Attorney"
               },
               "matter": {
                 "id": 295,
@@ -615,8 +673,7 @@
               "priority": "normal",
               "assignee": {
                 "id": 22,
-                "name": "B. Barrister",
-                "email": "b.barrister@smithlaw.com"
+                "name": "B. Barrister"
               },
               "matter": {
                 "id": 295,
@@ -631,8 +688,7 @@
               "priority": "normal",
               "assignee": {
                 "id": 22,
-                "name": "B. Barrister",
-                "email": "b.barrister@smithlaw.com"
+                "name": "B. Barrister"
               },
               "matter": {
                 "id": 295,
@@ -662,6 +718,32 @@
         }
       }
     ],
+    "Fetch Firm Users From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 21,
+              "name": "A. Attorney",
+              "email": "attorney@smithlaw.com",
+              "enabled": true
+            },
+            {
+              "id": 22,
+              "name": "B. Barrister",
+              "email": "b.barrister@smithlaw.com",
+              "enabled": true
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ],
     "Fetch Upcoming Calendar Entries From Clio": [
       {
         "json": {
@@ -680,8 +762,7 @@
               "attendees": [
                 {
                   "id": 21,
-                  "name": "A. Attorney",
-                  "email": "attorney@smithlaw.com"
+                  "name": "A. Attorney"
                 }
               ]
             },
@@ -699,8 +780,7 @@
               "attendees": [
                 {
                   "id": 22,
-                  "name": "B. Barrister",
-                  "email": "b.barrister@smithlaw.com"
+                  "name": "B. Barrister"
                 }
               ]
             },
@@ -745,6 +825,11 @@
           },
           {
             "node": "Fetch Upcoming Calendar Entries From Clio",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Firm Users From Clio",
             "type": "main",
             "index": 0
           }
