@@ -20,9 +20,11 @@ Get value in under 15 minutes. Every morning, the workflow pulls three things ou
 
 **Tasks and calendar entries whose assignee/attendee can't be resolved to an email, or that have no date, are silently excluded.** This includes tasks assigned to someone who isn't in the fetched user directory (e.g. a disabled or external user) — check Clio periodically for records stuck in that state.
 
-**One more Clio field hasn't been independently confirmed live:** the exact shape Clio expects for `calendar_entries.json`'s `from`/`to` date-range query parameters. Both fetches have "Never Error" turned on and degrade gracefully — if the calendar endpoint isn't available on your Clio plan, or the user-directory fetch fails, the digest still sends with whatever it could resolve rather than failing outright.
+**Confirmed live: `calendar_entries.json`'s `from`/`to` need a full ISO 8601 datetime, not a bare date.** A plain date like `2026-08-24` is rejected with `ArgumentError: An invalid argument was supplied: invalid xmlschema format`. Fixed by using `$now.startOf('day').toISO()` instead of `$now.toISODate()`. All three fetches have "Never Error" turned on and degrade gracefully — if the calendar endpoint isn't available on your Clio plan, or the user-directory fetch fails, the digest still sends with whatever it could resolve rather than failing outright.
 
 **If your Clio account is on a regional subdomain (e.g. `eu.app.clio.com`), `CLIO_BASE_URL` must match exactly.** All three fetches use it — a US default against an EU account (or vice versa) will silently return nothing usable.
+
+**Your Clio OAuth2 app needs Tasks, Calendar, and Users read scopes — granted *before* you authorize the credential.** All three showed up as `ForbiddenError: "User is forbidden from taking that action"` when the Users scope wasn't enabled on the app. Checking a scope's box in Clio's app config (`developers.clio.com/apps/...`) does **not** retroactively apply to a credential you already authorized — the scope is baked into the token at the moment you consent. If you add or change a scope after the fact, you must reconnect/reauthorize the credential in n8n (Credentials → your Clio credential → sign in again) to get a token that actually carries it.
 
 ---
 
