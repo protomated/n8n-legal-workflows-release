@@ -4,7 +4,7 @@
 **Pillar:** Keep
 **Replaces:** A Lawmatics-style onboarding journey
 
-Get value in under 15 minutes. Every day, the workflow checks every open Clio matter and works out — purely from each matter's own open date — whether today is one of four onboarding-sequence days: **Day 0** (welcome + portal access), **Day 1** (what to expect), **Day 3** (document checklist), **Day 7** (how billing works). Whichever stage is due gets built, checked against your compliance guardrail, and sent. A rocky, silent first week is one of the biggest drivers of early client churn — this keeps every new client hearing from the firm on a predictable cadence without anyone having to remember to do it by hand.
+Get value in under 15 minutes. Every day, the workflow pulls two things from Clio in parallel — every open matter, and the firm's user directory — and works out, purely from each matter's own open date, whether today is one of four onboarding-sequence days: **Day 0** (welcome + portal access), **Day 1** (what to expect), **Day 3** (document checklist), **Day 7** (how billing works). Whichever stage is due gets built — personalized with the assigned attorney's name where Clio's user directory resolves one — checked against your compliance guardrail, and sent. A rocky, silent first week is one of the biggest drivers of early client churn — this keeps every new client hearing from the firm on a predictable, personal cadence without anyone having to remember to do it by hand.
 
 ---
 
@@ -16,7 +16,11 @@ Get value in under 15 minutes. Every day, the workflow checks every open Clio ma
 
 **All four stages are plain text, not styled HTML.** The compliance guardrail only guarantees the opt-out footer is present in the plain-text `message_out` it returns — sending a separate HTML body without that same footer baked in would mean most email clients render the HTML (with no footer) instead of the compliant text version. Keeping this text-only avoids that risk entirely.
 
-**One Clio field hasn't been independently confirmed live:** `client{primary_email_address}` as a nested field on `matters.json`. That field name is reused from how this catalog's Review Request Engine (NTC-17) already refers to Clio contact emails elsewhere — and PAC-63 confirmed live that a *User's* email is rejected as a nested field on `tasks.json`, but a matter's `client` is a *Contact*, which behaves differently. Check your first real run's output on `Fetch Open Matters From Clio` and adjust the field name if Clio rejects it or returns something else.
+**Two Clio resources, one credential.** Matters (`matters.json`) are fetched, split into individual records, filtered, staged, and filtered again — all with native n8n nodes (Split Out, Filter), not one large custom script. A second fetch pulls the firm's user directory (`users.json`), used only to personalize with the assigned attorney's name (see below). Both use the same Clio OAuth2 credential.
+
+**Confirmed live (in PAC-63): Clio will not return a User's email as a nested field.** Requesting `responsible_attorney{id,name,email}` on a matter would hit the same wall PAC-63 hit on `tasks.json`'s `assignee{email}` — so this template only requests `responsible_attorney{id,name}` and resolves the email by matching the id against `Fetch Firm Users From Clio` (where email *is* a requestable top-level field). If the attorney can't be resolved — unassigned matter, disabled user, or the directory fetch itself failing — every stage's copy falls back to generic firm contact details rather than blocking the send.
+
+**Two Clio fields haven't been independently confirmed live on this specific endpoint:** `client{primary_email_address}` and `responsible_attorney` as fields on `matters.json`. `primary_email_address` is reused from how this catalog's Review Request Engine (NTC-17) already refers to Clio contact emails elsewhere, on the theory that a matter's `client` is a *Contact* (which PAC-63 didn't test) rather than a *User* (which PAC-63 confirmed rejects nested email). Check your first real run's output on `Fetch Open Matters From Clio` and adjust field names if Clio rejects either or returns something else.
 
 ---
 
@@ -24,8 +28,9 @@ Get value in under 15 minutes. Every day, the workflow checks every open Clio ma
 
 - **The Bar-Compliance Guardrail (NTC-33) must be set up first** — this template cannot send a single email without it; every send is gated on the guardrail's `approved` response.
 - An n8n instance (self-hosted or n8n Cloud)
-- A Clio account with API access, matter read scope (reuse the OAuth2 credential from PAC-18/20/55/57/58/59/61/63 if already deployed)
+- A Clio account with API access, matter and user-directory read scope (reuse the OAuth2 credential from PAC-18/20/55/57/58/59/61/63 if already deployed)
 - Every relevant Clio matter should have a client with a valid email on file — matters without one are silently excluded
+- Every relevant matter should have a responsible attorney assigned in Clio for the personalization to apply — matters without one still send, just without the attorney's name
 - An email account with SMTP access
 
 ---
@@ -69,15 +74,16 @@ Toggle the workflow to **Active**. It runs on its own from then on — no webhoo
 
 ## Step 5 — Test
 
-The workflow ships with pinned sample Clio data (six matters covering all four stage days, one already past the sequence window, and one with no client email on file), so you can test without waiting for a real schedule fire or having real matters at the right ages yet.
+The workflow ships with pinned sample Clio data on all three nodes that talk to Clio (seven matters covering all four stage days, one already past the sequence window, one with no client email on file, and one whose attorney can't be resolved — plus a two-user firm directory), so you can test without waiting for a real schedule fire or having real matters at the right ages yet.
 
-1. Run **"Fetch Open Matters From Clio"** → **"Compute Onboarding Stage For Each Matter"** and confirm: the matter opened 10 days ago and the matter with no client email are both excluded, and the other four each get the correct stage (`day0`, `day1`, `day3`, `day7`).
-2. Continue through **"If Onboarding Stage Due Today"** → **"Build Onboarding Stage Email"** for each of the four and confirm the subject/body match the intended stage, with `matterLabel`, client name, and any optional variables filled in correctly.
-3. Continue through **"Check Compliance Before Sending"** → **"If Onboarding Email Approved"** → **"Send Onboarding Stage Email"** and confirm the delivered email carries the guardrail's unsubscribe footer.
-4. Add a row to the Guardrail's Opt-Outs sheet for one of the pinned client emails, re-run, and confirm that matter routes to **"Skip — Client Opted Out"** instead of sending.
-5. Temporarily clear the pinned data on the fetch node down to an empty `data` array and re-run to confirm the workflow reaches **"Skip — No Onboarding Stage Due Today"** with no email sent.
+1. Run **"Fetch Open Matters From Clio"** → **"Split Out Matter Records"** → **"Filter Matters With Client Email And Open Date"** and confirm the matter with no client email is dropped.
+2. Continue through **"Compute Days Since Open And Determine Stage"** → **"Filter Matters With Stage Due Today"** and confirm the matter opened 10 days ago is dropped, and the other five each carry the correct `stage` (`day0`, `day1`, `day3`, `day7` — two matters land on `day0`).
+3. Continue through **"Check If Any Stage Due Today"** → **"If Onboarding Stage Due Today"** → **"Build Onboarding Stage Email"** for each surviving matter and confirm the subject/body match the intended stage. For the matter with attorney id `99` (not in the pinned user directory), confirm the copy falls back to generic firm contact details instead of naming an attorney; for the others, confirm it correctly names the resolved attorney.
+4. Continue through **"Check Compliance Before Sending"** → **"If Onboarding Email Approved"** → **"Send Onboarding Stage Email"** and confirm the delivered email carries the guardrail's unsubscribe footer.
+5. Add a row to the Guardrail's Opt-Outs sheet for one of the pinned client emails, re-run, and confirm that matter routes to **"Skip — Client Opted Out"** instead of sending.
+6. Temporarily clear the pinned data on both Clio fetch nodes down to empty `data` arrays and re-run to confirm the workflow reaches **"Skip — No Onboarding Stage Due Today"** with no email sent.
 
-**Testing against your real Clio account:** unpin `Fetch Open Matters From Clio`, connect a real Clio OAuth2 credential, and check the raw output before assuming anything is broken. If every matter gets excluded even though one should be at day 0, check whether `client.primary_email_address` actually appears in the response — this is the one unconfirmed field flagged above.
+**Testing against your real Clio account:** unpin `Fetch Open Matters From Clio` and `Fetch Firm Users From Clio`, connect a real Clio OAuth2 credential, and check each node's raw output before assuming anything is broken. If every matter gets excluded even though one should be at day 0, check whether `client.primary_email_address` and `responsible_attorney` actually appear in the response — these are the two unconfirmed fields flagged above. If matters come through fine but attorney names never resolve, check `Fetch Firm Users From Clio`'s output for the same reason PAC-63 hit a Forbidden error initially: a missing Users read scope on your Clio OAuth2 app, or a credential authorized before that scope was added (reconnect it after granting the scope).
 
 ---
 
@@ -88,9 +94,10 @@ The workflow ships with pinned sample Clio data (six matters covering all four s
 | A matter is exactly 0, 1, 3, or 7 days since its Clio open date | The matching stage email is built and sent (unless opted out) |
 | A matter is any other age | Excluded for today — no email, no error |
 | A matter's client has no email on file, or the matter has no open date | Silently excluded from every stage |
+| A matter's responsible attorney can't be resolved (unassigned, disabled, or the directory fetch failed) | Email still sends — copy falls back to generic firm name/contact details instead of naming an attorney |
 | No open matter hits a sequence day today | Skipped — no emails, nothing to route |
 | The client has opted out of firm emails | Guardrail suppresses the send; already logged to the audit sheet |
-| The Clio matters fetch fails | Degrades to a quiet skip rather than failing the run |
+| The Clio matters or user-directory fetch fails | Degrades gracefully rather than failing the run |
 
 ---
 
