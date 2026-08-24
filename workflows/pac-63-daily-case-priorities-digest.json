@@ -4,9 +4,9 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Daily Case Priorities Digest\n\n### How it works\n\n1. Triggers every morning on a schedule and pulls every open task from Clio.\n2. Groups tasks by the assigned attorney, then sorts each attorney's tasks into overdue, due today, and due this week.\n3. Skips silently if nobody has anything due — no empty emails go out.\n4. Builds one styled digest email per attorney and logs the send to the compliance audit log.\n5. Sends the digest, with a short teaser for the full LegalContext Morning Digest at the bottom.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — this template logs every digest send to it for audit purposes.\n- [ ] Configure Clio OAuth2 credentials with task read access.\n- [ ] Configure SMTP credentials for sending the digest email.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Adjust the morning schedule to match your firm's start of day.\n\n### Customization\n\nSet FIRM_DIGEST_FOLLOWUP_DAYS to widen or narrow the 'coming up this week' window (defaults to 7 days). Edit the section colors and copy in 'Build Morning Digest Email' to match your firm's branding, or change the LEGALCONTEXT_UPSELL_URL variable to point at your own booking link.",
+        "content": "## Daily Case Priorities Digest\n\n### How it works\n\n1. Triggers every morning on a schedule and pulls two things from Clio in parallel: every open task, and every calendar entry (hearings, court dates, appointments) in the next few days.\n2. Each branch is split into individual records, filtered down to the ones with someone to notify and a date to sort by, then sorted chronologically — all with native n8n nodes, not custom code.\n3. The two branches are merged, then grouped by attorney into three buckets: Priorities (overdue tasks), Deadlines (upcoming calendar entries), and Follow-ups (tasks due today or this week).\n4. Skips silently if nobody has anything in any bucket — no empty emails go out.\n5. Builds one styled digest email per attorney, logs the send to the compliance audit log, then delivers it — ending with a short teaser for the full LegalContext Morning Digest.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — this template logs every digest send to it for audit purposes.\n- [ ] Configure Clio OAuth2 credentials with task and calendar read access.\n- [ ] Configure SMTP credentials for sending the digest email.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Adjust the morning schedule to match your firm's start of day.\n\n### Customization\n\nSet FIRM_DIGEST_FOLLOWUP_DAYS to widen or narrow the 'coming up this week' / calendar lookahead window (defaults to 7 days). Edit the section colors and copy in 'Build Morning Digest Email' to match your firm's branding, or change the LEGALCONTEXT_UPSELL_URL variable to point at your own booking link.",
         "width": 480,
-        "height": 880
+        "height": 900
       },
       "id": "b1a1c001-0001-4000-8000-000000000001",
       "name": "📖 Workflow doc",
@@ -14,13 +14,13 @@
       "typeVersion": 1,
       "position": [
         -700,
-        -500
+        -560
       ]
     },
     {
       "parameters": {
-        "content": "## Morning trigger and fetch\n\nScheduled trigger fires each morning and pulls every open (non-completed) task from Clio, across all attorneys.",
-        "width": 416,
+        "content": "## Fetch and prep Clio tasks\n\nPulls every open task, splits it into individual records, keeps only the ones with an assignee email and a due date, then sorts chronologically — feeds the 'Priorities' and 'Follow-ups' buckets.",
+        "width": 1104,
         "height": 320,
         "color": 7
       },
@@ -30,14 +30,14 @@
       "typeVersion": 1,
       "position": [
         -48,
-        -160
+        -200
       ]
     },
     {
       "parameters": {
-        "content": "## Group and check for items\n\nGroups tasks by assigned attorney and buckets each into overdue, due today, or due this week. Branches to Skip if nobody has anything due.",
-        "width": 464,
-        "height": 496,
+        "content": "## Fetch and prep calendar deadlines\n\nPulls every calendar entry in the lookahead window, splits it into individual records, keeps only the ones with an attendee email and a start date, then sorts chronologically — feeds the 'Deadlines' bucket.",
+        "width": 1104,
+        "height": 320,
         "color": 7
       },
       "id": "b1a1c001-0001-4000-8000-000000000003",
@@ -45,8 +45,40 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        400,
-        -160
+        -48,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Merge and group by attorney\n\nCombines both prepped streams and groups everything by attorney into Priorities, Deadlines, and Follow-ups.",
+        "width": 464,
+        "height": 560,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000004",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Check for digest items\n\nBranches to Skip if no attorney has anything in any bucket this morning.",
+        "width": 336,
+        "height": 560,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000005",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        -200
       ]
     },
     {
@@ -56,13 +88,13 @@
         "height": 320,
         "color": 7
       },
-      "id": "b1a1c001-0001-4000-8000-000000000004",
-      "name": "Sticky Note3",
+      "id": "b1a1c001-0001-4000-8000-000000000006",
+      "name": "Sticky Note5",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        896,
-        -160
+        2000,
+        -200
       ]
     },
     {
@@ -82,9 +114,9 @@
       "typeVersion": 1.3,
       "position": [
         0,
-        0
+        100
       ],
-      "notes": "Fires every day at 7am (n8n server timezone) — before the start of the firm's business day. Adjust the cron expression to match when your attorneys actually want this waiting in their inbox, or restrict it to weekdays only (e.g. '0 7 * * 1-5') if a weekend digest isn't useful."
+      "notes": "Fires every day at 7am (n8n server timezone) — before the start of the firm's business day. Feeds two parallel fetches: open Clio tasks, and upcoming Clio calendar entries. Adjust the cron expression to match when your attorneys actually want this waiting in their inbox, or restrict it to weekdays only (e.g. '0 7 * * 1-5') if a weekend digest isn't useful."
     },
     {
       "parameters": {
@@ -105,11 +137,18 @@
             },
             {
               "name": "fields",
-              "value": "id,name,due_at,assignee{id,name,email},matter{id,display_number,description}"
+              "value": "id,name,due_at,priority,assignee{id,name,email},matter{id,display_number,description}"
             }
           ]
         },
-        "options": {}
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
       },
       "id": "6300aa00-0063-4000-a000-000000000002",
       "name": "Fetch Open Tasks From Clio",
@@ -117,9 +156,10 @@
       "typeVersion": 4.4,
       "position": [
         224,
-        0
+        -80
       ],
-      "notes": "Pulls every task still marked 'pending' in Clio, regardless of attorney — the next step splits them out per attorney. Same bills/tasks.json request pattern as PAC-59/61, with 'pending' as the status value.\n\n'due_at' is the field name used across this catalog whenever a Clio task is created (see NTC-16, PAC-59) but hasn't independently been confirmed on this endpoint's GET response — check your first real run's output and adjust the field name here if it comes back under a different key.\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59/61 — reuse it if already deployed.\n\nReturns up to 200 tasks per run. If your firm regularly has more open at once, add a loop over the 'page' parameter.",
+      "notes": "Pulls every task still marked 'pending' in Clio, regardless of attorney — the next few nodes split, filter, and sort it. Same tasks.json request pattern as PAC-59/61, with 'pending' as the status value.\n\n'due_at' and 'priority' are field names this catalog already uses when *creating* Clio tasks (see NTC-16, PAC-59) but reading them back on this endpoint's GET response hasn't independently been confirmed live — check your first real run's output and adjust the field names here if either comes back under a different key.\n\n'Never Error' is on, and downstream filtering treats a missing/empty 'data' array the same as zero tasks — a Clio outage degrades this branch gracefully instead of failing the whole digest.\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59/61 — reuse it if already deployed.\n\nReturns up to 200 tasks per run. If your firm regularly has more open at once, add a loop over the 'page' parameter.",
+      "onError": "continueRegularOutput",
       "credentials": {
         "oAuth2Api": {
           "id": "1",
@@ -129,17 +169,246 @@
     },
     {
       "parameters": {
-        "jsCode": "// Groups open Clio tasks by assignee, then buckets each task by due date relative to today.\n// This is the entire digest logic: what's already late (overdue), what's due today (deadlines),\n// and what's coming up this week (follow-ups) -- a pure sort by date, no judgment on task content.\nconst FOLLOWUP_WINDOW_DAYS = Number($vars.FIRM_DIGEST_FOLLOWUP_DAYS) || 7;\nconst tasks = $input.first().json.data || [];\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\n\nconst groups = {};\nfor (const task of tasks) {\n  const assignee = task.assignee || {};\n  if (!assignee.email) continue; // nobody to send this task's digest line to\n  if (!task.due_at) continue; // no date to bucket by\n\n  const due = new Date(task.due_at);\n  due.setHours(0, 0, 0, 0);\n  const daysUntilDue = Math.round((due - today) / msPerDay);\n\n  let bucket;\n  if (daysUntilDue < 0) bucket = 'overdue';\n  else if (daysUntilDue === 0) bucket = 'due_today';\n  else if (daysUntilDue <= FOLLOWUP_WINDOW_DAYS) bucket = 'follow_up';\n  else continue; // further out than the follow-up window -- not part of a morning digest\n\n  const key = assignee.email;\n  if (!groups[key]) {\n    groups[key] = {\n      attorney_name: assignee.name || 'Unassigned',\n      attorney_email: assignee.email,\n      overdue: [],\n      due_today: [],\n      follow_up: [],\n    };\n  }\n\n  groups[key][bucket].push({\n    task_name: task.name || '',\n    due_at: task.due_at,\n    matter_ref: (task.matter && task.matter.display_number) || '',\n    matter_description: (task.matter && task.matter.description) || '',\n  });\n}\n\nconst attorney_groups = Object.values(groups).filter(g =>\n  g.overdue.length || g.due_today.length || g.follow_up.length\n);\n\nreturn [{ json: {\n  attorney_groups,\n  has_digest_items: attorney_groups.length > 0,\n} }];"
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/calendar_entries.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "from",
+              "value": "={{ $now.toISODate() }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ $now.plus({ days: Number($vars.FIRM_DIGEST_FOLLOWUP_DAYS) || 7 }).toISODate() }}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,summary,start_at,end_at,all_day,matter{id,display_number,description},attendees{id,name,email}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
       },
       "id": "6300aa00-0063-4000-a000-000000000003",
-      "name": "Group Tasks By Attorney And Bucket",
+      "name": "Fetch Upcoming Calendar Entries From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        340
+      ],
+      "notes": "Pulls every calendar entry (hearings, court dates, client appointments) between today and the end of the follow-up window — these are the digest's 'Deadlines' section, distinct from task due dates.\n\nThis is Clio's own Calendar Entries resource (developer.clio.com), a separate resource from tasks.json. 'attendees' as the field carrying each entry's associated people, and the exact shape of 'from'/'to' as plain ISO dates, haven't independently been confirmed live — check your first real run's output and adjust if the response shape differs.\n\n'Never Error' is on, and downstream filtering treats a missing/empty 'data' array the same as zero entries — if your Clio plan doesn't expose this endpoint, the digest still sends with just the task sections.\n\nCredential: same Clio OAuth2 credential as the tasks fetch above — no separate calendar credential needed.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "6300aa00-0063-4000-a000-000000000004",
+      "name": "Split Out Task Records",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -80
+      ],
+      "notes": "Turns the single API response into one n8n item per task, so the Filter and Sort nodes downstream can each operate on individual tasks. An empty or missing 'data' array (e.g. after a Clio error) simply produces zero items — the rest of the branch handles that as 'nothing to report', not a failure."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "6300aa00-0063-4000-a000-000000000005",
+      "name": "Split Out Calendar Entries",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        448,
+        340
+      ],
+      "notes": "Turns the single API response into one n8n item per calendar entry. An empty or missing 'data' array simply produces zero items."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_assignee",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.assignee && $json.assignee.email }}",
+              "rightValue": ""
+            },
+            {
+              "id": "c_has_due_at",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.due_at }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6300aa00-0063-4000-a000-000000000006",
+      "name": "Filter Tasks With Assignee And Due Date",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        -80
+      ],
+      "notes": "Drops tasks with no assignee email (nobody to send it to) or no due date (nothing to sort it by). A nonzero drop rate here is worth checking in Clio periodically — it usually means a task needs an assignee or a due date set."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_attendee",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.attendees && $json.attendees.length > 0 && $json.attendees[0].email ? $json.attendees[0].email : '' }}",
+              "rightValue": ""
+            },
+            {
+              "id": "c_has_start_at",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.start_at }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6300aa00-0063-4000-a000-000000000007",
+      "name": "Filter Calendar Entries With Attendee And Date",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        340
+      ],
+      "notes": "Drops calendar entries with no attendee that has an email on file, or no start date. Only the first listed attendee is used to route the entry — a shared court date with multiple attendees currently reaches only the first one listed in Clio."
+    },
+    {
+      "parameters": {
+        "type": "simple",
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "due_at",
+              "order": "ascending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6300aa00-0063-4000-a000-000000000008",
+      "name": "Sort Tasks By Due Date",
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -80
+      ],
+      "notes": "Orders tasks oldest-due-first, so within each bucket the digest email lists the most pressing item at the top."
+    },
+    {
+      "parameters": {
+        "type": "simple",
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "start_at",
+              "order": "ascending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6300aa00-0063-4000-a000-000000000009",
+      "name": "Sort Calendar Entries By Start Date",
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        896,
+        340
+      ],
+      "notes": "Orders calendar entries soonest-first, so the digest's Deadlines section reads chronologically."
+    },
+    {
+      "parameters": {
+        "numberInputs": 2
+      },
+      "id": "6300aa00-0063-4000-a000-000000000010",
+      "name": "Merge Tasks And Calendar Entries",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        1120,
+        140
+      ],
+      "notes": "Appends the sorted task stream (input 1) and the sorted calendar-entry stream (input 2) into one list. The next node tells a task from a calendar entry by shape (due_at+assignee vs start_at+attendees), not by which input it arrived on — append order isn't load-bearing here."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Consumes the merged stream of Clio tasks and Clio calendar entries (already split, filtered,\n// and sorted upstream) and groups everything by attorney into three buckets: priorities (overdue\n// tasks), follow_ups (tasks due today or within the digest window), and deadlines (calendar\n// entries -- hearings, court dates, appointments -- within the digest window). A record is told\n// apart by shape, not by which Merge input it arrived on, since append order isn't preserved\n// per-branch once combined.\nconst FOLLOWUP_WINDOW_DAYS = Number($vars.FIRM_DIGEST_FOLLOWUP_DAYS) || 7;\nconst records = $input.all().map(i => i.json);\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst groups = {};\n\nfunction ensureGroup(email, name) {\n  if (!groups[email]) {\n    groups[email] = {\n      attorney_name: name || 'Unassigned',\n      attorney_email: email,\n      priorities: [],\n      follow_ups: [],\n      deadlines: [],\n    };\n  }\n  return groups[email];\n}\n\nfor (const rec of records) {\n  if (rec.due_at && rec.assignee) {\n    // A Clio task, already confirmed to have an assignee email and a due date upstream.\n    const email = rec.assignee.email;\n    const due = new Date(rec.due_at);\n    due.setHours(0, 0, 0, 0);\n    const daysUntilDue = Math.round((due - today) / msPerDay);\n    if (daysUntilDue > FOLLOWUP_WINDOW_DAYS) continue; // further out than the digest window\n\n    const group = ensureGroup(email, rec.assignee.name);\n    const line = {\n      task_name: rec.name || '',\n      due_at: rec.due_at,\n      matter_ref: (rec.matter && rec.matter.display_number) || '',\n      matter_description: (rec.matter && rec.matter.description) || '',\n      high_priority: rec.priority === 'high',\n    };\n    if (daysUntilDue < 0) group.priorities.push(line);\n    else group.follow_ups.push(line);\n  } else if (rec.start_at && rec.attendees) {\n    // A Clio calendar entry, already confirmed to have an attendee with an email and a start date.\n    const attendee = rec.attendees.find(a => a.email);\n    const group = ensureGroup(attendee.email, attendee.name);\n    group.deadlines.push({\n      event_name: rec.summary || '',\n      start_at: rec.start_at,\n      matter_ref: (rec.matter && rec.matter.display_number) || '',\n      matter_description: (rec.matter && rec.matter.description) || '',\n    });\n  }\n  // Anything matching neither shape would already have been dropped by the upstream Filter nodes.\n}\n\nconst attorney_groups = Object.values(groups).filter(g =>\n  g.priorities.length || g.follow_ups.length || g.deadlines.length\n);\n\nreturn [{ json: {\n  attorney_groups,\n  has_digest_items: attorney_groups.length > 0,\n} }];"
+      },
+      "id": "6300aa00-0063-4000-a000-000000000011",
+      "name": "Group Priorities Deadlines And Follow-ups By Attorney",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        448,
-        0
+        1344,
+        140
       ],
-      "notes": "Tasks with no assignee email or no due date are silently excluded — there's nobody to send them to, or no date to sort them by. Tasks due further out than FIRM_DIGEST_FOLLOWUP_DAYS are excluded too; this is a morning digest, not a full task list."
+      "notes": "The one node that actually groups by attorney and applies the digest window — everything upstream was fetch, split, filter, and sort. Tasks whose due date is further out than FIRM_DIGEST_FOLLOWUP_DAYS are excluded; this is a morning digest, not a full task list."
     },
     {
       "parameters": {
@@ -166,56 +435,56 @@
           ]
         }
       },
-      "id": "6300aa00-0063-4000-a000-000000000004",
+      "id": "6300aa00-0063-4000-a000-000000000012",
       "name": "If Any Attorney Has Digest Items",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        672,
-        0
+        1568,
+        140
       ],
-      "notes": "Yes (at least one attorney has an overdue, due-today, or follow-up task) → build and send digests.\nNo (every open task is either far enough out to be excluded, or there simply aren't any) → route to Skip. No emails sent.",
+      "notes": "Yes (at least one attorney has an overdue task, an upcoming calendar entry, or a follow-up task) → build and send digests.\nNo (every open task and calendar entry is either out of window, or there simply aren't any) → route to Skip. No emails sent.",
       "onError": "continueErrorOutput"
     },
     {
       "parameters": {},
-      "id": "6300aa00-0063-4000-a000-000000000005",
+      "id": "6300aa00-0063-4000-a000-000000000013",
       "name": "Skip — Nothing To Digest Today",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        896,
-        200
+        1792,
+        380
       ],
-      "notes": "No attorney had anything overdue, due today, or coming up this week. Expected on a quiet day — no digest email sent."
+      "notes": "No attorney had anything overdue, upcoming, or due this week. Expected on a quiet day — no digest email sent."
     },
     {
       "parameters": {
         "jsCode": "return $input.first().json.attorney_groups.map(g => ({ json: g }));"
       },
-      "id": "6300aa00-0063-4000-a000-000000000006",
+      "id": "6300aa00-0063-4000-a000-000000000014",
       "name": "Split Digest By Attorney",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
-        0
+        1792,
+        140
       ],
-      "notes": "Fans out into one item per attorney who has at least one digest-worthy task — everything downstream builds and sends one attorney's digest email at a time."
+      "notes": "Fans out into one item per attorney who has at least one digest-worthy item — everything downstream builds and sends one attorney's digest email at a time."
     },
     {
       "parameters": {
-        "jsCode": "// Builds one styled morning digest email per attorney, sorted into overdue / due today / due\n// this week. Always ends with a short teaser for the full LegalContext Morning Digest -- this\n// free template is a preview of that product, not a replacement for it.\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst UPSELL_URL = $vars.LEGALCONTEXT_UPSELL_URL || 'https://protomated.com/legalcontext';\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n}\n\nfunction section(label, color, items) {\n  if (!items.length) return '';\n  const rows = items.map(t => `\n    <div style=\"border-bottom:1px solid #e2e8f0;padding:10px 0;\">\n      <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(t.task_name)}</div>\n      <div style=\"font-size:13px;color:#64748b;\">${escapeHtml(t.matter_ref)}${t.matter_description ? ' — ' + escapeHtml(t.matter_description) : ''}</div>\n    </div>`).join('');\n  return `\n    <div style=\"margin-bottom:20px;\">\n      <div style=\"font-size:12px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;\">${label} (${items.length})</div>\n      ${rows}\n    </div>`;\n}\n\nconst item = $input.first().json;\nconst total = item.overdue.length + item.due_today.length + item.follow_up.length;\n\nconst bodyHtml = `\n    <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">Good morning ${escapeHtml(item.attorney_name)} — here's what needs your attention today (${total} item(s)):</div>\n    ${section('Overdue', '#dc2626', item.overdue)}\n    ${section('Due today', '#ea580c', item.due_today)}\n    ${section('Coming up this week', '#0e7490', item.follow_up)}\n    <div style=\"margin-top:24px;padding:14px 16px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;\">\n      <div style=\"font-size:13px;color:#0f766e;\">This lite digest pulls straight from your task list. <a href=\"${UPSELL_URL}\" style=\"color:#0e7490;font-weight:600;\">LegalContext Morning Digest</a> adds case status, billing alerts, and an AI-summarized action list — all in one email, every morning.</div>\n    </div>`;\n\nconst textLines = [];\nfunction textSection(label, items) {\n  if (!items.length) return;\n  textLines.push(`${label} (${items.length}):`);\n  items.forEach(t => textLines.push(`  • ${t.task_name}${t.matter_ref ? ' — ' + t.matter_ref : ''}`));\n  textLines.push('');\n}\ntextSection('Overdue', item.overdue);\ntextSection('Due today', item.due_today);\ntextSection('Coming up this week', item.follow_up);\n\nconst subject = `Your morning digest — ${total} item(s) need attention`;\n\nconst textBody = `Good morning ${item.attorney_name},\n\nHere's what needs your attention today (${total} item(s)):\n\n${textLines.join('\\n')}\nThis lite digest pulls straight from your task list. LegalContext Morning Digest adds case status, billing alerts, and an AI-summarized action list — all in one email, every morning: ${UPSELL_URL}\n\n— ${FIRM_NAME}`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: textBody,\n  email_html: emailShell('#02BDAD', 'Morning Digest', subject, bodyHtml),\n  template_id: 'PAC-63',\n  matter_id: '',\n} }];"
+        "jsCode": "// Builds one styled morning digest email per attorney, sorted into three sections: Priorities\n// (overdue tasks), Deadlines (upcoming calendar entries), and Follow-ups (tasks due today or this\n// week). Always ends with a short teaser for the full LegalContext Morning Digest -- this free\n// template is a preview of that product, not a replacement for it.\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst UPSELL_URL = $vars.LEGALCONTEXT_UPSELL_URL || 'https://protomated.com/legalcontext';\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_FROM_EMAIL) throw new Error('FIRM_FROM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction formatDateTime(iso) {\n  try {\n    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));\n  } catch (e) {\n    return iso;\n  }\n}\n\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n}\n\nfunction taskSection(label, color, items) {\n  if (!items.length) return '';\n  const rows = items.map(t => `\n    <div style=\"border-bottom:1px solid #e2e8f0;padding:10px 0;\">\n      <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${t.high_priority ? '⭐ ' : ''}${escapeHtml(t.task_name)}</div>\n      <div style=\"font-size:13px;color:#64748b;\">${escapeHtml(t.matter_ref)}${t.matter_description ? ' — ' + escapeHtml(t.matter_description) : ''}</div>\n    </div>`).join('');\n  return `\n    <div style=\"margin-bottom:20px;\">\n      <div style=\"font-size:12px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;\">${label} (${items.length})</div>\n      ${rows}\n    </div>`;\n}\n\nfunction deadlineSection(label, color, items) {\n  if (!items.length) return '';\n  const rows = items.map(d => `\n    <div style=\"border-bottom:1px solid #e2e8f0;padding:10px 0;\">\n      <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(d.event_name)}</div>\n      <div style=\"font-size:13px;color:#64748b;\">${formatDateTime(d.start_at)}${d.matter_ref ? ' — ' + escapeHtml(d.matter_ref) : ''}${d.matter_description ? ' (' + escapeHtml(d.matter_description) + ')' : ''}</div>\n    </div>`).join('');\n  return `\n    <div style=\"margin-bottom:20px;\">\n      <div style=\"font-size:12px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;\">${label} (${items.length})</div>\n      ${rows}\n    </div>`;\n}\n\nconst item = $input.first().json;\nconst total = item.priorities.length + item.deadlines.length + item.follow_ups.length;\n\nconst bodyHtml = `\n    <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">Good morning ${escapeHtml(item.attorney_name)} — here's what needs your attention today (${total} item(s)):</div>\n    ${taskSection('Priorities — overdue', '#dc2626', item.priorities)}\n    ${deadlineSection('Deadlines — upcoming', '#7c3aed', item.deadlines)}\n    ${taskSection('Follow-ups — this week', '#0e7490', item.follow_ups)}\n    <div style=\"margin-top:24px;padding:14px 16px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;\">\n      <div style=\"font-size:13px;color:#0f766e;\">This lite digest pulls straight from your tasks and calendar. <a href=\"${UPSELL_URL}\" style=\"color:#0e7490;font-weight:600;\">LegalContext Morning Digest</a> adds case status, billing alerts, and an AI-summarized action list — all in one email, every morning.</div>\n    </div>`;\n\nconst textLines = [];\nfunction textTaskSection(label, items) {\n  if (!items.length) return;\n  textLines.push(`${label} (${items.length}):`);\n  items.forEach(t => textLines.push(`  • ${t.high_priority ? '[HIGH] ' : ''}${t.task_name}${t.matter_ref ? ' — ' + t.matter_ref : ''}`));\n  textLines.push('');\n}\nfunction textDeadlineSection(label, items) {\n  if (!items.length) return;\n  textLines.push(`${label} (${items.length}):`);\n  items.forEach(d => textLines.push(`  • ${formatDateTime(d.start_at)} — ${d.event_name}${d.matter_ref ? ' — ' + d.matter_ref : ''}`));\n  textLines.push('');\n}\ntextTaskSection('Priorities — overdue', item.priorities);\ntextDeadlineSection('Deadlines — upcoming', item.deadlines);\ntextTaskSection('Follow-ups — this week', item.follow_ups);\n\nconst subject = `Your morning digest — ${total} item(s) need attention`;\n\nconst textBody = `Good morning ${item.attorney_name},\n\nHere's what needs your attention today (${total} item(s)):\n\n${textLines.join('\\n')}\nThis lite digest pulls straight from your tasks and calendar. LegalContext Morning Digest adds case status, billing alerts, and an AI-summarized action list — all in one email, every morning: ${UPSELL_URL}\n\n— ${FIRM_NAME}`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.attorney_email,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: textBody,\n  email_html: emailShell('#02BDAD', 'Morning Digest', subject, bodyHtml),\n  template_id: 'PAC-63',\n  matter_id: '',\n} }];"
       },
-      "id": "6300aa00-0063-4000-a000-000000000007",
+      "id": "6300aa00-0063-4000-a000-000000000015",
       "name": "Build Morning Digest Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1344,
-        0
+        2016,
+        140
       ],
-      "notes": "Builds one styled digest email per attorney with three sections (overdue, due today, this week) and a short teaser linking to the full LegalContext Morning Digest product. This is an internal firm email — no client is ever contacted by this workflow.\n\nLEGALCONTEXT_UPSELL_URL is optional — falls back to a generic protomated.com link if unset."
+      "notes": "Builds one styled digest email per attorney with three sections (overdue priorities, upcoming deadlines, this-week follow-ups), a star on any task Clio has marked high priority, and a short teaser linking to the full LegalContext Morning Digest product. This is an internal firm email — no client is ever contacted by this workflow.\n\nLEGALCONTEXT_UPSELL_URL is optional — falls back to a generic protomated.com link if unset."
     },
     {
       "parameters": {
@@ -240,13 +509,13 @@
           "convertFieldsToString": false
         }
       },
-      "id": "6300aa00-0063-4000-a000-000000000008",
+      "id": "6300aa00-0063-4000-a000-000000000016",
       "name": "Log Digest Send Event",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        1568,
-        0
+        2240,
+        140
       ],
       "notes": "Logs the digest send to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33). This is internal record-keeping, not a message to a client — opt-out checking doesn't apply here, same as PAC-59/60/61's internal notifications.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable."
     },
@@ -260,13 +529,13 @@
         "html": "={{ $('Build Morning Digest Email').item.json.email_html }}",
         "emailFormat": "html"
       },
-      "id": "6300aa00-0063-4000-a000-000000000009",
+      "id": "6300aa00-0063-4000-a000-000000000017",
       "name": "Send Morning Digest Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        1792,
-        0
+        2464,
+        140
       ],
       "notes": "Delivers the digest to the attorney. Reads all fields explicitly from 'Build Morning Digest Email' rather than $json — the guardrail call immediately upstream replaced the item's json with its own response.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
       "credentials": {
@@ -295,6 +564,7 @@
               "id": 9001,
               "name": "Follow up with client on settlement offer",
               "due_at": "2026-08-20T00:00:00.000Z",
+              "priority": "normal",
               "assignee": {
                 "id": 21,
                 "name": "A. Attorney",
@@ -310,6 +580,7 @@
               "id": 9002,
               "name": "File motion for extension",
               "due_at": "2026-08-24T00:00:00.000Z",
+              "priority": "high",
               "assignee": {
                 "id": 21,
                 "name": "A. Attorney",
@@ -325,6 +596,7 @@
               "id": 9003,
               "name": "Send engagement letter reminder",
               "due_at": "2026-08-27T00:00:00.000Z",
+              "priority": "normal",
               "assignee": {
                 "id": 21,
                 "name": "A. Attorney",
@@ -338,8 +610,9 @@
             },
             {
               "id": 9004,
-              "name": "Confirm hearing date with court clerk",
-              "due_at": "2026-08-24T00:00:00.000Z",
+              "name": "Prepare discovery response draft checklist",
+              "due_at": "2026-08-25T00:00:00.000Z",
+              "priority": "normal",
               "assignee": {
                 "id": 22,
                 "name": "B. Barrister",
@@ -355,6 +628,7 @@
               "id": 9005,
               "name": "Draft check-in call notes",
               "due_at": "2026-09-20T00:00:00.000Z",
+              "priority": "normal",
               "assignee": {
                 "id": 22,
                 "name": "B. Barrister",
@@ -370,6 +644,7 @@
               "id": 9006,
               "name": "Task with no assignee on file",
               "due_at": "2026-08-24T00:00:00.000Z",
+              "priority": "normal",
               "assignee": {},
               "matter": {
                 "id": 310,
@@ -383,6 +658,67 @@
               "next": null
             },
             "records": 6
+          }
+        }
+      }
+    ],
+    "Fetch Upcoming Calendar Entries From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 7001,
+              "summary": "Custody hearing — Chen matter",
+              "start_at": "2026-08-25T14:00:00.000Z",
+              "end_at": "2026-08-25T15:00:00.000Z",
+              "all_day": false,
+              "matter": {
+                "id": 301,
+                "display_number": "2026-CH-042",
+                "description": "Custody Modification"
+              },
+              "attendees": [
+                {
+                  "id": 21,
+                  "name": "A. Attorney",
+                  "email": "attorney@smithlaw.com"
+                }
+              ]
+            },
+            {
+              "id": 7002,
+              "summary": "Deposition — Avila matter",
+              "start_at": "2026-08-26T16:30:00.000Z",
+              "end_at": "2026-08-26T18:00:00.000Z",
+              "all_day": false,
+              "matter": {
+                "id": 295,
+                "display_number": "2026-AV-039",
+                "description": "Business Contract Dispute"
+              },
+              "attendees": [
+                {
+                  "id": 22,
+                  "name": "B. Barrister",
+                  "email": "b.barrister@smithlaw.com"
+                }
+              ]
+            },
+            {
+              "id": 7003,
+              "summary": "Firm-wide calendar entry with no attendee on file",
+              "start_at": "2026-08-25T09:00:00.000Z",
+              "end_at": "2026-08-25T09:30:00.000Z",
+              "all_day": false,
+              "matter": {},
+              "attendees": []
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 3
           }
         }
       }
@@ -406,6 +742,11 @@
             "node": "Fetch Open Tasks From Clio",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Fetch Upcoming Calendar Entries From Clio",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -414,14 +755,102 @@
       "main": [
         [
           {
-            "node": "Group Tasks By Attorney And Bucket",
+            "node": "Split Out Task Records",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Group Tasks By Attorney And Bucket": {
+    "Fetch Upcoming Calendar Entries From Clio": {
+      "main": [
+        [
+          {
+            "node": "Split Out Calendar Entries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Task Records": {
+      "main": [
+        [
+          {
+            "node": "Filter Tasks With Assignee And Due Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Calendar Entries": {
+      "main": [
+        [
+          {
+            "node": "Filter Calendar Entries With Attendee And Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Tasks With Assignee And Due Date": {
+      "main": [
+        [
+          {
+            "node": "Sort Tasks By Due Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Calendar Entries With Attendee And Date": {
+      "main": [
+        [
+          {
+            "node": "Sort Calendar Entries By Start Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort Tasks By Due Date": {
+      "main": [
+        [
+          {
+            "node": "Merge Tasks And Calendar Entries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort Calendar Entries By Start Date": {
+      "main": [
+        [
+          {
+            "node": "Merge Tasks And Calendar Entries",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Tasks And Calendar Entries": {
+      "main": [
+        [
+          {
+            "node": "Group Priorities Deadlines And Follow-ups By Attorney",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group Priorities Deadlines And Follow-ups By Attorney": {
       "main": [
         [
           {
@@ -484,5 +913,5 @@
       ]
     }
   },
-  "description": "Fires every morning, pulls every open task from Clio, and groups it by assigned attorney into overdue, due today, and due this week. Sends each attorney one styled digest email covering all three — skipping silently on quiet days — and logs every send to the OPS1 compliance audit sheet. Entirely internal, no client is ever contacted. Ends with a short teaser for the full LegalContext Morning Digest, which adds case status, billing alerts, and an AI-summarized action list."
+  "description": "Fires every morning and pulls two things from Clio in parallel: every open task, and every calendar entry (hearings, court dates, appointments) in the next several days. Splits, filters, and sorts each with native n8n nodes, merges them, then groups by attorney into Priorities (overdue tasks), Deadlines (upcoming calendar entries), and Follow-ups (tasks due this week). Sends each attorney one styled digest email covering all three — skipping silently on quiet days — and logs every send to the OPS1 compliance audit sheet. Entirely internal, no client is ever contacted. Ends with a short teaser for the full LegalContext Morning Digest, which adds case status, billing alerts, and an AI-summarized action list."
 }
