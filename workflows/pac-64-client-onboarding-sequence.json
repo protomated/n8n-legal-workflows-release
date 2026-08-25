@@ -4,66 +4,98 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Client Onboarding Sequence\n\n### How it works\n\n1. Triggers daily, fetches the firm's user directory first (used to personalize with the assigned attorney's name), then every open matter — in sequence, not a disconnected side-fetch, so the lookup is a real dependency n8n always resolves correctly.\n2. The matter list is split into individual records, filtered down to the ones with a client email and an open date, then each one's days-since-open is computed and matched against four sequence days.\n3. A second filter keeps only matters that hit exactly one of those days today — Day 0 (portal access), Day 1 (what to expect), Day 3 (document checklist), Day 7 (first-bill explainer). Anything else is excluded, all with native n8n nodes, not one large custom script.\n4. The matching email is built — personalized with the assigned attorney's name and email where Clio's user directory resolves one — checked against the compliance guardrail (opt-out + disclaimer), then sent if approved.\n5. Skips silently, with a clearly labelled entry in execution history, on a day with nothing due.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing email here goes through it for opt-out checking, disclaimer, and audit logging.\n- [ ] Configure Clio OAuth2 credentials with matter and user-directory read access.\n- [ ] Configure SMTP credentials for sending.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally set FIRM_CLIENT_PORTAL_URL, FIRM_BILLING_EMAIL, FIRM_RESPONSE_TIME_DAYS, FIRM_PAYMENT_TERMS_DAYS, FIRM_ONBOARDING_CHECKLIST.\n\n### Customization\n\nEdit the four stages' subject/body copy in 'Build Onboarding Stage Email' — one node handles all four, same pattern as the Invoice Reminder Ladder (PAC-18). Change which days trigger a stage by editing the STAGE_DAYS map in 'Compute Days Since Open And Determine Stage'.",
+        "content": "## Client Onboarding Sequence\n\n### How it works\n\n1. A scheduled trigger initiates the workflow to check client onboarding progression.\n2. It fetches firm users and open matters from Clio, then processes and filters these matters based on client email and open date.\n3. The workflow computes the onboarding stage by calculating days since matter opening and filters stages due today.\n4. If a matter has a stage due, it builds an onboarding email, checks compliance via a sub-workflow, and verifies approval before sending.\n5. Emails are sent out to clients with onboarding stages due, while those who opt out or have no stages due are skipped.\n\n### Setup steps\n\n- [ ] Configure Clio API credentials and set the CLIO_BASE_URL variable.\n- [ ] Set up email sending credentials for the emailSend node.\n- [ ] Configure the compliance check sub-workflow and ensure it is accessible.\n- [ ] Adjust the schedule trigger timing as needed for onboarding checks.\n\n### Customization\n\nCustomize the onboarding stages and email content in the 'Build Onboarding Stage Email' node to match your firm's client communication style.",
         "width": 480,
-        "height": 820
+        "height": 880
       },
-      "id": "b1a1c001-0001-4000-8000-000000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -700,
-        -460
-      ]
+        -608,
+        -208
+      ],
+      "id": "4bcd9b52-ba49-4e99-a3bc-ec0bfdc96718",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Resolve who to personalize with, then fetch matters\n\nFetches the firm's user directory first — its output is passed straight through into the matters fetch, making it a genuine upstream step rather than a disconnected side-fetch, so it always resolves correctly no matter how the workflow is run or tested. Then pulls every open matter, splits it into individual records, keeps only the ones with a client email and an open date, computes each one's days-since-open and matching stage, then keeps only the ones due today — all native n8n nodes.",
-        "width": 1720,
-        "height": 320,
+        "content": "## Trigger and data fetching\n\nStarts the workflow on a schedule and fetches firm users and open matters data from Clio API.",
+        "width": 640,
+        "height": 384,
         "color": 7
       },
-      "id": "b1a1c001-0001-4000-8000-000000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -208
+      ],
+      "id": "390df46c-fdd8-41dc-a17c-fa59504b8940",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Check for a stage due today\n\nBridges the native filter chain back to a clean, labelled Skip if nothing survived — matches the explicit-skip pattern used across this catalog (PAC-18, PAC-61, PAC-63).",
+        "content": "## Process and filter matters\n\nSplits open matters records, filters them by client email and open date, and calculates the onboarding stage based on days open.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        624,
+        -208
+      ],
+      "id": "8089002e-9d75-43e0-8e22-81ff387ff8b6",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Identify stages due today\n\nFilters matters with stages due today and checks if any stage exists to proceed further.",
         "width": 416,
-        "height": 480,
+        "height": 304,
         "color": 7
       },
-      "id": "b1a1c001-0001-4000-8000-000000000004",
-      "name": "Sticky Note3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1568,
-        -200
-      ]
+        1296,
+        -208
+      ],
+      "id": "f9d98b41-fff5-4ca1-9367-56af0db9bff7",
+      "name": "Sticky Note3"
     },
     {
       "parameters": {
-        "content": "## Build, check, and send\n\nBuilds the right stage's personalized email, routes it through the compliance guardrail for opt-out checking and the required disclaimer, then sends it if approved.",
-        "width": 928,
-        "height": 480,
+        "content": "## Onboarding stage decision branch\n\nConditional decision to build onboarding email if a stage is due or skip otherwise.",
+        "width": 416,
+        "height": 544,
         "color": 7
       },
-      "id": "b1a1c001-0001-4000-8000-000000000005",
-      "name": "Sticky Note4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2032,
-        -200
-      ]
+        1744,
+        -208
+      ],
+      "id": "443b37f0-1280-40dc-9429-1b7e637e6455",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Compliance check and email sending\n\nRuns compliance sub-workflow, checks approval, sends onboarding emails or skips if client opted out.",
+        "width": 640,
+        "height": 544,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2192,
+        -208
+      ],
+      "id": "62ab653e-345d-4bb2-8e53-6dac9e3fed76",
+      "name": "Sticky Note5"
     },
     {
       "parameters": {
@@ -77,7 +109,7 @@
         }
       },
       "id": "6400aa00-0064-4000-a000-000000000001",
-      "name": "When Onboarding Check Runs",
+      "name": "Every Day at 9am Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -115,7 +147,7 @@
         }
       },
       "id": "6400aa00-0064-4000-a000-000000000011",
-      "name": "Fetch Firm Users From Clio",
+      "name": "Fetch Firm Users from Clio API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -164,7 +196,7 @@
         }
       },
       "id": "6400aa00-0064-4000-a000-000000000002",
-      "name": "Fetch Open Matters From Clio",
+      "name": "Fetch Open Matters from Clio API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -229,7 +261,7 @@
         }
       },
       "id": "6400aa00-0064-4000-a000-000000000013",
-      "name": "Filter Matters With Client Email And Open Date",
+      "name": "Filter Matters with Email and Date",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
@@ -244,7 +276,7 @@
         "jsCode": "// Computes days since this matter's own Clio open date and matches it against the four\n// onboarding-sequence days (0, 1, 3, 7). No external tracking of what's already been sent -- the\n// open date alone tells this workflow exactly which stage, if any, applies today. Same 'compute\n// the age, match an exact day' approach as PAC-18's invoice ladder and PAC-61's pre-bill compile.\nconst matter = $json;\nconst STAGE_DAYS = { 0: 'day0', 1: 'day1', 3: 'day3', 7: 'day7' };\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst openDate = new Date(matter.open_date + 'T12:00:00Z');\nopenDate.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst daysSinceOpen = Math.floor((today - openDate) / msPerDay);\n\nreturn {\n  json: {\n    matter_id: matter.id,\n    matter_ref: matter.display_number || '',\n    matter_description: matter.description || '',\n    client_name: (matter.client && matter.client.name) || '',\n    client_email: (matter.client && matter.client.primary_email_address) || '',\n    attorney_id: (matter.responsible_attorney && matter.responsible_attorney.id) || null,\n    days_since_open: daysSinceOpen,\n    stage: STAGE_DAYS[daysSinceOpen] || '',\n  },\n};"
       },
       "id": "6400aa00-0064-4000-a000-000000000003",
-      "name": "Compute Days Since Open And Determine Stage",
+      "name": "Calculate Days Since Open Date",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -278,7 +310,7 @@
         }
       },
       "id": "6400aa00-0064-4000-a000-000000000014",
-      "name": "Filter Matters With Stage Due Today",
+      "name": "Filter Matters Due for Stage Today",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
@@ -292,7 +324,7 @@
         "jsCode": "// Bridges the native Split Out / Filter chain above back to this catalog's usual explicit-skip\n// pattern (see PAC-18, PAC-61, PAC-63): zero surviving matters becomes one clearly labelled\n// sentinel item instead of the run just quietly having nothing execute, so a 'nothing due today'\n// run still shows a clean, readable entry in execution history.\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [{ json: { is_actionable: false, stage: 'none', reason: 'No matter hit an onboarding-sequence day today' } }];\n}\n\nreturn items.map(i => ({ json: { ...i.json, is_actionable: true } }));"
       },
       "id": "6400aa00-0064-4000-a000-000000000015",
-      "name": "Check If Any Stage Due Today",
+      "name": "Check If Stages Are Due Today",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -327,7 +359,7 @@
         }
       },
       "id": "6400aa00-0064-4000-a000-000000000004",
-      "name": "If Onboarding Stage Due Today",
+      "name": "If Onboarding Stage Is Due",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -340,7 +372,7 @@
     {
       "parameters": {},
       "id": "6400aa00-0064-4000-a000-000000000005",
-      "name": "Skip — No Onboarding Stage Due Today",
+      "name": "Skip No Stage Due Today",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -351,10 +383,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// One node handles all four onboarding-sequence stages -- same pattern as the Invoice Reminder\n// Ladder's (PAC-18) single build node keyed by ladder step -- so there's one place to edit copy\n// instead of four near-duplicate nodes. Every stage is purely operational: portal access, process\n// expectations, a document checklist, and how billing works. None of it comments on the matter's\n// substance or gives legal guidance (ABA Op. 512).\n//\n// Resolves the matter's responsible_attorney id against the firm's user directory (fetched once\n// per run in 'Fetch Firm Users From Clio') to personalize the welcome message and route the\n// 'reach us at' mention to the actual assigned attorney -- falling back to the generic firm\n// contact if the attorney can't be resolved (unassigned matter, disabled user, fetch failure).\nconst item = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_EMAIL = $vars.FIRM_EMAIL;\nconst PORTAL_URL = $vars.FIRM_CLIENT_PORTAL_URL || '';\nconst BILLING_EMAIL = $vars.FIRM_BILLING_EMAIL || FIRM_EMAIL;\nconst RESPONSE_DAYS = $vars.FIRM_RESPONSE_TIME_DAYS || '1-2';\nconst PAYMENT_TERMS_DAYS = $vars.FIRM_PAYMENT_TERMS_DAYS || '30';\nconst CHECKLIST = ($vars.FIRM_ONBOARDING_CHECKLIST || 'A government-issued photo ID\\nYour signed engagement letter, if not already returned\\nAny prior correspondence related to this matter\\nContact information for anyone else involved')\n  .split('\\n').map(s => s.trim()).filter(Boolean).map(s => `- ${s}`).join('\\n');\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL) throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst users = ($('Fetch Firm Users From Clio').first().json.data) || [];\nconst attorney = item.attorney_id ? users.find(u => u.id === item.attorney_id) : null;\nconst attorneyName = (attorney && attorney.name) || '';\nconst contactEmail = (attorney && attorney.email) || FIRM_EMAIL;\nconst teamLine = attorneyName ? `Your attorney, ${attorneyName}, and the rest of our team` : `Our team`;\n\nconst matterLabel = item.matter_ref + (item.matter_description ? ' (' + item.matter_description + ')' : '');\n\nconst STAGES = {\n  day0: {\n    subject: `Welcome to ${FIRM_NAME} — here's what happens next`,\n    body: `Hi ${item.client_name},\\n\\nWelcome, and thank you for choosing ${FIRM_NAME} for your matter (${matterLabel}). ${attorneyName ? `${attorneyName} will be your attorney on this matter.` : `A member of our team will be your attorney on this matter.`}\\n\\n${PORTAL_URL ? `You can track your matter and message us anytime through our client portal:\\n${PORTAL_URL}\\n\\nIf you haven't received separate login instructions yet, just let us know and we'll get you set up.` : `We'll follow up shortly with instructions for accessing your client portal.`}\\n\\nOver the next week you'll hear from us with a quick overview of what to expect, a short document checklist, and an explanation of how billing works — no action needed from you yet.\\n\\nQuestions in the meantime? Reach us at ${contactEmail}.\\n\\n${FIRM_NAME}`,\n  },\n  day1: {\n    subject: `What to expect while we work on your matter`,\n    body: `Hi ${item.client_name},\\n\\nA quick note on how we'll work together on ${matterLabel}:\\n\\n- ${teamLine} will reach out whenever we need information or a decision from you — no need to check in for status updates.\\n- Most emails get a response within ${RESPONSE_DAYS} business day(s).\\n- Any documents we need from you will come with clear instructions on how to send them.\\n- You can always reach us at ${contactEmail} with questions.\\n\\nWe'll follow up in a couple of days with a short checklist of documents that help us get started.\\n\\n${FIRM_NAME}`,\n  },\n  day3: {\n    subject: `A few documents that will help us get started`,\n    body: `Hi ${item.client_name},\\n\\nTo keep things moving on ${matterLabel}${attorneyName ? ` with ${attorneyName}` : ''}, it helps to have the following on hand:\\n\\n${CHECKLIST}\\n\\nYou don't need to send everything at once — whatever you have is a good start, and ${attorneyName ? attorneyName + ' will' : \"we'll\"} follow up on anything still missing.\\n\\n${PORTAL_URL ? `You can upload documents directly through the client portal: ${PORTAL_URL}` : `Reply to this email or contact ${attorneyName || 'us'} at ${contactEmail} to send these over.`}\\n\\n${FIRM_NAME}`,\n  },\n  day7: {\n    subject: `How billing works for your matter`,\n    body: `Hi ${item.client_name},\\n\\nNow that ${attorneyName ? `${attorneyName} and the team are` : `we're`} underway on ${matterLabel}, here's a quick note on billing so nothing catches you by surprise:\\n\\n- Invoices are sent by email${PORTAL_URL ? ' and available in the client portal' : ''}.\\n- You'll see an itemized breakdown of the time and work performed.\\n- Payment is due within ${PAYMENT_TERMS_DAYS} days of the invoice date.\\n- Questions about a bill? Contact us at ${BILLING_EMAIL} any time — we're happy to walk through it.\\n\\nThanks again for trusting ${FIRM_NAME}${attorneyName ? ` and ${attorneyName}` : ''} with your matter.\\n\\n${FIRM_NAME}`,\n  },\n};\n\nconst content = STAGES[item.stage];\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.client_email,\n  subject: content.subject,\n  message: content.body,\n  template_id: 'PAC-64-client-onboarding',\n  matter_id: String(item.matter_id || ''),\n} }];"
+        "jsCode": "// One node handles all four onboarding-sequence stages -- same pattern as the Invoice Reminder\n// Ladder's (PAC-18) single build node keyed by ladder step -- so there's one place to edit copy\n// instead of four near-duplicate nodes. Every stage is purely operational: portal access, process\n// expectations, a document checklist, and how billing works. None of it comments on the matter's\n// substance or gives legal guidance (ABA Op. 512).\n//\n// Resolves the matter's responsible_attorney id against the firm's user directory (fetched once\n// per run in 'Fetch Firm Users From Clio') to personalize the welcome message and route the\n// 'reach us at' mention to the actual assigned attorney -- falling back to the generic firm\n// contact if the attorney can't be resolved (unassigned matter, disabled user, fetch failure).\nconst item = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_EMAIL = $vars.FIRM_EMAIL;\nconst PORTAL_URL = $vars.FIRM_CLIENT_PORTAL_URL || '';\nconst BILLING_EMAIL = $vars.FIRM_BILLING_EMAIL || FIRM_EMAIL;\nconst RESPONSE_DAYS = $vars.FIRM_RESPONSE_TIME_DAYS || '1-2';\nconst PAYMENT_TERMS_DAYS = $vars.FIRM_PAYMENT_TERMS_DAYS || '30';\nconst CHECKLIST = ($vars.FIRM_ONBOARDING_CHECKLIST || 'A government-issued photo ID\\nYour signed engagement letter, if not already returned\\nAny prior correspondence related to this matter\\nContact information for anyone else involved')\n  .split('\\n').map(s => s.trim()).filter(Boolean).map(s => `- ${s}`).join('\\n');\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL) throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst users = ($('Fetch Firm Users from Clio API').first().json.data) || [];\nconst attorney = item.attorney_id ? users.find(u => u.id === item.attorney_id) : null;\nconst attorneyName = (attorney && attorney.name) || '';\nconst contactEmail = (attorney && attorney.email) || FIRM_EMAIL;\nconst teamLine = attorneyName ? `Your attorney, ${attorneyName}, and the rest of our team` : `Our team`;\n\nconst matterLabel = item.matter_ref + (item.matter_description ? ' (' + item.matter_description + ')' : '');\n\nconst STAGES = {\n  day0: {\n    subject: `Welcome to ${FIRM_NAME} — here's what happens next`,\n    body: `Hi ${item.client_name},\\n\\nWelcome, and thank you for choosing ${FIRM_NAME} for your matter (${matterLabel}). ${attorneyName ? `${attorneyName} will be your attorney on this matter.` : `A member of our team will be your attorney on this matter.`}\\n\\n${PORTAL_URL ? `You can track your matter and message us anytime through our client portal:\\n${PORTAL_URL}\\n\\nIf you haven't received separate login instructions yet, just let us know and we'll get you set up.` : `We'll follow up shortly with instructions for accessing your client portal.`}\\n\\nOver the next week you'll hear from us with a quick overview of what to expect, a short document checklist, and an explanation of how billing works — no action needed from you yet.\\n\\nQuestions in the meantime? Reach us at ${contactEmail}.\\n\\n${FIRM_NAME}`,\n  },\n  day1: {\n    subject: `What to expect while we work on your matter`,\n    body: `Hi ${item.client_name},\\n\\nA quick note on how we'll work together on ${matterLabel}:\\n\\n- ${teamLine} will reach out whenever we need information or a decision from you — no need to check in for status updates.\\n- Most emails get a response within ${RESPONSE_DAYS} business day(s).\\n- Any documents we need from you will come with clear instructions on how to send them.\\n- You can always reach us at ${contactEmail} with questions.\\n\\nWe'll follow up in a couple of days with a short checklist of documents that help us get started.\\n\\n${FIRM_NAME}`,\n  },\n  day3: {\n    subject: `A few documents that will help us get started`,\n    body: `Hi ${item.client_name},\\n\\nTo keep things moving on ${matterLabel}${attorneyName ? ` with ${attorneyName}` : ''}, it helps to have the following on hand:\\n\\n${CHECKLIST}\\n\\nYou don't need to send everything at once — whatever you have is a good start, and ${attorneyName ? attorneyName + ' will' : \"we'll\"} follow up on anything still missing.\\n\\n${PORTAL_URL ? `You can upload documents directly through the client portal: ${PORTAL_URL}` : `Reply to this email or contact ${attorneyName || 'us'} at ${contactEmail} to send these over.`}\\n\\n${FIRM_NAME}`,\n  },\n  day7: {\n    subject: `How billing works for your matter`,\n    body: `Hi ${item.client_name},\\n\\nNow that ${attorneyName ? `${attorneyName} and the team are` : `we're`} underway on ${matterLabel}, here's a quick note on billing so nothing catches you by surprise:\\n\\n- Invoices are sent by email${PORTAL_URL ? ' and available in the client portal' : ''}.\\n- You'll see an itemized breakdown of the time and work performed.\\n- Payment is due within ${PAYMENT_TERMS_DAYS} days of the invoice date.\\n- Questions about a bill? Contact us at ${BILLING_EMAIL} any time — we're happy to walk through it.\\n\\nThanks again for trusting ${FIRM_NAME}${attorneyName ? ` and ${attorneyName}` : ''} with your matter.\\n\\n${FIRM_NAME}`,\n  },\n};\n\nconst content = STAGES[item.stage];\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.client_email,\n  subject: content.subject,\n  message: content.body,\n  template_id: 'PAC-64-client-onboarding',\n  matter_id: String(item.matter_id || ''),\n} }];"
       },
       "id": "6400aa00-0064-4000-a000-000000000006",
-      "name": "Build Onboarding Stage Email",
+      "name": "Build Onboarding Stage Email Content",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -387,7 +419,7 @@
         }
       },
       "id": "6400aa00-0064-4000-a000-000000000007",
-      "name": "Check Compliance Before Sending",
+      "name": "Execute Compliance Check Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -436,7 +468,7 @@
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
         "toEmail": "={{ $json.recipient }}",
-        "subject": "={{ $('Build Onboarding Stage Email').item.json.subject }}",
+        "subject": "={{ $('Build Onboarding Stage Email Content').item.json.subject }}",
         "text": "={{ $json.message_out }}",
         "options": {},
         "emailFormat": "text"
@@ -460,7 +492,7 @@
     {
       "parameters": {},
       "id": "6400aa00-0064-4000-a000-000000000010",
-      "name": "Skip — Client Opted Out",
+      "name": "Skip Client Opt-Out",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -472,7 +504,7 @@
   ],
   "active": false,
   "pinData": {
-    "When Onboarding Check Runs": [
+    "Every Day at 9am Trigger": [
       {
         "json": {
           "timestamp": "2026-08-24T09:00:00.000Z",
@@ -480,7 +512,7 @@
         }
       }
     ],
-    "Fetch Open Matters From Clio": [
+    "Fetch Open Matters from Clio API": [
       {
         "json": {
           "data": [
@@ -598,7 +630,7 @@
         }
       }
     ],
-    "Fetch Firm Users From Clio": [
+    "Fetch Firm Users from Clio API": [
       {
         "json": {
           "data": [
@@ -636,29 +668,29 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "When Onboarding Check Runs": {
+    "Every Day at 9am Trigger": {
       "main": [
         [
           {
-            "node": "Fetch Firm Users From Clio",
+            "node": "Fetch Firm Users from Clio API",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Firm Users From Clio": {
+    "Fetch Firm Users from Clio API": {
       "main": [
         [
           {
-            "node": "Fetch Open Matters From Clio",
+            "node": "Fetch Open Matters from Clio API",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Open Matters From Clio": {
+    "Fetch Open Matters from Clio API": {
       "main": [
         [
           {
@@ -673,87 +705,87 @@
       "main": [
         [
           {
-            "node": "Filter Matters With Client Email And Open Date",
+            "node": "Filter Matters with Email and Date",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Matters With Client Email And Open Date": {
+    "Filter Matters with Email and Date": {
       "main": [
         [
           {
-            "node": "Compute Days Since Open And Determine Stage",
+            "node": "Calculate Days Since Open Date",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Days Since Open And Determine Stage": {
+    "Calculate Days Since Open Date": {
       "main": [
         [
           {
-            "node": "Filter Matters With Stage Due Today",
+            "node": "Filter Matters Due for Stage Today",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Matters With Stage Due Today": {
+    "Filter Matters Due for Stage Today": {
       "main": [
         [
           {
-            "node": "Check If Any Stage Due Today",
+            "node": "Check If Stages Are Due Today",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check If Any Stage Due Today": {
+    "Check If Stages Are Due Today": {
       "main": [
         [
           {
-            "node": "If Onboarding Stage Due Today",
+            "node": "If Onboarding Stage Is Due",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Onboarding Stage Due Today": {
+    "If Onboarding Stage Is Due": {
       "main": [
         [
           {
-            "node": "Build Onboarding Stage Email",
+            "node": "Build Onboarding Stage Email Content",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — No Onboarding Stage Due Today",
+            "node": "Skip No Stage Due Today",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Onboarding Stage Email": {
+    "Build Onboarding Stage Email Content": {
       "main": [
         [
           {
-            "node": "Check Compliance Before Sending",
+            "node": "Execute Compliance Check Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Compliance Before Sending": {
+    "Execute Compliance Check Workflow": {
       "main": [
         [
           {
@@ -775,7 +807,7 @@
         ],
         [
           {
-            "node": "Skip — Client Opted Out",
+            "node": "Skip Client Opt-Out",
             "type": "main",
             "index": 0
           }
