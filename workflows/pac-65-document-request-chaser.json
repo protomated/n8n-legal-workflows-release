@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Document Request Chaser\n\n### How it works\n\n1. Triggers daily, fetches the firm's user directory first (used to personalize with the assigned staff member's name), then every pending Clio task — in sequence, so the lookup is a real dependency n8n always resolves correctly (see PAC-64 for why this matters).\n2. Splits tasks into individual records, keeps only ones that are actually document requests (a configurable Clio task type) with a client email and a due date on file, then computes each one's days-overdue and matches it against three escalation tiers.\n3. A second filter keeps only tasks hitting a tier today — 1-2 days overdue (reminder), 7-8 days (second reminder), 14-15 days (urgent) — all with native n8n nodes.\n4. The matching reminder is built, checked against the compliance guardrail (opt-out + disclaimer), then sent to the client if approved.\n5. At the urgent tier, a separate internal email also alerts the responsible staff member (resolved by name via the user directory) that the request may need a phone call — bypassing the guardrail since it's an internal message, not a client one.\n6. Skips silently, with a clearly labelled entry in execution history, on a day with nothing due. Marking the Clio task complete once the document arrives stops all future reminders automatically — there's nothing else to update.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing reminder here goes through it.\n- [ ] Configure Clio OAuth2 credentials with task and user-directory read access.\n- [ ] Configure SMTP credentials for sending.\n- [ ] Create (or confirm) a Clio task type named 'Document Request' — every outstanding document should be tracked as one task of this type, due-dated, assigned to whoever is chasing it.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally set FIRM_CLIENT_PORTAL_URL, FIRM_DOCUMENT_REQUEST_TASK_TYPE, FIRM_PARALEGAL_EMAIL.\n\n### Customization\n\nEdit the three tiers' subject/body copy in 'Build Document Reminder Email' — one node handles all three, same pattern as the Invoice Reminder Ladder (PAC-18). Change the escalation timing by editing the day windows in 'Compute Days Overdue And Escalation Tier'.",
+        "content": "## Document Request Chaser\n\n### How it works\n\n1. Triggers daily, fetches the firm's user directory (used to personalize with the assigned staff member's name), then every open matter, then every pending Clio task — each in sequence, so every lookup is a real dependency n8n always resolves correctly (see PAC-64 for why this matters). Matters are fetched separately because Clio rejects a doubly-nested client{...} request on tasks.json.\n2. Splits tasks into individual records, keeps only ones that are actually document requests (a configurable Clio task type) with a due date on file, then computes each one's days-overdue, resolves the client's email from the matters lookup, and matches the tier.\n3. A second filter keeps only tasks hitting a tier today, with a client email that actually resolved — 1-2 days overdue (reminder), 7-8 days (second reminder), 14-15 days (urgent) — all with native n8n nodes.\n4. The matching reminder is built, checked against the compliance guardrail (opt-out + disclaimer), then sent to the client if approved.\n5. At the urgent tier, a separate internal email also alerts the responsible staff member (resolved by name via the user directory) that the request may need a phone call — bypassing the guardrail since it's an internal message, not a client one.\n6. Skips silently, with a clearly labelled entry in execution history, on a day with nothing due. Marking the Clio task complete once the document arrives stops all future reminders automatically — there's nothing else to update.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing reminder here goes through it.\n- [ ] Configure Clio OAuth2 credentials with task and user-directory read access.\n- [ ] Configure SMTP credentials for sending.\n- [ ] Create (or confirm) a Clio task type named 'Document Request' — every outstanding document should be tracked as one task of this type, due-dated, assigned to whoever is chasing it.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally set FIRM_CLIENT_PORTAL_URL, FIRM_DOCUMENT_REQUEST_TASK_TYPE, FIRM_PARALEGAL_EMAIL.\n\n### Customization\n\nEdit the three tiers' subject/body copy in 'Build Document Reminder Email' — one node handles all three, same pattern as the Invoice Reminder Ladder (PAC-18). Change the escalation timing by editing the day windows in 'Compute Days Overdue And Escalation Tier'.",
         "width": 480,
         "height": 900
       },
@@ -19,8 +19,8 @@
     },
     {
       "parameters": {
-        "content": "## Resolve who to personalize with, then fetch document requests\n\nFetches the firm's user directory first — its output passes straight through into the tasks fetch, making it a genuine upstream step (not a disconnected side-fetch) so n8n always resolves it, on every run and every testing method.",
-        "width": 928,
+        "content": "## Resolve who to personalize with, then fetch document requests\n\nFetches the firm's user directory, then every open matter, then every pending task — each passed straight through into the next in sequence, making every fetch a genuine upstream step (not a disconnected side-fetch) so n8n always resolves them, on every run and every testing method. Matters are fetched separately from tasks because Clio rejects a doubly-nested client{...} request on tasks.json.",
+        "width": 1150,
         "height": 320,
         "color": 7
       },
@@ -45,14 +45,14 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        928,
+        1150,
         -200
       ]
     },
     {
       "parameters": {
         "content": "## Check for anything due today\n\nBridges the native filter chain back to a clean, labelled Skip if nothing survived — matches the explicit-skip pattern used across this catalog.",
-        "width": 416,
+        "width": 480,
         "height": 620,
         "color": 7
       },
@@ -61,7 +61,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1568,
+        1792,
         -200
       ]
     },
@@ -77,7 +77,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2016,
+        2240,
         -280
       ]
     },
@@ -93,7 +93,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2016,
+        2240,
         60
       ]
     },
@@ -166,6 +166,55 @@
     {
       "parameters": {
         "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "Open"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description,client{id,name,primary_email_address}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6500aa00-0065-4000-a000-000000000020",
+      "name": "Fetch Open Matters From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Fetches every open matter once per run — used by 'Compute Days Overdue And Escalation Tier' to resolve a task's matter id to the client's real name and email.\n\nClio rejects a doubly-nested field request: tasks.json's 'matter{...,client{...}}' fails with 'InvalidFields: matter} is not a valid field' (confirmed live) — Clio's field selector apparently only supports one level of nesting, and client{...} nested inside matter{...} nested inside the tasks fetch is two levels deep. 'client{id,name,primary_email_address}' nested just one level under matters.json, by contrast, is exactly the pattern PAC-64 already confirmed works live. So instead of trying to get the client in one call, this fetches matters separately and 'Compute Days Overdue And Escalation Tier' resolves each task's matter id against it — the same lookup-table approach already used for the assignee/user directory.\n\nSame Clio OAuth2 credential as the other two fetches — no separate setup.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
         "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/tasks.json",
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
@@ -182,7 +231,7 @@
             },
             {
               "name": "fields",
-              "value": "id,name,due_at,task_type{id,name},assignee{id,name},matter{id,display_number,description,client{id,name,primary_email_address}}"
+              "value": "id,name,due_at,task_type{id,name},assignee{id,name},matter{id,display_number,description}"
             }
           ]
         },
@@ -200,10 +249,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        448,
+        672,
         0
       ],
-      "notes": "Pulls every task still marked 'pending' in Clio, regardless of type — the next few nodes filter down to just document requests. Same tasks.json request pattern as PAC-59/61/63, with 'pending' as the status value.\n\nA document request is tracked as a Clio task: name it what's needed (e.g. 'Photo ID from client'), set a due date, assign it to whoever is chasing it, and use a dedicated task type (default 'Document Request', configurable via FIRM_DOCUMENT_REQUEST_TASK_TYPE) so this workflow can tell it apart from ordinary to-dos. Marking the task complete once the document arrives is what stops future reminders — there's no separate 'stop reminding' step anywhere in this workflow.\n\n'task_type' and 'assignee' as nested fields, and reading a Contact's 'primary_email_address' nested under matter.client, follow the same conventions this catalog already uses (NTC-17, PAC-59, PAC-64) but haven't been independently confirmed live on this exact combination of nested fields — check your first real run's output and adjust if Clio rejects any of them.\n\n'Never Error' is on, and downstream filtering treats a missing/empty 'data' array the same as zero tasks.\n\nCredential: same Clio OAuth2 credential as the users fetch above — no separate setup.",
+      "notes": "Pulls every task still marked 'pending' in Clio, regardless of type — the next few nodes filter down to just document requests. Same tasks.json request pattern as PAC-59/61/63, with 'pending' as the status value.\n\nA document request is tracked as a Clio task: name it what's needed (e.g. 'Photo ID from client'), set a due date, assign it to whoever is chasing it, and use a dedicated task type (default 'Document Request', configurable via FIRM_DOCUMENT_REQUEST_TASK_TYPE) so this workflow can tell it apart from ordinary to-dos. Marking the task complete once the document arrives is what stops future reminders — there's no separate 'stop reminding' step anywhere in this workflow.\n\nOnly one level of nested fields is requested here ('task_type{id,name}', 'assignee{id,name}', 'matter{id,display_number,description}', with no client nested inside matter) — see 'Fetch Open Matters From Clio' for why a doubly-nested client request is rejected. 'task_type' and 'assignee' as nested fields follow the same conventions this catalog already uses (NTC-17, PAC-59) but haven't themselves been independently confirmed live — check your first real run's output and adjust if Clio rejects either.\n\n'Never Error' is on, and downstream filtering treats a missing/empty 'data' array the same as zero tasks.\n\nCredential: same Clio OAuth2 credential as the other two fetches above — no separate setup.",
       "onError": "continueRegularOutput",
       "credentials": {
         "oAuth2Api": {
@@ -222,7 +271,7 @@
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
       "position": [
-        672,
+        896,
         0
       ],
       "notes": "Turns the single API response into one n8n item per task, so the Filter and Code nodes downstream can each operate on individual tasks. An empty or missing 'data' array (e.g. after a Clio error) simply produces zero items."
@@ -249,15 +298,6 @@
               "rightValue": "={{ $vars.FIRM_DOCUMENT_REQUEST_TASK_TYPE || 'Document Request' }}"
             },
             {
-              "id": "c_has_client_email",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              },
-              "leftValue": "={{ $json.matter && $json.matter.client && $json.matter.client.primary_email_address }}",
-              "rightValue": ""
-            },
-            {
               "id": "c_has_due_at",
               "operator": {
                 "type": "string",
@@ -270,29 +310,29 @@
         }
       },
       "id": "6500aa00-0065-4000-a000-000000000005",
-      "name": "Filter Document Request Tasks With Client Email And Due Date",
+      "name": "Filter Document Request Tasks With Due Date",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
-        896,
+        1120,
         0
       ],
-      "notes": "Drops anything that isn't a Document Request task (ordinary to-dos, deadlines, etc.), any document request whose matter's client has no email on file, or one with no due date. A nonzero drop rate on the last two is worth checking in Clio periodically — it usually means a task needs an assignee's matter linked to a client with an email, or a due date set."
+      "notes": "Drops anything that isn't a Document Request task (ordinary to-dos, deadlines, etc.), or one with no due date. The client-email check happens later, after 'Compute Days Overdue And Escalation Tier' resolves it from the separate matters lookup — a task's own matter object doesn't carry the client here (see that fetch's notes for why)."
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Computes how many days overdue this document request is, and matches it against three\n// escalation tiers. Same 2-day-window approach as PAC-18's invoice ladder, so a reminder isn't\n// missed if the cron runs a day late due to a server restart or holiday.\nconst task = $json;\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst dueDate = new Date(task.due_at + 'T12:00:00Z');\ndueDate.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst daysOverdue = Math.floor((today - dueDate) / msPerDay);\n\nlet tier = '';\nif (daysOverdue >= 1 && daysOverdue <= 2) tier = 'reminder';\nelse if (daysOverdue >= 7 && daysOverdue <= 8) tier = 'second_reminder';\nelse if (daysOverdue >= 14 && daysOverdue <= 15) tier = 'urgent';\n\nreturn {\n  json: {\n    task_id: task.id,\n    task_name: task.name || '',\n    due_at: task.due_at,\n    matter_id: (task.matter && task.matter.id) || '',\n    matter_ref: (task.matter && task.matter.display_number) || '',\n    matter_description: (task.matter && task.matter.description) || '',\n    client_name: (task.matter && task.matter.client && task.matter.client.name) || '',\n    client_email: (task.matter && task.matter.client && task.matter.client.primary_email_address) || '',\n    assignee_id: (task.assignee && task.assignee.id) || null,\n    days_overdue: daysOverdue,\n    tier,\n  },\n};"
+        "jsCode": "// Computes how many days overdue this document request is, and matches it against three\n// escalation tiers. Same 2-day-window approach as PAC-18's invoice ladder, so a reminder isn't\n// missed if the cron runs a day late due to a server restart or holiday.\n//\n// Clio rejects a doubly-nested field request (tasks.json's matter{...,client{...}}), so the\n// client's name/email is resolved here from a separate matters lookup ('Fetch Open Matters From\n// Clio') by matter id -- the same lookup-table approach used for the assignee/user directory.\nconst task = $json;\n\nconst matters = ($('Fetch Open Matters From Clio').first().json.data) || [];\nconst matterById = {};\nfor (const m of matters) {\n  matterById[m.id] = {\n    client_name: (m.client && m.client.name) || '',\n    client_email: (m.client && m.client.primary_email_address) || '',\n  };\n}\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst dueDate = new Date(task.due_at + 'T12:00:00Z');\ndueDate.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst daysOverdue = Math.floor((today - dueDate) / msPerDay);\n\nlet tier = '';\nif (daysOverdue >= 1 && daysOverdue <= 2) tier = 'reminder';\nelse if (daysOverdue >= 7 && daysOverdue <= 8) tier = 'second_reminder';\nelse if (daysOverdue >= 14 && daysOverdue <= 15) tier = 'urgent';\n\nconst matterId = (task.matter && task.matter.id) || null;\nconst matterInfo = (matterId && matterById[matterId]) || { client_name: '', client_email: '' };\n\nreturn {\n  json: {\n    task_id: task.id,\n    task_name: task.name || '',\n    due_at: task.due_at,\n    matter_id: matterId || '',\n    matter_ref: (task.matter && task.matter.display_number) || '',\n    matter_description: (task.matter && task.matter.description) || '',\n    client_name: matterInfo.client_name,\n    client_email: matterInfo.client_email,\n    assignee_id: (task.assignee && task.assignee.id) || null,\n    days_overdue: daysOverdue,\n    tier,\n  },\n};"
       },
       "id": "6500aa00-0065-4000-a000-000000000006",
       "name": "Compute Days Overdue And Escalation Tier",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
+        1344,
         0
       ],
-      "notes": "Runs once per task (mode: Run Once for Each Item). Every task gets a 'tier' field — empty string if today isn't one of its three escalation windows — which the next node filters on. A task that isn't yet overdue at all (daysOverdue <= 0) simply gets tier: '' like any other non-matching day."
+      "notes": "Runs once per task (mode: Run Once for Each Item). Every task gets a 'tier' field — empty string if today isn't one of its three escalation windows — which the next node filters on, alongside whether the client email actually resolved. A task that isn't yet overdue at all (daysOverdue <= 0) simply gets tier: '' like any other non-matching day."
     },
     {
       "parameters": {
@@ -314,6 +354,15 @@
               },
               "leftValue": "={{ $json.tier }}",
               "rightValue": ""
+            },
+            {
+              "id": "c_has_client_email",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.client_email }}",
+              "rightValue": ""
             }
           ]
         }
@@ -323,10 +372,10 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
-        1344,
+        1568,
         0
       ],
-      "notes": "Drops any task whose days-overdue didn't land on exactly one of the three tier windows — the vast majority of outstanding document requests on any given day. Only tasks actually due for a reminder survive to the next step."
+      "notes": "Drops any task whose days-overdue didn't land on exactly one of the three tier windows, and any task whose matter didn't resolve to a client with an email on file (unassigned client, matter not in the open-matters fetch, etc.) — there's nobody to send the reminder to. Only tasks actually due for a reminder, with somewhere to send it, survive to the next step."
     },
     {
       "parameters": {
@@ -337,7 +386,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1568,
+        1792,
         0
       ],
       "notes": "Run Once for All Items (the default) — needs to see whether anything survived the filters above, not one task at a time."
@@ -372,7 +421,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1792,
+        2016,
         0
       ],
       "notes": "Yes (at least one document request hit a tier today) → build and send the client reminder, and separately check whether it also needs a staff escalation.\nNo (nothing due — most days, for most firms) → route to Skip. No email sent.",
@@ -385,7 +434,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        2016,
+        2240,
         400
       ],
       "notes": "No outstanding document request hit one of the three escalation tiers today. Expected on most days — this is normal, not a failure."
@@ -399,7 +448,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2016,
+        2240,
         -160
       ],
       "notes": "Do not add an opt-out footer here — the compliance guardrail (next node) appends it automatically and logs the send attempt.\n\nFIRM_CLIENT_PORTAL_URL is optional — copy adapts gracefully if unset. Personalization (assignee's contact email) degrades gracefully to the generic firm address if the assignee can't be resolved."
@@ -432,7 +481,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        2240,
+        2464,
         -160
       ],
       "notes": "Checks whether this client has opted out of firm emails. If not, appends the required unsubscribe footer and logs the send attempt to the audit sheet — same client-facing pattern as PAC-18 and PAC-64.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields."
@@ -467,7 +516,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        2464,
+        2688,
         -160
       ],
       "notes": "Yes (client hasn't opted out) → send.\nNo (client has opted out of firm emails) → route to Skip. The suppression is already logged by the guardrail.",
@@ -487,7 +536,7 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2688,
+        2912,
         -160
       ],
       "notes": "Sends the compliance-approved reminder to the client. Uses message_out from the guardrail, which carries the required unsubscribe footer — plain text only, since the footer is only guaranteed to be present in the text version the guardrail returns.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
@@ -505,7 +554,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        2688,
+        2912,
         -40
       ],
       "notes": "This client has opted out of firm emails. The suppression is already logged by the guardrail workflow. No email is sent."
@@ -539,7 +588,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        2016,
+        2240,
         120
       ],
       "notes": "Yes (14-15 days overdue) → also alert the responsible staff member directly, on top of the client reminder built in the row above.\nNo (reminder or second_reminder tier) → no staff escalation yet, route to Skip.",
@@ -552,7 +601,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        2240,
+        2464,
         280
       ],
       "notes": "This document request isn't at the urgent tier yet — no internal escalation needed. The client still gets their own reminder from the row above."
@@ -566,7 +615,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2240,
+        2464,
         120
       ],
       "notes": "FIRM_PARALEGAL_EMAIL is optional — falls back to FIRM_EMAIL if unset. If neither the assignee resolves nor either variable is set, this throws rather than silently escalating to nobody."
@@ -585,7 +634,7 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2464,
+        2688,
         120
       ],
       "notes": "Delivers the internal escalation to the responsible staff member (or the fallback address). Same SMTP credential as the client reminder — no separate setup.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
@@ -633,6 +682,69 @@
         }
       }
     ],
+    "Fetch Open Matters From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 41001,
+              "display_number": "2026-CH-050",
+              "description": "Custody Modification",
+              "client": {
+                "id": 601,
+                "name": "Jane Doe",
+                "primary_email_address": "jane.doe@example.com"
+              }
+            },
+            {
+              "id": 41002,
+              "display_number": "2026-AV-051",
+              "description": "Business Contract Dispute",
+              "client": {
+                "id": 602,
+                "name": "John Smith",
+                "primary_email_address": "john.smith@example.com"
+              }
+            },
+            {
+              "id": 41003,
+              "display_number": "2026-PB-052",
+              "description": "Estate Administration",
+              "client": {
+                "id": 603,
+                "name": "Alice Wong",
+                "primary_email_address": "alice.wong@example.com"
+              }
+            },
+            {
+              "id": 41004,
+              "display_number": "2026-FL-053",
+              "description": "Uncontested Divorce",
+              "client": {
+                "id": 604,
+                "name": "Bob Lee",
+                "primary_email_address": "bob.lee@example.com"
+              }
+            },
+            {
+              "id": 41005,
+              "display_number": "2026-CH-049",
+              "description": "Guardianship",
+              "client": {
+                "id": 605,
+                "name": "No Email On File"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 5
+          }
+        }
+      }
+    ],
     "Fetch Outstanding Document Tasks From Clio": [
       {
         "json": {
@@ -652,12 +764,7 @@
               "matter": {
                 "id": 41001,
                 "display_number": "2026-CH-050",
-                "description": "Custody Modification",
-                "client": {
-                  "id": 601,
-                  "name": "Jane Doe",
-                  "primary_email_address": "jane.doe@example.com"
-                }
+                "description": "Custody Modification"
               }
             },
             {
@@ -675,12 +782,7 @@
               "matter": {
                 "id": 41002,
                 "display_number": "2026-AV-051",
-                "description": "Business Contract Dispute",
-                "client": {
-                  "id": 602,
-                  "name": "John Smith",
-                  "primary_email_address": "john.smith@example.com"
-                }
+                "description": "Business Contract Dispute"
               }
             },
             {
@@ -698,12 +800,7 @@
               "matter": {
                 "id": 41003,
                 "display_number": "2026-PB-052",
-                "description": "Estate Administration",
-                "client": {
-                  "id": 603,
-                  "name": "Alice Wong",
-                  "primary_email_address": "alice.wong@example.com"
-                }
+                "description": "Estate Administration"
               }
             },
             {
@@ -721,12 +818,7 @@
               "matter": {
                 "id": 41004,
                 "display_number": "2026-FL-053",
-                "description": "Uncontested Divorce",
-                "client": {
-                  "id": 604,
-                  "name": "Bob Lee",
-                  "primary_email_address": "bob.lee@example.com"
-                }
+                "description": "Uncontested Divorce"
               }
             },
             {
@@ -744,12 +836,7 @@
               "matter": {
                 "id": 41001,
                 "display_number": "2026-CH-050",
-                "description": "Custody Modification",
-                "client": {
-                  "id": 601,
-                  "name": "Jane Doe",
-                  "primary_email_address": "jane.doe@example.com"
-                }
+                "description": "Custody Modification"
               }
             },
             {
@@ -767,11 +854,7 @@
               "matter": {
                 "id": 41005,
                 "display_number": "2026-CH-049",
-                "description": "Guardianship",
-                "client": {
-                  "id": 605,
-                  "name": "No Email On File"
-                }
+                "description": "Guardianship"
               }
             }
           ],
@@ -811,6 +894,17 @@
       "main": [
         [
           {
+            "node": "Fetch Open Matters From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Open Matters From Clio": {
+      "main": [
+        [
+          {
             "node": "Fetch Outstanding Document Tasks From Clio",
             "type": "main",
             "index": 0
@@ -833,14 +927,14 @@
       "main": [
         [
           {
-            "node": "Filter Document Request Tasks With Client Email And Due Date",
+            "node": "Filter Document Request Tasks With Due Date",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Document Request Tasks With Client Email And Due Date": {
+    "Filter Document Request Tasks With Due Date": {
       "main": [
         [
           {
@@ -977,5 +1071,5 @@
       ]
     }
   },
-  "description": "Fires daily, fetches the firm's user directory from Clio, then every pending task. Filters down to document-request tasks (a configurable Clio task type) with a client email and due date, computes each one's days-overdue, and matches it against three escalation tiers: 1-2 days overdue (reminder), 7-8 days (second reminder), 14-15 days (urgent). The matching reminder is personalized with the responsible staff member's contact details where resolvable, checked against the Bar-Compliance Guardrail for opt-out and disclaimer, then sent if approved. At the urgent tier, a separate internal email also alerts the staff member directly, bypassing the guardrail since it's not a client message. Marking the Clio task complete stops all future reminders automatically. Replaces the manual paralegal follow-up that eats time chasing outstanding client documents."
+  "description": "Fires daily, fetches the firm's user directory from Clio, then every open matter, then every pending task. Filters down to document-request tasks (a configurable Clio task type) with a due date, resolves each one's client email from the matters lookup, computes days-overdue, and matches it against three escalation tiers: 1-2 days overdue (reminder), 7-8 days (second reminder), 14-15 days (urgent). The matching reminder is personalized with the responsible staff member's contact details where resolvable, checked against the Bar-Compliance Guardrail for opt-out and disclaimer, then sent if approved. At the urgent tier, a separate internal email also alerts the staff member directly, bypassing the guardrail since it's not a client message. Marking the Clio task complete stops all future reminders automatically. Replaces the manual paralegal follow-up that eats time chasing outstanding client documents."
 }

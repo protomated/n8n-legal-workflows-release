@@ -4,7 +4,7 @@
 **Pillar:** Keep
 **Replaces:** Manual paralegal follow-up chasing outstanding client documents
 
-Get value in under 15 minutes. Every day, the workflow pulls two things from Clio in sequence — the firm's user directory, then every pending task — and filters down to outstanding document requests (a configurable Clio task type). Each one's days-overdue is computed fresh from its own due date and matched against three escalation tiers: **1-2 days overdue** (friendly reminder), **7-8 days** (firmer follow-up), **14-15 days** (urgent, plus a direct internal alert to the responsible staff member). Mark the Clio task complete once the document arrives, and every future reminder stops automatically — nothing else to update.
+Get value in under 15 minutes. Every day, the workflow pulls three things from Clio in sequence — the firm's user directory, every open matter, and every pending task — and filters down to outstanding document requests (a configurable Clio task type). Each one's client is resolved from the matters lookup, and its days-overdue is computed fresh from its own due date and matched against three escalation tiers: **1-2 days overdue** (friendly reminder), **7-8 days** (firmer follow-up), **14-15 days** (urgent, plus a direct internal alert to the responsible staff member). Mark the Clio task complete once the document arrives, and every future reminder stops automatically — nothing else to update.
 
 ---
 
@@ -14,11 +14,13 @@ Get value in under 15 minutes. Every day, the workflow pulls two things from Cli
 
 **A document request is just a Clio task, with one convention.** Create a task named for what's needed (e.g. "Photo ID from client"), set a due date, assign it to whoever's chasing it, and set its task type to **Document Request** (or whatever you set `FIRM_DOCUMENT_REQUEST_TASK_TYPE` to). Mark it complete in Clio the moment the document actually arrives — that's the entire "stop reminding" mechanism. There's no separate list or sheet to keep in sync.
 
-**Two Clio integrations, wired in sequence, not parallel.** `Fetch Firm Users From Clio` runs first and passes its output straight through into `Fetch Outstanding Document Tasks From Clio` — this isn't cosmetic. PAC-64 confirmed live that a disconnected side-fetch (referenced only by name in code, with no real connection into the graph) is **not reliably executed by n8n** on every run or every testing method. Wiring it as a genuine sequential dependency fixes that for good.
+**Three Clio integrations, wired in sequence, not parallel.** `Fetch Firm Users From Clio` runs first, passes straight through into `Fetch Open Matters From Clio`, which passes straight through into `Fetch Outstanding Document Tasks From Clio` — this isn't cosmetic. PAC-64 confirmed live that a disconnected side-fetch (referenced only by name in code, with no real connection into the graph) is **not reliably executed by n8n** on every run or every testing method. Wiring every fetch as a genuine sequential dependency fixes that for good.
+
+**Confirmed live: Clio rejects a doubly-nested field request.** The natural way to get a task's client would be `tasks.json`'s `matter{...,client{...}}` — but that fails outright with `InvalidFields: "matter} is not a valid field"`. Clio's field selector only supports one level of nesting; `client{...}` nested inside `matter{...}` nested inside the tasks fetch is two levels deep. So the client is resolved a different way: `Fetch Open Matters From Clio` pulls every matter with `client{id,name,primary_email_address}` nested just **one** level (exactly the pattern PAC-64 already confirmed works on `matters.json`), and `Compute Days Overdue And Escalation Tier` looks up each task's matter id against it — the same lookup-table approach already used for resolving the assignee against the user directory.
 
 **Escalation windows are 2 days wide** (1-2, 7-8, 14-15) on purpose — same as PAC-18's invoice ladder — so a reminder isn't silently skipped if the daily cron runs a day late (server restart, holiday, etc.).
 
-**A few Clio fields haven't been independently confirmed live on this exact combination:** `task_type{id,name}` and `assignee{id,name}` as nested fields on `tasks.json`, and `matter.client.primary_email_address` alongside them in the same request. Each individual piece is confirmed elsewhere in this catalog (PAC-59 uses task fields, PAC-64 confirmed `primary_email_address` on `matters.json`), but not all together on one `tasks.json` call. Check your first real run's output on `Fetch Outstanding Document Tasks From Clio` and adjust field names if Clio rejects any of them.
+**A few Clio fields haven't been independently confirmed live on this exact combination:** `task_type{id,name}` and `assignee{id,name}` as nested fields on `tasks.json`. Each individual piece is confirmed elsewhere in this catalog (PAC-59 uses task fields), but not together on one call. Check your first real run's output on `Fetch Outstanding Document Tasks From Clio` and adjust field names if Clio rejects either.
 
 ---
 
@@ -70,18 +72,19 @@ Toggle the workflow to **Active**. It runs on its own from then on — no webhoo
 
 ## Step 5 — Test
 
-The workflow ships with pinned sample Clio data on both Clio-facing nodes: a two-user firm directory, and six document tasks covering all three tiers plus three exclusion cases (wrong task type, no client email, and one 5-days-overdue task that doesn't land on any tier).
+The workflow ships with pinned sample Clio data on all three Clio-facing nodes: a two-user firm directory, five open matters (one with no client email on file), and six document tasks covering all three tiers plus exclusion cases (wrong task type, an unresolvable client, and one 5-days-overdue task that doesn't land on any tier).
 
-1. Run **"Fetch Outstanding Document Tasks From Clio"** → **"Split Out Task Records"** → **"Filter Document Request Tasks With Client Email And Due Date"** and confirm the wrong-task-type task and the no-client-email task are both dropped.
-2. Continue through **"Compute Days Overdue And Escalation Tier"** → **"Filter Tasks Due For A Reminder Today"** and confirm the 5-days-overdue task is dropped, and the other three carry `tier: reminder`, `second_reminder`, and `urgent` respectively.
-3. Continue through **"Check If Any Reminder Due Today"** → **"If Any Reminder Due Today"** and confirm it fans out to both **"Build Document Reminder Email"** and **"If Tier Is Urgent"**.
-4. For each of the three surviving tasks, confirm **"Build Document Reminder Email"** produces the right tone for its tier, with the assignee's contact email substituted in correctly.
-5. Confirm only the `urgent`-tier task reaches **"Build Staff Escalation Email"** → **"Send Staff Escalation Email"** — the other two should hit **"Skip — No Staff Escalation Needed"**.
-6. Continue the client-email path through **"Check Compliance Before Sending"** → **"If Reminder Approved"** → **"Send Document Reminder Email"** and confirm the delivered email carries the guardrail's unsubscribe footer.
-7. Add a row to the Guardrail's Opt-Outs sheet for one of the pinned client emails, re-run, and confirm that task routes to **"Skip — Client Opted Out"** instead of sending (the staff escalation, if applicable, still fires independently — opting out of client emails doesn't suppress internal staff alerts).
-8. Temporarily clear the pinned data on both Clio-facing nodes down to empty `data` arrays and re-run to confirm the workflow reaches **"Skip — Nothing To Chase Today"** with no email sent.
+1. Run **"Fetch Outstanding Document Tasks From Clio"** → **"Split Out Task Records"** → **"Filter Document Request Tasks With Due Date"** and confirm the wrong-task-type task is dropped.
+2. Continue through **"Compute Days Overdue And Escalation Tier"** and confirm each surviving task's `client_email` was correctly resolved from the matters lookup (empty for the one whose matter has no client email on file).
+3. Continue through **"Filter Tasks Due For A Reminder Today"** and confirm the 5-days-overdue task and the no-client-email task are both dropped, and the remaining three carry `tier: reminder`, `second_reminder`, and `urgent` respectively.
+4. Continue through **"Check If Any Reminder Due Today"** → **"If Any Reminder Due Today"** and confirm it fans out to both **"Build Document Reminder Email"** and **"If Tier Is Urgent"**.
+5. For each of the three surviving tasks, confirm **"Build Document Reminder Email"** produces the right tone for its tier, with the assignee's contact email substituted in correctly.
+6. Confirm only the `urgent`-tier task reaches **"Build Staff Escalation Email"** → **"Send Staff Escalation Email"** — the other two should hit **"Skip — No Staff Escalation Needed"**.
+7. Continue the client-email path through **"Check Compliance Before Sending"** → **"If Reminder Approved"** → **"Send Document Reminder Email"** and confirm the delivered email carries the guardrail's unsubscribe footer.
+8. Add a row to the Guardrail's Opt-Outs sheet for one of the pinned client emails, re-run, and confirm that task routes to **"Skip — Client Opted Out"** instead of sending (the staff escalation, if applicable, still fires independently — opting out of client emails doesn't suppress internal staff alerts).
+9. Temporarily clear the pinned data on all three Clio-facing nodes down to empty `data` arrays and re-run to confirm the workflow reaches **"Skip — Nothing To Chase Today"** with no email sent.
 
-**Testing against your real Clio account:** unpin both Clio-facing nodes, connect a real credential, and create one real "Document Request" task due a day or two ago so it lands on the `reminder` tier immediately. Check each node's raw output before assuming anything is broken — see the field-name caveats above.
+**Testing against your real Clio account:** unpin all three Clio-facing nodes, connect a real credential, and create one real "Document Request" task due a day or two ago so it lands on the `reminder` tier immediately. Check each node's raw output before assuming anything is broken — see the field-name caveats above.
 
 ---
 
@@ -91,7 +94,8 @@ The workflow ships with pinned sample Clio data on both Clio-facing nodes: a two
 |---|---|
 | A document request task is 1-2, 7-8, or 14-15 days overdue | The matching-tier reminder is built and sent to the client (unless opted out) |
 | A document request task is any other age (including not yet due) | Excluded for today — no email, no error |
-| A task isn't the configured document-request type, has no client email, or no due date | Silently excluded from every tier |
+| A task isn't the configured document-request type, or has no due date | Excluded before tier computation even runs |
+| A task's matter doesn't resolve to a client with an email on file (not in the open-matters fetch, no email set) | Silently excluded from every tier |
 | A task's assignee can't be resolved (unassigned, disabled user, or the directory fetch failed) | Reminder still sends — falls back to the generic firm contact address instead of naming staff |
 | No document request hits a tier today | Skipped — no emails, nothing to route |
 | The client has opted out of firm emails | Guardrail suppresses that client email; already logged to the audit sheet. The urgent-tier staff escalation is unaffected — it's not a client message |
