@@ -4,21 +4,6 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Document Request Chaser\n\n### How it works\n\n1. The workflow triggers when a new form submission occurs and extracts the input data.\n2. It generates an AI-based response using the input data and OpenAI integration.\n3. The generated AI response is processed and formatted.\n4. The processed response is saved into an Airtable database for record-keeping.\n5. Finally, the workflow sends out a notification email containing the AI-generated response.\n\n### Setup steps\n\n- [ ] Configure a Webhook node or form submission trigger to capture user inputs.\n- [ ] Set up OpenAI credentials with API key for AI response generation.\n- [ ] Connect Airtable node with appropriate API key and base/table IDs to save records.\n- [ ] Configure an Email node with SMTP or service credentials to send notifications.\n\n### Customization\n\nYou can customize the AI prompt to better suit your specific use case or enhance the email content and formatting for better user communication.",
-        "width": 480,
-        "height": 816
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -384,
-        240
-      ],
-      "id": "cdc45309-7d6d-469f-a841-1c6998ae474b",
-      "name": "Sticky Note"
-    },
-    {
-      "parameters": {
         "rule": {
           "interval": [
             {
@@ -566,6 +551,101 @@
           "name": "Email account (SMTP)"
         }
       }
+    },
+    {
+      "parameters": {
+        "content": "## Document Request Chaser\n\n### How it works\n\n1. Triggers daily, fetches the firm's user directory (used to personalize with the assigned staff member's name), then every open matter, then every pending Clio task — each in sequence, so every lookup is a real dependency n8n always resolves correctly. Matters are fetched separately because Clio rejects a doubly-nested client{...} request on tasks.json.\n2. Splits tasks into individual records, keeps only ones that are actually document requests (a configurable Clio task type) with a due date on file, then computes each one's days-overdue, resolves the client's email from the matters lookup, and matches the tier.\n3. A second filter keeps only tasks hitting a tier today, with a client email that actually resolved — 1-2 days overdue (reminder), 7-8 days (second reminder), 14-15 days (urgent) — all with native n8n nodes.\n4. The matching reminder is built (styled HTML + plain text), checked against the compliance guardrail (opt-out + disclaimer), then sent to the client if approved.\n5. At the urgent tier, a separate internal email also alerts the responsible staff member (resolved by name via the user directory) that the request may need a phone call — bypassing the guardrail since it's an internal message, not a client one.\n6. Skips silently, with a clearly labelled entry in execution history, on a day with nothing due. Marking the Clio task complete once the document arrives stops all future reminders automatically — there's nothing else to update.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing reminder here goes through it.\n- [ ] Configure Clio OAuth2 credentials with task, matter, and user-directory read access.\n- [ ] Configure SMTP credentials for sending.\n- [ ] Create (or confirm) a Clio task type named 'Document Request' — every outstanding document should be tracked as one task of this type, due-dated, assigned to whoever is chasing it, and linked to its matter.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally set FIRM_CLIENT_PORTAL_URL, FIRM_DOCUMENT_REQUEST_TASK_TYPE, FIRM_PARALEGAL_EMAIL.\n\n### Customization\n\nEdit the three tiers' subject/body copy in 'Build Document Reminder Email Body' — one node handles all three, same pattern as the Invoice Reminder Ladder (PAC-18). Change the escalation timing by editing the day windows in 'Calculate Overdue Days And Tier'.",
+        "width": 480,
+        "height": 900
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Resolve who to personalize with, then fetch document requests\n\nFetches the firm's user directory, then every open matter, then every pending task — each passed straight through into the next in sequence, making every fetch a genuine upstream step (not a disconnected side-fetch) so n8n always resolves them, on every run and every testing method. Matters are fetched separately from tasks because Clio rejects a doubly-nested client{...} request on tasks.json.",
+        "width": 1150,
+        "height": 320,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Split, filter, and tier\n\nKeeps only pending tasks that are document requests with a due date, computes each one's days-overdue, resolves the client's email from the matters lookup, then keeps only the ones hitting an escalation tier today — all native n8n nodes.",
+        "width": 928,
+        "height": 320,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1150,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Check for anything due today\n\nBridges the native filter chain back to a clean, labelled Skip if nothing survived — matches the explicit-skip pattern used across this catalog.",
+        "width": 480,
+        "height": 620,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000004",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Send the client reminder\n\nBuilds the tiered reminder (styled HTML + plain text), routes it through the compliance guardrail for opt-out checking and the required disclaimer, then sends it if approved.",
+        "width": 928,
+        "height": 320,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000005",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        -280
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Escalate to staff if urgent\n\nAt the 14-15 day tier, also alerts the responsible staff member directly — an internal email, so it bypasses the client-facing guardrail entirely, same as PAC-18's partner escalation.",
+        "width": 704,
+        "height": 240,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000006",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        60
+      ]
     }
   ],
   "active": false,
