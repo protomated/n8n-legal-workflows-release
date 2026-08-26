@@ -530,7 +530,7 @@
         "text": "={{ $json.message_out }}",
         "options": {},
         "emailFormat": "html",
-        "html": "={{ $json.email_html }}"
+        "html": "={{ $('Build Document Reminder Email').item.json.email_html }}"
       },
       "id": "6500aa00-0065-4000-a000-000000000014",
       "name": "Send Document Reminder Email",
@@ -540,7 +540,7 @@
         2912,
         -160
       ],
-      "notes": "Sends the compliance-approved reminder to the client. Uses message_out from the guardrail, which carries the required unsubscribe footer — plain text only, since the footer is only guaranteed to be present in the text version the guardrail returns.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
+      "notes": "Sends the compliance-approved reminder to the client — both the plain-text body (from 'text', using message_out from the guardrail, which carries the required unsubscribe footer) and the styled HTML body. The HTML field must reach back to '$('Build Document Reminder Email').item.json.email_html' rather than plain '$json.email_html' — the guardrail call immediately upstream replaces $json with its own response, which doesn't carry email_html (confirmed live: this was wired as plain $json initially and silently sent a blank email — visible only as 'undefined' under the HTML field's expression preview, not as an error anywhere).\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
       "credentials": {
         "smtp": {
           "id": "2",
