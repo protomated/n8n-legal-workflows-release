@@ -20,6 +20,8 @@ Get value in under 15 minutes. Every day, the workflow pulls three things from C
 
 **Escalation windows are 2 days wide** (1-2, 7-8, 14-15) on purpose — same as PAC-18's invoice ladder — so a reminder isn't silently skipped if the daily cron runs a day late (server restart, holiday, etc.).
 
+**Emails are styled HTML with a plain-text fallback, not plain text only.** Each tier gets its own header color (teal → orange → red, escalating with the tone), and the internal staff alert gets a purple "Escalation" header. The compliance guardrail only ever sees and appends its required opt-out footer to the plain-text version — the HTML version carries its own independently-built matching footer, so the disclaimer is present no matter which part a client's email client renders.
+
 **A few Clio fields haven't been independently confirmed live on this exact combination:** `task_type{id,name}` and `assignee{id,name}` as nested fields on `tasks.json`. Each individual piece is confirmed elsewhere in this catalog (PAC-59 uses task fields), but not together on one call. Check your first real run's output on `Fetch Outstanding Document Tasks From Clio` and adjust field names if Clio rejects either.
 
 ---
