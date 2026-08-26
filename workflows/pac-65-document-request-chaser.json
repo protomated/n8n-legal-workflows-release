@@ -4,6 +4,117 @@
   "nodes": [
     {
       "parameters": {
+        "content": "## Document Request Chaser\n\n### How it works\n\n1. The workflow triggers daily at 8 AM to start the document chasing process.\n2. It fetches firm users, open matters, and outstanding document tasks from the Clio API.\n3. The workflow filters tasks based on due dates, calculates how overdue they are, and determines if reminders should be triggered.\n4. Conditional branches check if reminders or escalations are due, build appropriate email bodies, and execute compliance workflow steps.\n5. Reminders are sent to clients, and urgent escalations trigger internal staff email alerts.\n6. The workflow includes skip branches for tasks that do not meet criteria to ensure clean flow.\n\n\n### Setup steps\n\n- [ ] Configure the CLIO_BASE_URL environment variable or credentials for Clio API access.\n- [ ] Ensure API permissions allow fetching users, matters, and tasks from Clio.\n- [ ] Configure email credentials for sending reminder and escalation emails.\n- [ ] Import and connect the compliance sub-workflow used for reminder approvals.\n- [ ] Schedule the trigger node to run daily at desired time (default 8 AM).\n",
+        "width": 480,
+        "height": 896
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        -288
+      ],
+      "id": "8c10eded-25db-47eb-98ce-32d198466ee3",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Trigger and fetch data\n\nStarts the workflow at 8 AM and fetches firm users, open matters, and outstanding document tasks from Clio API.",
+        "width": 864,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -128
+      ],
+      "id": "54a91c3a-20c8-49fc-917a-4e0b515a328e",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Process and filter document tasks\n\nSplits and filters document task records to identify those with valid due dates that are eligible for reminders.",
+        "width": 416,
+        "height": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        848,
+        -160
+      ],
+      "id": "90dd953e-6b1f-4731-9f48-944f462fef70",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Calculate overdue and reminder eligibility\n\nCalculates how many days a task is overdue and filters tasks that are due for reminders today.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        -128
+      ],
+      "id": "b440c1d0-9172-4ef4-b41a-f718ddae7630",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Reminder decision and branching\n\nDetermines if a reminder is due today and branches workflow to build reminders, handle escalations, or skip as needed.",
+        "width": 416,
+        "height": 720,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        -160
+      ],
+      "id": "6627501f-86c3-40d2-9754-11978a8d6779",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Build and send client reminders\n\nBuilds the document reminder email body, executes related compliance workflow, checks approval, then sends or skips the reminder email.",
+        "width": 864,
+        "height": 416,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        -288
+      ],
+      "id": "5a46b311-12d0-4baa-97cb-52148e7f8e19",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Urgent escalation check\n\nChecks if reminder tier is urgent to trigger internal staff escalation or skip escalation if not needed.",
+        "width": 416,
+        "height": 480,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        160
+      ],
+      "id": "331652cc-3a8a-4573-ad8b-756692476329",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
         "rule": {
           "interval": [
             {
@@ -14,7 +125,7 @@
         }
       },
       "id": "6500aa00-0065-4000-a000-000000000001",
-      "name": "Trigger Document Chaser At 8AM",
+      "name": "When Document Chaser Runs At 8 AM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -52,7 +163,7 @@
         }
       },
       "id": "6500aa00-0065-4000-a000-000000000002",
-      "name": "Fetch Firm Users From Clio API",
+      "name": "Fetch Firm Users From Clio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -101,7 +212,7 @@
         }
       },
       "id": "6500aa00-0065-4000-a000-000000000020",
-      "name": "Fetch Open Matters From Clio API",
+      "name": "Fetch Open Matters From Clio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -150,7 +261,7 @@
         }
       },
       "id": "6500aa00-0065-4000-a000-000000000003",
-      "name": "Fetch Outstanding Document Tasks",
+      "name": "Fetch Outstanding Document Tasks From Clio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -227,7 +338,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Computes how many days overdue this document request is, and matches it against three\n// escalation tiers. Same 2-day-window approach as PAC-18's invoice ladder, so a reminder isn't\n// missed if the cron runs a day late due to a server restart or holiday.\n//\n// Clio rejects a doubly-nested field request (tasks.json's matter{...,client{...}}), so the\n// client's name/email is resolved here from a separate matters lookup ('Fetch Open Matters From\n// Clio') by matter id -- the same lookup-table approach used for the assignee/user directory.\nconst task = $json;\n\nconst matters = ($('Fetch Open Matters From Clio API').first().json.data) || [];\nconst matterById = {};\nfor (const m of matters) {\n  matterById[m.id] = {\n    client_name: (m.client && m.client.name) || '',\n    client_email: (m.client && m.client.primary_email_address) || '',\n  };\n}\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst dueDate = new Date(task.due_at + 'T12:00:00Z');\ndueDate.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst daysOverdue = Math.floor((today - dueDate) / msPerDay);\n\nlet tier = '';\nif (daysOverdue >= 1 && daysOverdue <= 2) tier = 'reminder';\nelse if (daysOverdue >= 7 && daysOverdue <= 8) tier = 'second_reminder';\nelse if (daysOverdue >= 14 && daysOverdue <= 15) tier = 'urgent';\n\nconst matterId = (task.matter && task.matter.id) || null;\nconst matterInfo = (matterId && matterById[matterId]) || { client_name: '', client_email: '' };\n\nreturn {\n  json: {\n    task_id: task.id,\n    task_name: task.name || '',\n    due_at: task.due_at,\n    matter_id: matterId || '',\n    matter_ref: (task.matter && task.matter.display_number) || '',\n    matter_description: (task.matter && task.matter.description) || '',\n    client_name: matterInfo.client_name,\n    client_email: matterInfo.client_email,\n    assignee_id: (task.assignee && task.assignee.id) || null,\n    days_overdue: daysOverdue,\n    tier,\n  },\n};"
+        "jsCode": "// Computes how many days overdue this document request is, and matches it against three\n// escalation tiers. Same 2-day-window approach as PAC-18's invoice ladder, so a reminder isn't\n// missed if the cron runs a day late due to a server restart or holiday.\n//\n// Clio rejects a doubly-nested field request (tasks.json's matter{...,client{...}}), so the\n// client's name/email is resolved here from a separate matters lookup ('Fetch Open Matters From\n// Clio') by matter id -- the same lookup-table approach used for the assignee/user directory.\nconst task = $json;\n\nconst matters = ($('Fetch Open Matters From Clio').first().json.data) || [];\nconst matterById = {};\nfor (const m of matters) {\n  matterById[m.id] = {\n    client_name: (m.client && m.client.name) || '',\n    client_email: (m.client && m.client.primary_email_address) || '',\n  };\n}\n\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst dueDate = new Date(task.due_at + 'T12:00:00Z');\ndueDate.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst daysOverdue = Math.floor((today - dueDate) / msPerDay);\n\nlet tier = '';\nif (daysOverdue >= 1 && daysOverdue <= 2) tier = 'reminder';\nelse if (daysOverdue >= 7 && daysOverdue <= 8) tier = 'second_reminder';\nelse if (daysOverdue >= 14 && daysOverdue <= 15) tier = 'urgent';\n\nconst matterId = (task.matter && task.matter.id) || null;\nconst matterInfo = (matterId && matterById[matterId]) || { client_name: '', client_email: '' };\n\nreturn {\n  json: {\n    task_id: task.id,\n    task_name: task.name || '',\n    due_at: task.due_at,\n    matter_id: matterId || '',\n    matter_ref: (task.matter && task.matter.display_number) || '',\n    matter_description: (task.matter && task.matter.description) || '',\n    client_name: matterInfo.client_name,\n    client_email: matterInfo.client_email,\n    assignee_id: (task.assignee && task.assignee.id) || null,\n    days_overdue: daysOverdue,\n    tier,\n  },\n};"
       },
       "id": "6500aa00-0065-4000-a000-000000000006",
       "name": "Calculate Overdue Days And Tier",
@@ -287,7 +398,7 @@
         "jsCode": "// Bridges the native Split Out / Filter chain above back to this catalog's usual explicit-skip\n// pattern (see PAC-18, PAC-61, PAC-63, PAC-64): zero surviving tasks becomes one clearly labelled\n// sentinel item instead of the run just quietly having nothing execute, so a 'nothing due today'\n// run still shows a clean, readable entry in execution history.\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [{ json: { is_actionable: false, tier: 'none', reason: 'No document request hit an escalation tier today' } }];\n}\n\nreturn items.map(i => ({ json: { ...i.json, is_actionable: true } }));"
       },
       "id": "6500aa00-0065-4000-a000-000000000008",
-      "name": "Check For Any Reminders Today",
+      "name": "Check For Reminders Today",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -322,7 +433,7 @@
         }
       },
       "id": "6500aa00-0065-4000-a000-000000000009",
-      "name": "If Reminder Is Due Today",
+      "name": "If Document Reminder Is Due",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -346,14 +457,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// One node handles all three escalation tiers -- same pattern as the Invoice Reminder Ladder's\n// (PAC-18) single build node keyed by ladder step -- so there's one place to edit copy instead of\n// three near-duplicate nodes. Purely operational: chasing a document that's already been\n// requested, never any comment on the matter's substance (ABA Op. 512).\n//\n// Resolves the task's assignee id against the firm's user directory (fetched once per run in\n// 'Fetch Firm Users From Clio') so the upload/contact line can point to the actual responsible\n// staff member -- falling back to the generic firm contact if the assignee can't be resolved.\n//\n// Builds both a plain-text body (used as-is by the compliance guardrail, which appends the\n// required opt-out footer to it) and a styled HTML version for nicer rendering in clients that\n// support it. The HTML gets its own matching footer -- independently reconstructed here rather\n// than reused from the guardrail, since the guardrail only ever returns the plain-text version --\n// so the disclaimer is present regardless of which part an email client chooses to render.\nconst item = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_EMAIL = $vars.FIRM_EMAIL;\nconst PORTAL_URL = $vars.FIRM_CLIENT_PORTAL_URL || '';\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL) throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst users = ($('Fetch Firm Users From Clio API').first().json.data) || [];\nconst assignee = item.assignee_id ? users.find(u => u.id === item.assignee_id) : null;\nconst contactEmail = (assignee && assignee.email) || FIRM_EMAIL;\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n    <div style=\"padding:16px 32px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\">${escapeHtml(FIRM_NAME)} | This message is for the intended recipient only. Reply UNSUBSCRIBE to stop receiving messages.</div>\n  </div>\n</body>\n</html>`;\n}\n\nconst matterLabel = item.matter_ref + (item.matter_description ? ' (' + item.matter_description + ')' : '');\nconst uploadLine = PORTAL_URL\n  ? `You can upload it directly through our client portal: ${PORTAL_URL}`\n  : `Just reply to this email with it attached, or contact us at ${contactEmail}.`;\nconst uploadHtml = PORTAL_URL\n  ? `You can upload it directly through our client portal: <a href=\"${PORTAL_URL}\" style=\"color:#0e7490;font-weight:600;\">${escapeHtml(PORTAL_URL)}</a>`\n  : `Just reply to this email with it attached, or contact us at <a href=\"mailto:${contactEmail}\" style=\"color:#0e7490;font-weight:600;\">${escapeHtml(contactEmail)}</a>.`;\n\nconst TIERS = {\n  reminder: {\n    color: '#0e7490',\n    label: 'Friendly reminder',\n    subject: `Quick reminder: ${item.task_name} still needed`,\n    introHtml: `Just a friendly reminder that we're still waiting on the following for your matter (${escapeHtml(matterLabel)}):`,\n    extraHtml: '',\n    body: `Hi ${item.client_name},\\n\\nJust a friendly reminder that we're still waiting on the following for your matter (${matterLabel}):\\n\\n- ${item.task_name}\\n\\n${uploadLine}\\n\\nThanks,\\n${FIRM_NAME}`,\n  },\n  second_reminder: {\n    color: '#ea580c',\n    label: 'Second reminder',\n    subject: `Following up: ${item.task_name} still outstanding`,\n    introHtml: `We're following up again — we still haven't received the following for your matter (${escapeHtml(matterLabel)}):`,\n    extraHtml: `This is holding up progress on your matter, so getting it to us soon helps keep things moving.`,\n    body: `Hi ${item.client_name},\\n\\nWe're following up again — we still haven't received the following for your matter (${matterLabel}):\\n\\n- ${item.task_name}\\n\\nThis is holding up progress on your matter, so getting it to us soon helps keep things moving.\\n\\n${uploadLine}\\n\\n${FIRM_NAME}`,\n  },\n  urgent: {\n    color: '#dc2626',\n    label: 'Action needed',\n    subject: `Action needed: ${item.task_name} is now significantly overdue`,\n    introHtml: `We still need the following for your matter (${escapeHtml(matterLabel)}), and it's now been over two weeks:`,\n    extraHtml: `Without this, we may not be able to move your matter forward. Please send it as soon as you can.<br><br>If there's a reason this has been difficult to provide, let us know — we're happy to help find a solution.`,\n    body: `Hi ${item.client_name},\\n\\nWe still need the following for your matter (${matterLabel}), and it's now been over two weeks:\\n\\n- ${item.task_name}\\n\\nWithout this, we may not be able to move your matter forward. Please send it as soon as you can.\\n\\n${uploadLine}\\n\\nIf there's a reason this has been difficult to provide, let us know — we're happy to help find a solution.\\n\\n${FIRM_NAME}`,\n  },\n};\n\nconst content = TIERS[item.tier];\n\nconst bodyHtml = `\n  <div style=\"color:#334155;font-size:14px;margin-bottom:16px;\">Hi ${escapeHtml(item.client_name)},</div>\n  <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">${content.introHtml}</div>\n  <div style=\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:20px;background:#f8fafc;\">\n    <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(item.task_name)}</div>\n    <div style=\"font-size:13px;color:#64748b;margin-top:2px;\">${escapeHtml(matterLabel)}</div>\n  </div>\n  ${content.extraHtml ? `<div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">${content.extraHtml}</div>` : ''}\n  <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">${uploadHtml}</div>\n  <div style=\"color:#334155;font-size:14px;\">Thanks,<br>${escapeHtml(FIRM_NAME)}</div>`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.client_email,\n  subject: content.subject,\n  message: content.body,\n  email_html: emailShell(content.color, content.label, content.subject, bodyHtml),\n  template_id: 'PAC-65-document-chaser',\n  matter_id: String(item.matter_id || ''),\n} }];"
+        "jsCode": "// One node handles all three escalation tiers -- same pattern as the Invoice Reminder Ladder's\n// (PAC-18) single build node keyed by ladder step -- so there's one place to edit copy instead of\n// three near-duplicate nodes. Purely operational: chasing a document that's already been\n// requested, never any comment on the matter's substance (ABA Op. 512).\n//\n// Resolves the task's assignee id against the firm's user directory (fetched once per run in\n// 'Fetch Firm Users From Clio') so the upload/contact line can point to the actual responsible\n// staff member -- falling back to the generic firm contact if the assignee can't be resolved.\n//\n// Builds both a plain-text body (used as-is by the compliance guardrail, which appends the\n// required opt-out footer to it) and a styled HTML version for nicer rendering in clients that\n// support it. The HTML gets its own matching footer -- independently reconstructed here rather\n// than reused from the guardrail, since the guardrail only ever returns the plain-text version --\n// so the disclaimer is present regardless of which part an email client chooses to render.\nconst item = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_EMAIL = $vars.FIRM_EMAIL;\nconst PORTAL_URL = $vars.FIRM_CLIENT_PORTAL_URL || '';\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL) throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst users = ($('Fetch Firm Users From Clio').first().json.data) || [];\nconst assignee = item.assignee_id ? users.find(u => u.id === item.assignee_id) : null;\nconst contactEmail = (assignee && assignee.email) || FIRM_EMAIL;\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction emailShell(headerColor, headerLabel, headerTitle, bodyHtml) {\n  return `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${headerColor};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">${headerLabel}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${headerTitle}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n    <div style=\"padding:16px 32px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\">${escapeHtml(FIRM_NAME)} | This message is for the intended recipient only. Reply UNSUBSCRIBE to stop receiving messages.</div>\n  </div>\n</body>\n</html>`;\n}\n\nconst matterLabel = item.matter_ref + (item.matter_description ? ' (' + item.matter_description + ')' : '');\nconst uploadLine = PORTAL_URL\n  ? `You can upload it directly through our client portal: ${PORTAL_URL}`\n  : `Just reply to this email with it attached, or contact us at ${contactEmail}.`;\nconst uploadHtml = PORTAL_URL\n  ? `You can upload it directly through our client portal: <a href=\"${PORTAL_URL}\" style=\"color:#0e7490;font-weight:600;\">${escapeHtml(PORTAL_URL)}</a>`\n  : `Just reply to this email with it attached, or contact us at <a href=\"mailto:${contactEmail}\" style=\"color:#0e7490;font-weight:600;\">${escapeHtml(contactEmail)}</a>.`;\n\nconst TIERS = {\n  reminder: {\n    color: '#0e7490',\n    label: 'Friendly reminder',\n    subject: `Quick reminder: ${item.task_name} still needed`,\n    introHtml: `Just a friendly reminder that we're still waiting on the following for your matter (${escapeHtml(matterLabel)}):`,\n    extraHtml: '',\n    body: `Hi ${item.client_name},\\n\\nJust a friendly reminder that we're still waiting on the following for your matter (${matterLabel}):\\n\\n- ${item.task_name}\\n\\n${uploadLine}\\n\\nThanks,\\n${FIRM_NAME}`,\n  },\n  second_reminder: {\n    color: '#ea580c',\n    label: 'Second reminder',\n    subject: `Following up: ${item.task_name} still outstanding`,\n    introHtml: `We're following up again — we still haven't received the following for your matter (${escapeHtml(matterLabel)}):`,\n    extraHtml: `This is holding up progress on your matter, so getting it to us soon helps keep things moving.`,\n    body: `Hi ${item.client_name},\\n\\nWe're following up again — we still haven't received the following for your matter (${matterLabel}):\\n\\n- ${item.task_name}\\n\\nThis is holding up progress on your matter, so getting it to us soon helps keep things moving.\\n\\n${uploadLine}\\n\\n${FIRM_NAME}`,\n  },\n  urgent: {\n    color: '#dc2626',\n    label: 'Action needed',\n    subject: `Action needed: ${item.task_name} is now significantly overdue`,\n    introHtml: `We still need the following for your matter (${escapeHtml(matterLabel)}), and it's now been over two weeks:`,\n    extraHtml: `Without this, we may not be able to move your matter forward. Please send it as soon as you can.<br><br>If there's a reason this has been difficult to provide, let us know — we're happy to help find a solution.`,\n    body: `Hi ${item.client_name},\\n\\nWe still need the following for your matter (${matterLabel}), and it's now been over two weeks:\\n\\n- ${item.task_name}\\n\\nWithout this, we may not be able to move your matter forward. Please send it as soon as you can.\\n\\n${uploadLine}\\n\\nIf there's a reason this has been difficult to provide, let us know — we're happy to help find a solution.\\n\\n${FIRM_NAME}`,\n  },\n};\n\nconst content = TIERS[item.tier];\n\nconst bodyHtml = `\n  <div style=\"color:#334155;font-size:14px;margin-bottom:16px;\">Hi ${escapeHtml(item.client_name)},</div>\n  <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">${content.introHtml}</div>\n  <div style=\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:20px;background:#f8fafc;\">\n    <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(item.task_name)}</div>\n    <div style=\"font-size:13px;color:#64748b;margin-top:2px;\">${escapeHtml(matterLabel)}</div>\n  </div>\n  ${content.extraHtml ? `<div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">${content.extraHtml}</div>` : ''}\n  <div style=\"color:#334155;font-size:14px;margin-bottom:18px;\">${uploadHtml}</div>\n  <div style=\"color:#334155;font-size:14px;\">Thanks,<br>${escapeHtml(FIRM_NAME)}</div>`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.client_email,\n  subject: content.subject,\n  message: content.body,\n  email_html: emailShell(content.color, content.label, content.subject, bodyHtml),\n  template_id: 'PAC-65-document-chaser',\n  matter_id: String(item.matter_id || ''),\n} }];"
       },
       "id": "6500aa00-0065-4000-a000-000000000011",
       "name": "Build Document Reminder Email Body",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2240,
+        2464,
         -160
       ],
       "notes": "Do not add an opt-out footer to 'message' (the plain-text body) — the compliance guardrail (next node) appends it automatically to that version and logs the send attempt. 'email_html' carries its own independently-built matching footer, since the guardrail never sees or touches the HTML version.\n\nFIRM_CLIENT_PORTAL_URL is optional — copy adapts gracefully if unset. Personalization (assignee's contact email) degrades gracefully to the generic firm address if the assignee can't be resolved."
@@ -382,11 +493,11 @@
         }
       },
       "id": "6500aa00-0065-4000-a000-000000000012",
-      "name": "Execute Compliance Workflow",
+      "name": "Execute Compliance Reminder Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        2464,
+        2688,
         -160
       ],
       "notes": "Checks whether this client has opted out of firm emails. If not, appends the required unsubscribe footer and logs the send attempt to the audit sheet — same client-facing pattern as PAC-18 and PAC-64.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable.\n\nReturns: { approved, message_out, recipient, suppression_reason } plus all upstream fields."
@@ -417,11 +528,11 @@
         }
       },
       "id": "6500aa00-0065-4000-a000-000000000013",
-      "name": "If Reminder Is Approved",
+      "name": "If Document Reminder Is Approved",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        2688,
+        2912,
         -160
       ],
       "notes": "Yes (client hasn't opted out) → send.\nNo (client has opted out of firm emails) → route to Skip. The suppression is already logged by the guardrail.",
@@ -442,7 +553,7 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2912,
+        3136,
         -160
       ],
       "notes": "Sends the compliance-approved reminder to the client — both the plain-text body (from 'text', using message_out from the guardrail, which carries the required unsubscribe footer) and the styled HTML body. The HTML field must reach back to '$('Build Document Reminder Email').item.json.email_html' rather than plain '$json.email_html' — the guardrail call immediately upstream replaces $json with its own response, which doesn't carry email_html (confirmed live: this was wired as plain $json initially and silently sent a blank email — visible only as 'undefined' under the HTML field's expression preview, not as an error anywhere).\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
@@ -460,8 +571,8 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        2912,
-        -40
+        3136,
+        -32
       ],
       "notes": "This client has opted out of firm emails. The suppression is already logged by the guardrail workflow. No email is sent."
     },
@@ -503,18 +614,18 @@
     {
       "parameters": {},
       "id": "6500aa00-0065-4000-a000-000000000017",
-      "name": "Skip No Staff Escalation Needed",
+      "name": "Skip Staff Escalation Needed",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
         2464,
-        280
+        480
       ],
       "notes": "This document request isn't at the urgent tier yet — no internal escalation needed. The client still gets their own reminder from the row above."
     },
     {
       "parameters": {
-        "jsCode": "// Builds the internal alert to the staff member responsible for chasing this document request,\n// once it's 14-15 days overdue. This is an internal firm email -- no client is ever contacted by\n// this node -- so it bypasses the compliance guardrail entirely, same as PAC-18's day-60 partner\n// escalation. Styled as HTML for readability, with a plain-text fallback -- no opt-out footer\n// needed since this never reaches a client.\nconst item = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst FALLBACK_EMAIL = $vars.FIRM_PARALEGAL_EMAIL || $vars.FIRM_EMAIL;\n\nconst users = ($('Fetch Firm Users From Clio API').first().json.data) || [];\nconst assignee = item.assignee_id ? users.find(u => u.id === item.assignee_id) : null;\nconst assigneeEmail = (assignee && assignee.email) || FALLBACK_EMAIL;\nconst assigneeName = (assignee && assignee.name) || 'Team';\n\nif (!assigneeEmail) throw new Error('Cannot send the staff escalation -- set FIRM_PARALEGAL_EMAIL or FIRM_EMAIL as a fallback in n8n Variables.');\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst matterLabel = item.matter_ref + (item.matter_description ? ' (' + item.matter_description + ')' : '');\nconst subject = `Client document overdue 14+ days — ${item.matter_ref}`;\nconst body = `Hi ${assigneeName},\\n\\n${item.client_name} still hasn't sent \"${item.task_name}\" for ${matterLabel} — it's been over two weeks since it was due (${item.due_at}).\\n\\nThe client has already received automated reminders at 1-2 days and 7-8 days overdue, plus today's urgent notice. This may need a personal phone call, or a check on whether the request is still needed at all.\\n\\nMark the Clio task complete once it's resolved so future automated reminders stop.\\n\\n— ${FIRM_NAME} Document Chaser`;\n\nconst bodyHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:#7c3aed;padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">Escalation</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${escapeHtml(subject)}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">\n      <div style=\"color:#334155;font-size:14px;margin-bottom:16px;\">Hi ${escapeHtml(assigneeName)},</div>\n      <div style=\"color:#334155;font-size:14px;margin-bottom:16px;\"><strong>${escapeHtml(item.client_name)}</strong> still hasn't sent the following for <strong>${escapeHtml(matterLabel)}</strong> — it's been over two weeks since it was due (${escapeHtml(item.due_at)}):</div>\n      <div style=\"border:1px solid #fecaca;border-radius:8px;padding:14px 16px;margin-bottom:20px;background:#fef2f2;\">\n        <div style=\"font-size:14px;font-weight:600;color:#7f1d1d;\">${escapeHtml(item.task_name)}</div>\n      </div>\n      <div style=\"color:#334155;font-size:14px;margin-bottom:16px;\">The client has already received automated reminders at 1-2 days and 7-8 days overdue, plus today's urgent notice. This may need a personal phone call, or a check on whether the request is still needed at all.</div>\n      <div style=\"color:#334155;font-size:14px;\">Mark the Clio task complete once it's resolved so future automated reminders stop.</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: {\n  recipient: assigneeEmail,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  email_html: bodyHtml,\n} }];"
+        "jsCode": "// Builds the internal alert to the staff member responsible for chasing this document request,\n// once it's 14-15 days overdue. This is an internal firm email -- no client is ever contacted by\n// this node -- so it bypasses the compliance guardrail entirely, same as PAC-18's day-60 partner\n// escalation. Styled as HTML for readability, with a plain-text fallback -- no opt-out footer\n// needed since this never reaches a client.\nconst item = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\nconst FALLBACK_EMAIL = $vars.FIRM_PARALEGAL_EMAIL || $vars.FIRM_EMAIL;\n\nconst users = ($('Fetch Firm Users From Clio').first().json.data) || [];\nconst assignee = item.assignee_id ? users.find(u => u.id === item.assignee_id) : null;\nconst assigneeEmail = (assignee && assignee.email) || FALLBACK_EMAIL;\nconst assigneeName = (assignee && assignee.name) || 'Team';\n\nif (!assigneeEmail) throw new Error('Cannot send the staff escalation -- set FIRM_PARALEGAL_EMAIL or FIRM_EMAIL as a fallback in n8n Variables.');\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst matterLabel = item.matter_ref + (item.matter_description ? ' (' + item.matter_description + ')' : '');\nconst subject = `Client document overdue 14+ days — ${item.matter_ref}`;\nconst body = `Hi ${assigneeName},\\n\\n${item.client_name} still hasn't sent \"${item.task_name}\" for ${matterLabel} — it's been over two weeks since it was due (${item.due_at}).\\n\\nThe client has already received automated reminders at 1-2 days and 7-8 days overdue, plus today's urgent notice. This may need a personal phone call, or a check on whether the request is still needed at all.\\n\\nMark the Clio task complete once it's resolved so future automated reminders stop.\\n\\n— ${FIRM_NAME} Document Chaser`;\n\nconst bodyHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:#7c3aed;padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">Escalation</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${escapeHtml(subject)}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">\n      <div style=\"color:#334155;font-size:14px;margin-bottom:16px;\">Hi ${escapeHtml(assigneeName)},</div>\n      <div style=\"color:#334155;font-size:14px;margin-bottom:16px;\"><strong>${escapeHtml(item.client_name)}</strong> still hasn't sent the following for <strong>${escapeHtml(matterLabel)}</strong> — it's been over two weeks since it was due (${escapeHtml(item.due_at)}):</div>\n      <div style=\"border:1px solid #fecaca;border-radius:8px;padding:14px 16px;margin-bottom:20px;background:#fef2f2;\">\n        <div style=\"font-size:14px;font-weight:600;color:#7f1d1d;\">${escapeHtml(item.task_name)}</div>\n      </div>\n      <div style=\"color:#334155;font-size:14px;margin-bottom:16px;\">The client has already received automated reminders at 1-2 days and 7-8 days overdue, plus today's urgent notice. This may need a personal phone call, or a check on whether the request is still needed at all.</div>\n      <div style=\"color:#334155;font-size:14px;\">Mark the Clio task complete once it's resolved so future automated reminders stop.</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: {\n  recipient: assigneeEmail,\n  from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n  email_html: bodyHtml,\n} }];"
       },
       "id": "6500aa00-0065-4000-a000-000000000018",
       "name": "Build Staff Escalation Email Body",
@@ -522,7 +633,7 @@
       "typeVersion": 2,
       "position": [
         2464,
-        120
+        320
       ],
       "notes": "FIRM_PARALEGAL_EMAIL is optional — falls back to FIRM_EMAIL if unset. If neither the assignee resolves nor either variable is set, this throws rather than silently escalating to nobody."
     },
@@ -542,7 +653,7 @@
       "typeVersion": 2,
       "position": [
         2688,
-        120
+        320
       ],
       "notes": "Delivers the internal escalation to the responsible staff member (or the fallback address). Same SMTP credential as the client reminder — no separate setup.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
       "credentials": {
@@ -551,106 +662,11 @@
           "name": "Email account (SMTP)"
         }
       }
-    },
-    {
-      "parameters": {
-        "content": "## Document Request Chaser\n\n### How it works\n\n1. Triggers daily, fetches the firm's user directory (used to personalize with the assigned staff member's name), then every open matter, then every pending Clio task — each in sequence, so every lookup is a real dependency n8n always resolves correctly. Matters are fetched separately because Clio rejects a doubly-nested client{...} request on tasks.json.\n2. Splits tasks into individual records, keeps only ones that are actually document requests (a configurable Clio task type) with a due date on file, then computes each one's days-overdue, resolves the client's email from the matters lookup, and matches the tier.\n3. A second filter keeps only tasks hitting a tier today, with a client email that actually resolved — 1-2 days overdue (reminder), 7-8 days (second reminder), 14-15 days (urgent) — all with native n8n nodes.\n4. The matching reminder is built (styled HTML + plain text), checked against the compliance guardrail (opt-out + disclaimer), then sent to the client if approved.\n5. At the urgent tier, a separate internal email also alerts the responsible staff member (resolved by name via the user directory) that the request may need a phone call — bypassing the guardrail since it's an internal message, not a client one.\n6. Skips silently, with a clearly labelled entry in execution history, on a day with nothing due. Marking the Clio task complete once the document arrives stops all future reminders automatically — there's nothing else to update.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing reminder here goes through it.\n- [ ] Configure Clio OAuth2 credentials with task, matter, and user-directory read access.\n- [ ] Configure SMTP credentials for sending.\n- [ ] Create (or confirm) a Clio task type named 'Document Request' — every outstanding document should be tracked as one task of this type, due-dated, assigned to whoever is chasing it, and linked to its matter.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally set FIRM_CLIENT_PORTAL_URL, FIRM_DOCUMENT_REQUEST_TASK_TYPE, FIRM_PARALEGAL_EMAIL.\n\n### Customization\n\nEdit the three tiers' subject/body copy in 'Build Document Reminder Email Body' — one node handles all three, same pattern as the Invoice Reminder Ladder (PAC-18). Change the escalation timing by editing the day windows in 'Calculate Overdue Days And Tier'.",
-        "width": 480,
-        "height": 900
-      },
-      "id": "b1a1c001-0001-4000-8000-000000000001",
-      "name": "📖 Workflow doc",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -700,
-        -460
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## Resolve who to personalize with, then fetch document requests\n\nFetches the firm's user directory, then every open matter, then every pending task — each passed straight through into the next in sequence, making every fetch a genuine upstream step (not a disconnected side-fetch) so n8n always resolves them, on every run and every testing method. Matters are fetched separately from tasks because Clio rejects a doubly-nested client{...} request on tasks.json.",
-        "width": 1150,
-        "height": 320,
-        "color": 7
-      },
-      "id": "b1a1c001-0001-4000-8000-000000000002",
-      "name": "Sticky Note1",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -48,
-        -200
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## Split, filter, and tier\n\nKeeps only pending tasks that are document requests with a due date, computes each one's days-overdue, resolves the client's email from the matters lookup, then keeps only the ones hitting an escalation tier today — all native n8n nodes.",
-        "width": 928,
-        "height": 320,
-        "color": 7
-      },
-      "id": "b1a1c001-0001-4000-8000-000000000003",
-      "name": "Sticky Note2",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1150,
-        -200
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## Check for anything due today\n\nBridges the native filter chain back to a clean, labelled Skip if nothing survived — matches the explicit-skip pattern used across this catalog.",
-        "width": 480,
-        "height": 620,
-        "color": 7
-      },
-      "id": "b1a1c001-0001-4000-8000-000000000004",
-      "name": "Sticky Note3",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1792,
-        -200
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## Send the client reminder\n\nBuilds the tiered reminder (styled HTML + plain text), routes it through the compliance guardrail for opt-out checking and the required disclaimer, then sends it if approved.",
-        "width": 928,
-        "height": 320,
-        "color": 7
-      },
-      "id": "b1a1c001-0001-4000-8000-000000000005",
-      "name": "Sticky Note4",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        2240,
-        -280
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## Escalate to staff if urgent\n\nAt the 14-15 day tier, also alerts the responsible staff member directly — an internal email, so it bypasses the client-facing guardrail entirely, same as PAC-18's partner escalation.",
-        "width": 704,
-        "height": 240,
-        "color": 7
-      },
-      "id": "b1a1c001-0001-4000-8000-000000000006",
-      "name": "Sticky Note5",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        2240,
-        60
-      ]
     }
   ],
   "active": false,
   "pinData": {
-    "Trigger Document Chaser At 8AM": [
+    "When Document Chaser Runs At 8 AM": [
       {
         "json": {
           "timestamp": "2026-08-25T08:00:00.000Z",
@@ -658,7 +674,7 @@
         }
       }
     ],
-    "Fetch Firm Users From Clio API": [
+    "Fetch Firm Users From Clio": [
       {
         "json": {
           "data": [
@@ -684,7 +700,7 @@
         }
       }
     ],
-    "Fetch Open Matters From Clio API": [
+    "Fetch Open Matters From Clio": [
       {
         "json": {
           "data": [
@@ -747,7 +763,7 @@
         }
       }
     ],
-    "Fetch Outstanding Document Tasks": [
+    "Fetch Outstanding Document Tasks From Clio": [
       {
         "json": {
           "data": [
@@ -881,40 +897,40 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Trigger Document Chaser At 8AM": {
+    "When Document Chaser Runs At 8 AM": {
       "main": [
         [
           {
-            "node": "Fetch Firm Users From Clio API",
+            "node": "Fetch Firm Users From Clio",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Firm Users From Clio API": {
+    "Fetch Firm Users From Clio": {
       "main": [
         [
           {
-            "node": "Fetch Open Matters From Clio API",
+            "node": "Fetch Open Matters From Clio",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Open Matters From Clio API": {
+    "Fetch Open Matters From Clio": {
       "main": [
         [
           {
-            "node": "Fetch Outstanding Document Tasks",
+            "node": "Fetch Outstanding Document Tasks From Clio",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Outstanding Document Tasks": {
+    "Fetch Outstanding Document Tasks From Clio": {
       "main": [
         [
           {
@@ -962,25 +978,25 @@
       "main": [
         [
           {
-            "node": "Check For Any Reminders Today",
+            "node": "Check For Reminders Today",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check For Any Reminders Today": {
+    "Check For Reminders Today": {
       "main": [
         [
           {
-            "node": "If Reminder Is Due Today",
+            "node": "If Document Reminder Is Due",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Reminder Is Due Today": {
+    "If Document Reminder Is Due": {
       "main": [
         [
           {
@@ -1007,25 +1023,25 @@
       "main": [
         [
           {
-            "node": "Execute Compliance Workflow",
+            "node": "Execute Compliance Reminder Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Execute Compliance Workflow": {
+    "Execute Compliance Reminder Workflow": {
       "main": [
         [
           {
-            "node": "If Reminder Is Approved",
+            "node": "If Document Reminder Is Approved",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Reminder Is Approved": {
+    "If Document Reminder Is Approved": {
       "main": [
         [
           {
@@ -1054,7 +1070,7 @@
         ],
         [
           {
-            "node": "Skip No Staff Escalation Needed",
+            "node": "Skip Staff Escalation Needed",
             "type": "main",
             "index": 0
           }
