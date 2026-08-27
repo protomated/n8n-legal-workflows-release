@@ -4,9 +4,9 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Matter Milestone Updates\n\n### How it works\n\nThis workflow has TWO independent triggers on one canvas:\n\n**A. The matter-update flow (top row)**\n1. Fires when Clio sends a matter-updated webhook — OR Clio's one-time verification handshake, required before a newly (re)created webhook leaves status 'pending' and starts delivering anything. 'Is Verification Handshake' tells the two apart and echoes the handshake's secret back immediately; a real event gets an instant acknowledgment response AND continues into this flow in parallel, so Clio's delivery call never waits on the rest of this chain. Only the matter id is trusted from a real event's payload — everything else (current status, client, responsible attorney) is re-fetched live from Clio, since webhook payloads can vary and Clio fires this event on any field edit, not just status changes.\n2. Fetches the matter's authoritative current state, then the firm's user directory (used to personalize with the assigned attorney's name).\n3. Compares the matter's current status against the last status this workflow saw for it — stored in n8n's own workflow static data, no external database or extra lookup call needed. The very first event ever seen for a matter is cached silently, without sending, since there's no way to know what the status was before that event.\n4. If the status genuinely changed, looks it up in a firm-edited, plain-English message map. A status with no configured message (e.g. an internal-only status) is silently skipped — no client email.\n5. Builds the update (styled HTML + plain text), personalized with the assigned attorney's name where resolvable, checks it against the compliance guardrail, then sends it if approved.\n\n**B. The webhook self-maintenance flow (bottom row)**\nRuns daily and, separately, is also how you register the webhook the first time. Lists Clio's existing webhooks, checks whether one matching this workflow's URL still has enough life left, and (re)creates it if not — Clio webhooks expire after 31 days maximum and there's no Settings UI for managing them, so this replaces what would otherwise be a recurring manual API call outside n8n.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing update here goes through it.\n- [ ] Configure Clio OAuth2 credentials with matter, task, user-directory, AND Webhooks read+write scopes (Webhooks scope is required for the self-maintenance flow below, and is separate from Matters/Tasks/Users — reconnect the credential if you add the scope after it was first authorized).\n- [ ] Configure SMTP credentials for sending.\n- [ ] Edit the STATUS_MESSAGES map in 'Look Up Status Update Message' to match your firm's actual Clio matter statuses and firm-approved plain-English copy — this is the one node every firm must customize before going live.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, FIRM_MATTER_WEBHOOK_URL (copy this from 'When Matter Status Changes' → Production URL, after activating).\n- [ ] Activate the workflow, then manually run the webhook self-maintenance branch once ('Check Webhook Subscription Daily' → Execute step, then walk each following node the same way) to create the webhook for the first time — no external tools needed.\n\n### Customization\n\nThe STATUS_MESSAGES map is the entire content surface — add one entry per Clio status your firm wants to notify clients about. Everything else (dedupe, personalization, compliance, webhook maintenance) is generic and doesn't need editing.",
+        "content": "## Matter Milestone Updates\n\n### How it works\n\n1. Runs once a day. Fetches the firm's user directory, then every Clio matter updated in roughly the last 2 days (a small overlap buffer so a daily cron running a bit late never misses one).\n2. Drops any matter whose client has no email on file, then compares each remaining matter's current status against the last status this workflow saw for it — stored in n8n's own workflow static data, no external database or extra lookup call needed. The first time this workflow ever sees a given matter, it's cached silently without sending — there's no way to know what the status was before that first sighting.\n3. If the status genuinely changed, looks it up in a firm-edited, plain-English message map. A status with no configured message (e.g. an internal-only status) is silently skipped — no client email.\n4. Builds the update (styled HTML + plain text), personalized with the assigned attorney's name where resolvable, checks it against the compliance guardrail, then sends it if approved.\n\n### Why a daily poll instead of a webhook\n\nAn earlier version of this template used a Clio webhook for instant delivery. Live testing surfaced a lot of friction that isn't worth it for most firms: there's no Settings UI for webhooks (API-only registration only), it requires its own OAuth scope, a newly created webhook silently sits in 'pending' and delivers nothing until a one-time verification handshake is answered correctly, subscriptions expire every 31 days, and a firm's day-to-day 'status' (e.g. a custom practice-area workflow stage) may not even be the same field as Clio's built-in Open/Pending/Closed status that webhooks watch. Polling once a day removes all of that — same dedupe, build, compliance, and send logic, just triggered by a schedule instead of a webhook — at the cost of up to a day of delay.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing update here goes through it.\n- [ ] Configure Clio OAuth2 credentials with matter and user-directory read scope (reuse the credential from other templates in this catalog if already deployed).\n- [ ] Configure SMTP credentials for sending.\n- [ ] Edit the STATUS_MESSAGES map in 'Look Up Status Update Message' to match your firm's actual Clio matter statuses and firm-approved plain-English copy — this is the one node every firm must customize before going live.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Activate the workflow. No webhook URL to wire anywhere.\n\n### Customization\n\nThe STATUS_MESSAGES map is the entire content surface — add one entry per Clio status your firm wants to notify clients about. Everything else (fetch, dedupe, personalization, compliance) is generic and doesn't need editing.",
         "width": 480,
-        "height": 1080
+        "height": 900
       },
       "id": "b1a1c001-0001-4000-8000-000000000001",
       "name": "📖 Workflow doc",
@@ -19,9 +19,9 @@
     },
     {
       "parameters": {
-        "content": "## Receive and validate the event\n\nAccepts Clio's matter-updated webhook (or a generic practice-management shape), trusting only the matter id from the payload. Routes anything without a usable matter id to Skip.\n\nAlso handles Clio's one-time webhook verification handshake (top row) — confirmed live that a webhook stays in status 'pending' and delivers nothing at all until this exact request is answered with its own secret echoed back. A real event gets an immediate acknowledgment response AND continues into the matter-lookup flow in parallel, so Clio's delivery call never waits on the compliance check or email send.",
+        "content": "## Fetch matters and detect changes\n\nPulls the firm's user directory, then every matter Clio has recorded as updated in roughly the last 2 days. Drops any matter whose client has no email on file — it can never be emailed regardless of what its status does.",
         "width": 928,
-        "height": 480,
+        "height": 320,
         "color": 7
       },
       "id": "b1a1c001-0001-4000-8000-000000000002",
@@ -30,12 +30,12 @@
       "typeVersion": 1,
       "position": [
         -48,
-        -360
+        -200
       ]
     },
     {
       "parameters": {
-        "content": "## Fetch authoritative state and dedupe\n\nFetches the matter's current status, client, and attorney directly from Clio (not trusted from the webhook), then checks whether the status actually changed since the last time this workflow saw this matter — using n8n's own static data, no database.",
+        "content": "## Detect real changes and look up the message\n\nCompares each matter's current status against the last one this workflow saw for it — using n8n's own static data, no database — then looks a genuine change up in a firm-edited, plain-English message map. A status with no configured message is treated as internal-only and silently skipped (ABA Op. 512).",
         "width": 928,
         "height": 320,
         "color": 7
@@ -51,8 +51,8 @@
     },
     {
       "parameters": {
-        "content": "## Look up the firm-approved message\n\nA status with no configured message is treated as internal-only and silently skipped — this workflow never generates or interprets update text itself (ABA Op. 512).",
-        "width": 480,
+        "content": "## Build, check, and send\n\nBuilds the personalized update, routes it through the compliance guardrail for opt-out checking and the required disclaimer, then sends it if approved.",
+        "width": 928,
         "height": 320,
         "color": 7
       },
@@ -61,223 +61,30 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1856,
+        1792,
         -200
       ]
     },
     {
       "parameters": {
-        "content": "## Build, check, and send\n\nBuilds the personalized update, routes it through the compliance guardrail for opt-out checking and the required disclaimer, then sends it if approved.",
-        "width": 928,
-        "height": 320,
-        "color": 7
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
       },
-      "id": "b1a1c001-0001-4000-8000-000000000005",
-      "name": "Sticky Note4",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        2336,
-        -200
-      ]
-    },
-    {
-      "parameters": {
-        "path": "matter-status-update",
-        "options": {},
-        "httpMethod": "POST",
-        "responseMode": "responseNode"
-      },
-      "id": "6600aa00-0066-4000-a000-000000000001",
-      "name": "When Matter Status Changes",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "webhookId": "6600aa00-0066-4000-b000-000000000001",
+      "id": "6600aa00-0066-4000-a000-000000000021",
+      "name": "Check Matter Statuses Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
       "position": [
         0,
         0
       ],
-      "notes": "Receives Clio's matter-updated webhook.\n\nConfirmed live: Clio has no Settings UI for webhook management — registering one is an API-only action, requiring its own Webhooks scope (Read + Write) on your Clio OAuth2 app, granted separately from Matters/Tasks/Users (if you add it after the credential was already authorized, reconnect the credential — same lesson as PAC-64's ForbiddenError). Clio webhooks also EXPIRE (31-day maximum) — not a one-time setup.\n\nRather than hand-crafting that API call yourself, this template ships with a self-maintaining branch further down the canvas ('Check Webhook Subscription Daily' and the nodes after it) that creates and renews the subscription automatically using this same Clio credential — see that branch's sticky note. Copy THIS node's Production URL (visible after you activate this workflow) into the FIRM_MATTER_WEBHOOK_URL n8n Variable once, and that branch takes care of the rest, including the very first registration (just run it manually via 'Execute step').\n\nConfirmed live: a newly created Clio webhook sits in status 'pending' and delivers NOTHING until a one-time verification handshake succeeds. Immediately after creation (or whenever its URL changes), Clio sends a POST here carrying a unique secret in an X-Hook-Secret header, and expects that exact same secret echoed back in an X-Hook-Secret response header with a 200 — 'a webhook will not be enabled until this handshake is successful' (Clio's own docs). That's why responseMode is 'responseNode' rather than n8n's default immediate response: 'Is Verification Handshake' right after this node detects that header and routes to a dedicated response that echoes it back, separately from the normal event-acknowledgment path.\n\nClio fires this on ANY field edit to a matter, not just status changes — the next few nodes are what filter this down to genuine status changes with a configured client message. Do not rely on this node's payload for the matter's current data; only the matter id is trusted from it, and everything else is re-fetched live from Clio.\n\nGeneric practice management systems: POST JSON with a 'matter_id' (or 'id') field; this workflow re-fetches the rest from Clio regardless, so a generic caller only needs to identify which matter changed."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Handles both Clio's matter-updated webhook and a generic practice-management webhook shape,\n// same dual-format pattern as the Review Request Engine (NTC-17). Only the matter id is extracted\n// here -- the actual current status, client, and attorney are re-fetched live from Clio next,\n// rather than trusted from whatever fields the webhook happened to include.\n//\n// Also detects Clio's one-time webhook verification handshake -- confirmed live that a newly\n// created webhook stays in 'pending' status and delivers nothing until this exact request is\n// answered: Clio POSTs here once with a secret in the X-Hook-Secret header, and the workflow must\n// echo it straight back in a response header (see 'Is Verification Handshake' next).\nconst raw = $input.first().json;\nconst headers = raw.headers || {};\nconst hookSecret = headers['x-hook-secret'];\nif (hookSecret) {\n  return [{ json: { is_verification_handshake: true, hook_secret: hookSecret } }];\n}\n\nconst body = raw.body || raw;\n\nlet matterId;\nlet source;\nif (body.topic === 'matter' || (body.payload && body.payload.id !== undefined)) {\n  const p = body.payload || body;\n  matterId = String(p.id || p.matter_id || '');\n  source = 'clio';\n} else {\n  matterId = String(body.matter_id || body.id || '');\n  source = 'generic';\n}\n\nreturn [{ json: {\n  is_verification_handshake: false,\n  matter_id: matterId,\n  source,\n  is_valid_event: !!matterId,\n  received_at: new Date().toISOString(),\n} }];"
-      },
-      "id": "6600aa00-0066-4000-a000-000000000002",
-      "name": "Normalize Matter Status Webhook",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        224,
-        0
-      ],
-      "notes": "Extracts only the matter id from whichever webhook shape arrived, OR detects Clio's verification handshake (an X-Hook-Secret header) and short-circuits to that instead. is_valid_event is false if no usable matter id was found anywhere in a real event payload — the next node routes that to a labelled Skip rather than continuing with an empty id (the CLAUDE.md guard pattern for external webhooks that fire on more events than the actionable ones)."
-    },
-    {
-      "parameters": {
-        "options": {},
-        "conditions": {
-          "options": {
-            "version": 2,
-            "leftValue": "",
-            "caseSensitive": true,
-            "typeValidation": "loose"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "c_is_handshake",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              },
-              "leftValue": "={{ $json.is_verification_handshake }}",
-              "rightValue": ""
-            }
-          ]
-        }
-      },
-      "id": "6600aa00-0066-4000-a000-00000000001e",
-      "name": "Is Verification Handshake",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        448,
-        -240
-      ],
-      "notes": "Yes (this call carried Clio's X-Hook-Secret header) → echo it straight back so Clio flips the webhook from 'pending' to active. This is a one-time call per webhook creation (or URL change), not a real matter event — nothing downstream of the main flow runs for it.\nNo (a normal event delivery, or nothing usable at all) → acknowledge it immediately AND continue into the real matter-event flow in parallel, so Clio's delivery call doesn't wait on the compliance check and email send to finish.",
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "OK",
-        "options": {
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "X-Hook-Secret",
-                "value": "={{ $json.hook_secret }}"
-              }
-            ]
-          }
-        }
-      },
-      "id": "6600aa00-0066-4000-a000-00000000001f",
-      "name": "Confirm Webhook Handshake",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        672,
-        -320
-      ],
-      "notes": "Echoes Clio's own X-Hook-Secret value back in the response header, exactly as Clio's docs require: 'a webhook will not be enabled until this handshake is successful.' Without this, the webhook silently stays in status 'pending' forever and never delivers a single real event — confirmed live the hard way. This fires once per webhook creation (or whenever its URL changes, e.g. after the daily renewal branch creates a fresh one) — not on every matter update."
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { received: true } }}",
-        "options": {}
-      },
-      "id": "6600aa00-0066-4000-a000-000000000020",
-      "name": "Acknowledge Event Received",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        672,
-        -160
-      ],
-      "notes": "Sends Clio's real event delivery an immediate 200 so it doesn't time out waiting for the compliance check and email send to finish — the actual processing (matter lookup, dedupe, message lookup, send) continues in parallel via 'If Valid Matter Event' and keeps running after this response is sent."
-    },
-    {
-      "parameters": {
-        "options": {},
-        "conditions": {
-          "options": {
-            "version": 2,
-            "leftValue": "",
-            "caseSensitive": true,
-            "typeValidation": "loose"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "c_is_valid",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              },
-              "leftValue": "={{ $json.is_valid_event }}",
-              "rightValue": ""
-            }
-          ]
-        }
-      },
-      "id": "6600aa00-0066-4000-a000-000000000003",
-      "name": "If Valid Matter Event",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        448,
-        0
-      ],
-      "notes": "Yes (a usable matter id was found) → look up the matter's current state.\nNo (unrecognized payload shape, or no matter id anywhere in it) → route to Skip.",
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {},
-      "id": "6600aa00-0066-4000-a000-000000000004",
-      "name": "Skip — Invalid Or Unrelated Event",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        672,
-        220
-      ],
-      "notes": "This webhook call didn't carry a usable matter id — nothing to look up or notify about. No email sent."
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters/{{ $json.matter_id }}.json",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "fields",
-              "value": "id,display_number,description,status,client{id,name,primary_email_address},responsible_attorney{id,name}"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true,
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "6600aa00-0066-4000-a000-000000000005",
-      "name": "Fetch Matter Details From Clio",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        672,
-        0
-      ],
-      "notes": "Fetches this one matter's authoritative current state directly by id — the webhook payload is never trusted for the actual data, only for which matter to look up. Treating the webhook as a pointer rather than a data source sidesteps uncertainty about exactly what fields Clio includes in the event payload.\n\nSingle-resource GET on /matters/{id}.json, 'status' as a returned field, and the response being wrapped in a 'data' object (matching the list-endpoint convention already confirmed elsewhere in this catalog) all follow standard Clio API conventions but haven't been independently confirmed live for this specific combination — check your first real webhook delivery's output and adjust if Clio's response shape differs (e.g. if the single-resource response isn't wrapped in 'data' the way list responses are).\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59/61/63/64/65 — reuse it if already deployed.",
-      "onError": "continueRegularOutput",
-      "credentials": {
-        "oAuth2Api": {
-          "id": "1",
-          "name": "Clio API (OAuth2)"
-        }
-      }
+      "notes": "Fires every day at 8am (n8n server timezone) — adjust the cron expression if a different time suits your firm better. Replaces an earlier webhook-based design: live testing found Clio webhooks required an API-only registration flow, a separate OAuth scope, a one-time verification handshake that silently failed if unanswered, 31-day expiring subscriptions, and uncertainty about whether a firm's day-to-day 'status' is even the same field Clio's matter webhooks watch. A daily poll sidesteps all of that using the exact same Clio credential and dedupe logic — at the cost of up to a day of delay instead of instant delivery."
     },
     {
       "parameters": {
@@ -312,10 +119,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        896,
+        224,
         0
       ],
-      "notes": "Fetches the firm's user directory — used by 'Build Status Update Email' to resolve the matter's responsible_attorney id to a real name and email, so the update can be personalized. Requesting 'email' works here because /users.json is the primary resource, not a nested association (Clio rejects a nested User's email — confirmed live in PAC-63).\n\nRuns after the matter fetch in this single linear chain — there's no fan-out from the trigger here, so there's no risk of the disconnected-side-fetch execution problem PAC-63/64 hit; this node is simply the next real step.\n\nSame Clio OAuth2 credential as the matter fetch above — no separate setup.",
+      "notes": "Fetches the firm's user directory — used by 'Build Status Update Email' to resolve a matter's responsible_attorney id to a real name and email, so the update can be personalized. Requesting 'email' works here because /users.json is the primary resource, not a nested association (Clio rejects a nested User's email — confirmed live in PAC-63).\n\nRuns first in this single linear chain, feeding straight into the matters fetch next — a genuine sequential dependency, not a disconnected side-fetch (confirmed live in PAC-63/64 that a disconnected side-fetch referenced only by name in code isn't reliably executed by n8n).\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59/61/63/64/65 — reuse it if already deployed.",
       "onError": "continueRegularOutput",
       "credentials": {
         "oAuth2Api": {
@@ -326,7 +133,106 @@
     },
     {
       "parameters": {
-        "jsCode": "// Uses n8n's built-in workflow static data to detect whether this matter's status has actually\n// changed since the last time this workflow processed an event for it -- avoids sending a client\n// update every time ANY field on the matter is edited, since Clio's webhook fires on any update,\n// not just status changes. No external database or extra API lookup call needed for this.\n//\n// The very first event this workflow ever sees for a given matter is cached silently, without\n// sending -- there's no way to know what the status was *before* this event, so treating a cold\n// start as \"changed\" could send a misleading update for a field edit that had nothing to do with\n// status.\nconst matterResponse = $('Fetch Matter Details From Clio').first().json;\nconst matter = matterResponse.data || matterResponse;\n\nconst matterId = matter.id;\nconst newStatus = matter.status || '';\nconst clientName = (matter.client && matter.client.name) || '';\nconst clientEmail = (matter.client && matter.client.primary_email_address) || '';\nconst attorneyId = (matter.responsible_attorney && matter.responsible_attorney.id) || null;\nconst matterRef = matter.display_number || '';\nconst matterDescription = matter.description || '';\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastStatusByMatter) staticData.lastStatusByMatter = {};\nconst cache = staticData.lastStatusByMatter;\n\n// Self-prune entries older than 180 days so this doesn't grow forever on a long-running instance.\nconst CUTOFF_MS = 180 * 24 * 60 * 60 * 1000;\nconst now = Date.now();\nfor (const [id, entry] of Object.entries(cache)) {\n  if (now - (entry.seenAt || 0) > CUTOFF_MS) delete cache[id];\n}\n\nconst previous = cache[matterId];\nconst hasChanged = !!previous && previous.status !== newStatus;\n\ncache[matterId] = { status: newStatus, seenAt: now };\n\nreturn [{ json: {\n  matter_id: matterId,\n  matter_ref: matterRef,\n  matter_description: matterDescription,\n  client_name: clientName,\n  client_email: clientEmail,\n  attorney_id: attorneyId,\n  status: newStatus,\n  previous_status: previous ? previous.status : null,\n  has_changed: hasChanged,\n} }];"
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "updated_since",
+              "value": "={{ $now.minus({ days: 2 }).toISO() }}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description,status,client{id,name,primary_email_address},responsible_attorney{id,name}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6600aa00-0066-4000-a000-000000000022",
+      "name": "Fetch Recently Updated Matters From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Fetches every matter Clio has recorded as updated in roughly the last 2 days — not just today's, so a cron that runs a bit late (server restart, holiday) never silently misses one. No status filter (e.g. status=Open) on purpose: a matter transitioning all the way to Closed still needs to be caught, and filtering to Open would make it disappear from this fetch the moment it closes, before the change is ever detected.\n\n'updated_since' (ISO-8601 timestamp) and one level of nested 'client{...}' are both confirmed Clio API v4 conventions used elsewhere in this catalog. Firms with more than 200 matters updated in a 2-day window (unlikely for the 1-10 attorney firms this catalog targets) would need pagination added — check 'meta.paging.next' on this node's output if you suspect matters are being missed.\n\nCredential: same Clio OAuth2 credential as the user directory fetch above.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "6600aa00-0066-4000-a000-000000000023",
+      "name": "Split Out Matter Records",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Turns the single API response into one n8n item per matter, so the Filter and Code nodes downstream can each operate on individual matters. An empty or missing 'data' array (e.g. after a Clio error, or genuinely no matters updated recently) simply produces zero items — nothing downstream runs."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_client_email",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.client && $json.client.primary_email_address }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6600aa00-0066-4000-a000-000000000024",
+      "name": "Filter Matters With Client Email",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Drops any matter whose client has no email on file (or has no client at all — internal/business matters, conflict-check placeholders, etc.). No point computing a status change for a matter this workflow could never email anyway."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Uses n8n's built-in workflow static data to detect whether this matter's status has actually\n// changed since the last time this workflow saw it -- runs once per matter fetched today, so a\n// client update only sends on a genuine change, never every day the status just stays the same.\n// No external database or extra API lookup call needed for this.\n//\n// The very first time this workflow ever sees a given matter, it's cached silently, without\n// sending -- there's no way to know what the status was *before* this first sighting, so treating\n// a cold start as \"changed\" could send a misleading update for a matter that's been sitting in the\n// same status for a long time and only just started being tracked by this workflow.\nconst matter = $json;\n\nconst matterId = matter.id;\nconst newStatus = matter.status || '';\nconst clientName = (matter.client && matter.client.name) || '';\nconst clientEmail = (matter.client && matter.client.primary_email_address) || '';\nconst attorneyId = (matter.responsible_attorney && matter.responsible_attorney.id) || null;\nconst matterRef = matter.display_number || '';\nconst matterDescription = matter.description || '';\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastStatusByMatter) staticData.lastStatusByMatter = {};\nconst cache = staticData.lastStatusByMatter;\n\n// Self-prune entries older than 180 days so this doesn't grow forever on a long-running instance.\nconst CUTOFF_MS = 180 * 24 * 60 * 60 * 1000;\nconst now = Date.now();\nfor (const [id, entry] of Object.entries(cache)) {\n  if (now - (entry.seenAt || 0) > CUTOFF_MS) delete cache[id];\n}\n\nconst previous = cache[matterId];\nconst hasChanged = !!previous && previous.status !== newStatus;\n\ncache[matterId] = { status: newStatus, seenAt: now };\n\nreturn { json: {\n  matter_id: matterId,\n  matter_ref: matterRef,\n  matter_description: matterDescription,\n  client_name: clientName,\n  client_email: clientEmail,\n  attorney_id: attorneyId,\n  status: newStatus,\n  previous_status: previous ? previous.status : null,\n  has_changed: hasChanged,\n} };"
       },
       "id": "6600aa00-0066-4000-a000-000000000007",
       "name": "Check If Status Actually Changed",
@@ -371,7 +277,7 @@
         1344,
         0
       ],
-      "notes": "Yes (status genuinely differs from what this workflow last saw for this matter) → look up whether there's a client message for it.\nNo (first time seeing this matter, or the edit didn't touch status) → route to Skip.",
+      "notes": "Yes (status genuinely differs from what this workflow last saw for this matter) → look up whether there's a client message for it.\nNo (first time seeing this matter, or its status hasn't moved since the last run) → route to Skip.",
       "onError": "continueErrorOutput"
     },
     {
@@ -384,7 +290,7 @@
         1568,
         220
       ],
-      "notes": "Either this matter's status didn't actually change (some other field was edited), or this is the first event this workflow has ever seen for it. No email sent either way."
+      "notes": "Either this matter's status hasn't actually changed since the last run, or this is the first time this workflow has ever seen it. No email sent either way."
     },
     {
       "parameters": {
@@ -568,223 +474,10 @@
         220
       ],
       "notes": "This client has opted out of firm emails. The suppression is already logged by the guardrail workflow. No email is sent."
-    },
-    {
-      "parameters": {
-        "content": "## Keep the webhook alive — no manual renewal, no external tools\n\nClio has no Settings UI for webhooks and the subscription expires after 31 days maximum — so this branch checks daily whether a valid one still exists and (re)creates it automatically if not. It runs completely independently of the branch above; it doesn't touch matter events at all.\n\nThis is also the easiest way to create the webhook the very first time: after setting the FIRM_MATTER_WEBHOOK_URL variable (step 4 of the deploy guide), just click on 'List Existing Clio Webhooks' and hit **Execute step**, then walk the rest of this branch node-by-node with the same button — no curl, no Postman, no temporary nodes, no copying a bearer token out of n8n. Everything needed is already on this canvas, using the same Clio credential as the rest of the workflow.",
-        "width": 928,
-        "height": 320,
-        "color": 4
-      },
-      "id": "b1a1c001-0001-4000-8000-000000000006",
-      "name": "Sticky Note5",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -48,
-        480
-      ]
-    },
-    {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "0 3 * * *"
-            }
-          ]
-        }
-      },
-      "id": "6600aa00-0066-4000-a000-000000000018",
-      "name": "Check Webhook Subscription Daily",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.3,
-      "position": [
-        0,
-        680
-      ],
-      "notes": "Runs once a day (3am, n8n server timezone) purely to make sure Clio's webhook subscription is still alive — completely separate from the matter-update branch above. This is what replaces the manual 'POST to Clio's API by hand every few weeks' process: as long as this workflow is Active, the subscription renews itself before it can expire.\n\nYou can also trigger this branch manually at any time (click this node, then 'Execute step', then walk each following node the same way) — that's the recommended way to create the webhook for the very first time, since it uses this workflow's own already-authorized Clio credential instead of a hand-crafted API call."
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/webhooks.json",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "fields",
-              "value": "id,url,model,events,expires_at,status"
-            },
-            {
-              "name": "limit",
-              "value": "200"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true,
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "6600aa00-0066-4000-a000-000000000019",
-      "name": "List Existing Clio Webhooks",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        224,
-        680
-      ],
-      "notes": "Lists every webhook currently registered on this Clio app, so the next step can tell whether the one this workflow depends on already exists and still has enough life left in it. Same Clio OAuth2 credential as the rest of this workflow — this is what makes self-renewal possible without a separate manual API call: n8n already holds a valid, auto-refreshing OAuth token for this credential.\n\nThis is also the safe first node to manually 'Execute step' on when setting up the webhook for the very first time.",
-      "onError": "continueRegularOutput",
-      "credentials": {
-        "oAuth2Api": {
-          "id": "1",
-          "name": "Clio API (OAuth2)"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Decides whether the webhook this workflow depends on needs to be (re)created. Looks for an\n// existing subscription matching this workflow's own URL, subscribed to the right events, not\n// stuck in an unconfirmed state, and not within RENEWAL_BUFFER_DAYS of expiring -- renewing a few\n// days ahead of the deadline (rather than waiting for it to actually lapse) means deliveries never\n// really stop. If one already exists, is confirmed, and is comfortably valid, this daily check does\n// nothing at all, so re-running it never piles up duplicate subscriptions.\n//\n// Confirmed live: a webhook that never successfully answered Clio's verification handshake sits in\n// status 'pending' indefinitely, with a perfectly normal-looking expires_at far in the future --\n// checking expiry alone would never notice it's actually dead. PENDING_STATUS_VALUES lists every\n// value Clio might report for an unconfirmed webhook; treat anything not in CONFIRMED_STATUS_VALUES\n// as needing renewal, not just an allowlist match, in case Clio uses a status string not seen yet.\nconst RENEWAL_BUFFER_DAYS = 5;\nconst CONFIRMED_STATUS_VALUES = ['active', 'enabled', 'confirmed'];\nconst targetUrl = $vars.FIRM_MATTER_WEBHOOK_URL;\n\nif (!targetUrl) {\n  throw new Error(\"FIRM_MATTER_WEBHOOK_URL n8n Variable is not set. Go to Settings \\u2192 Variables and set it to this workflow's own Production URL, copied from the 'When Matter Status Changes' node, before this maintenance check can do anything.\");\n}\n\nconst response = $input.first().json;\nconst webhooks = response.data || response;\nconst list = Array.isArray(webhooks) ? webhooks : [];\n\nconst cutoff = new Date(Date.now() + RENEWAL_BUFFER_DAYS * 24 * 60 * 60 * 1000);\n\nconst stillValid = list.find(w =>\n  w.url === targetUrl &&\n  (w.events || []).includes('updated') &&\n  w.expires_at && new Date(w.expires_at) > cutoff &&\n  (!w.status || CONFIRMED_STATUS_VALUES.includes(String(w.status).toLowerCase()))\n);\n\nconst stuckPending = list.find(w =>\n  w.url === targetUrl &&\n  w.status && !CONFIRMED_STATUS_VALUES.includes(String(w.status).toLowerCase())\n);\n\nreturn [{ json: {\n  needs_renewal: !stillValid,\n  matched_webhook_id: stillValid ? stillValid.id : null,\n  matched_expires_at: stillValid ? stillValid.expires_at : null,\n  stuck_pending_webhook_id: stuckPending ? stuckPending.id : null,\n  stuck_pending_status: stuckPending ? stuckPending.status : null,\n} }];"
-      },
-      "id": "6600aa00-0066-4000-a000-00000000001a",
-      "name": "Check If Webhook Needs Renewal",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        448,
-        680
-      ],
-      "notes": "needs_renewal is true if no webhook matches this workflow's own URL, the one that does is within 5 days of expiring, OR it's stuck in a non-confirmed status like 'pending' regardless of how far off its expiry is — confirmed live that a webhook can sit in 'pending' with a perfectly healthy-looking expires_at forever if its verification handshake never succeeded. stuck_pending_webhook_id surfaces the old broken subscription's id for visibility (it isn't deleted automatically — Clio will let it expire on its own)."
-    },
-    {
-      "parameters": {
-        "options": {},
-        "conditions": {
-          "options": {
-            "version": 2,
-            "leftValue": "",
-            "caseSensitive": true,
-            "typeValidation": "loose"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "c_needs_renewal",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              },
-              "leftValue": "={{ $json.needs_renewal }}",
-              "rightValue": ""
-            }
-          ]
-        }
-      },
-      "id": "6600aa00-0066-4000-a000-00000000001b",
-      "name": "If Webhook Needs Renewal",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        672,
-        680
-      ],
-      "notes": "Yes (missing, or expiring within 5 days) → (re)register it with Clio.\nNo (already valid with plenty of life left) → route to Skip. Nothing to do today.",
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {},
-      "id": "6600aa00-0066-4000-a000-00000000001c",
-      "name": "Skip — Webhook Still Valid",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        896,
-        860
-      ],
-      "notes": "The webhook this workflow depends on already exists and isn't close to expiring. Nothing to do today."
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/webhooks.json",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ data: { url: $vars.FIRM_MATTER_WEBHOOK_URL, model: 'matter', events: ['updated'], fields: 'id,status', expires_at: $now.plus({ days: 31 }).toISO() } }) }}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true,
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "6600aa00-0066-4000-a000-00000000001d",
-      "name": "Register Or Renew Clio Webhook",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        896,
-        680
-      ],
-      "notes": "Creates a fresh Clio webhook subscription for this workflow's own URL, valid for another 31 days (Clio's maximum). This is the same API call that used to require a hand-crafted curl/Postman request outside n8n — now it just runs automatically before the old one can expire, using the credential already wired up for every other Clio call in this workflow.\n\nThe target URL comes from the FIRM_MATTER_WEBHOOK_URL n8n Variable, set once during deployment (copy it from the 'When Matter Status Changes' node's Production URL tab) — n8n can't read a webhook node's own public URL back out via an expression, so this one manual copy-paste is unavoidable, but it only has to happen once, not every 31 days.\n\nCheck this node's output after it runs (or the Executions tab) to confirm Clio returned a new webhook id and expires_at rather than an error — if your Clio OAuth2 app doesn't have the Webhooks (Read + Write) scope granted and the credential reconnected afterward, this call fails with the same ForbiddenError pattern confirmed in PAC-64."
     }
   ],
   "active": false,
   "pinData": {
-    "When Matter Status Changes": [
-      {
-        "json": {
-          "body": {
-            "topic": "matter",
-            "payload": {
-              "id": 41001
-            }
-          },
-          "query": {},
-          "params": {},
-          "headers": {
-            "user-agent": "Clio-Webhooks",
-            "content-type": "application/json"
-          },
-          "webhookUrl": "https://your-n8n.example.com/webhook/matter-status-update",
-          "executionMode": "production"
-        }
-      }
-    ],
-    "Fetch Matter Details From Clio": [
-      {
-        "json": {
-          "data": {
-            "id": 41001,
-            "display_number": "2026-CH-050",
-            "description": "Custody Modification",
-            "status": "Discovery",
-            "client": {
-              "id": 601,
-              "name": "Jane Doe",
-              "primary_email_address": "jane.doe@example.com"
-            },
-            "responsible_attorney": {
-              "id": 21,
-              "name": "A. Attorney"
-            }
-          }
-        }
-      }
-    ],
     "Fetch Firm Users From Clio": [
       {
         "json": {
@@ -811,26 +504,59 @@
         }
       }
     ],
-    "Check Webhook Subscription Daily": [
-      {
-        "json": {}
-      }
-    ],
-    "List Existing Clio Webhooks": [
+    "Fetch Recently Updated Matters From Clio": [
       {
         "json": {
           "data": [
             {
-              "id": 9001,
-              "url": "https://your-n8n.example.com/webhook/matter-status-update",
-              "model": "matter",
-              "events": [
-                "updated"
-              ],
-              "expires_at": "2026-08-30T00:00:00Z",
-              "status": "active"
+              "id": 41001,
+              "display_number": "2026-CH-050",
+              "description": "Custody Modification",
+              "status": "Discovery",
+              "client": {
+                "id": 601,
+                "name": "Jane Doe",
+                "primary_email_address": "jane.doe@example.com"
+              },
+              "responsible_attorney": {
+                "id": 21,
+                "name": "A. Attorney"
+              }
+            },
+            {
+              "id": 41002,
+              "display_number": "2026-CH-051",
+              "description": "Business Formation",
+              "status": "Settlement Negotiation",
+              "client": {
+                "id": 602,
+                "name": "John Roe",
+                "primary_email_address": ""
+              },
+              "responsible_attorney": {
+                "id": 22,
+                "name": "B. Barrister"
+              }
+            },
+            {
+              "id": 41003,
+              "display_number": "2026-CH-052",
+              "description": "Estate Planning",
+              "status": "Intake",
+              "client": {
+                "id": 603,
+                "name": "Mary Major",
+                "primary_email_address": "mary.major@example.com"
+              },
+              "responsible_attorney": null
             }
-          ]
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 3
+          }
         }
       }
     ]
@@ -846,70 +572,7 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "When Matter Status Changes": {
-      "main": [
-        [
-          {
-            "node": "Normalize Matter Status Webhook",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Normalize Matter Status Webhook": {
-      "main": [
-        [
-          {
-            "node": "Is Verification Handshake",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Is Verification Handshake": {
-      "main": [
-        [
-          {
-            "node": "Confirm Webhook Handshake",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Acknowledge Event Received",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "If Valid Matter Event",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If Valid Matter Event": {
-      "main": [
-        [
-          {
-            "node": "Fetch Matter Details From Clio",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Skip — Invalid Or Unrelated Event",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Matter Details From Clio": {
+    "Check Matter Statuses Daily": {
       "main": [
         [
           {
@@ -921,6 +584,39 @@
       ]
     },
     "Fetch Firm Users From Clio": {
+      "main": [
+        [
+          {
+            "node": "Fetch Recently Updated Matters From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Recently Updated Matters From Clio": {
+      "main": [
+        [
+          {
+            "node": "Split Out Matter Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Matter Records": {
+      "main": [
+        [
+          {
+            "node": "Filter Matters With Client Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Matters With Client Email": {
       "main": [
         [
           {
@@ -1028,58 +724,7 @@
           }
         ]
       ]
-    },
-    "Check Webhook Subscription Daily": {
-      "main": [
-        [
-          {
-            "node": "List Existing Clio Webhooks",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "List Existing Clio Webhooks": {
-      "main": [
-        [
-          {
-            "node": "Check If Webhook Needs Renewal",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check If Webhook Needs Renewal": {
-      "main": [
-        [
-          {
-            "node": "If Webhook Needs Renewal",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If Webhook Needs Renewal": {
-      "main": [
-        [
-          {
-            "node": "Register Or Renew Clio Webhook",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Skip — Webhook Still Valid",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   },
-  "description": "Fires on Clio's matter-updated webhook, trusting only the matter id from the payload — everything else is re-fetched live from Clio (current status, client, responsible attorney), since Clio fires this event on any field edit, not just status changes. Compares the fetched status against the last one this workflow saw for the matter, using n8n's own workflow static data (no external database), so a client update only sends on a genuine status change, never a duplicate. Looks the new status up in a firm-edited, plain-English message map — an unconfigured status is treated as internal-only and skipped. Sends the matching update, personalized with the assigned attorney's name where resolvable, through the Bar-Compliance Guardrail. Replaces a paid Case Status app — poor communication between milestones is a top bar-complaint driver of client dissatisfaction."
+  "description": "Runs once a day: fetches every Clio matter updated in roughly the last 2 days (plus the firm's user directory), and compares each one's current status against the last status this workflow saw for it, using n8n's own workflow static data (no external database), so a client update only sends on a genuine status change, never a duplicate. Looks the new status up in a firm-edited, plain-English message map — an unconfigured status is treated as internal-only and skipped. Sends the matching update, personalized with the assigned attorney's name where resolvable, through the Bar-Compliance Guardrail. Replaces a paid Case Status app — poor communication between milestones is a top bar-complaint driver of client dissatisfaction."
 }
