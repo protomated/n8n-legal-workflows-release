@@ -101,7 +101,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Handles both Clio's matter-updated webhook and a generic practice-management webhook shape,\n// same dual-format pattern as the Review Request Engine (NTC-17). Only the matter id is extracted\n// here -- the actual current status, client, and attorney are re-fetched live from Clio next,\n// rather than trusted from whatever fields the webhook happened to include.\n//\n// Also detects Clio's one-time webhook verification handshake -- confirmed live that a newly\n// created webhook stays in 'pending' status and delivers nothing until this exact request is\n// answered: Clio POSTs here once with a secret in the X-Hook-Secret header, and the workflow must\n// echo it straight back in a response header (see 'Is Verification Handshake' next).\nconst raw = $input.first().json;\nconst headers = raw.headers || {};\nconst hookSecret = headers['x-hook-secret'];\nif (hookSecret) {\n  return [{ json: { is_verification_handshake: true, hook_secret: hookSecret } }];\n}\n\nconst body = raw.body || raw;\n\nlet matterId;\nlet source;\nif (body.topic === 'matter' || (body.payload && body.payload.id !== undefined)) {\n  const p = body.payload || body;\n  matterId = String(p.id || p.matter_id || '');\n  source = 'clio';\n} else {\n  matterId = String(body.matter_id || body.id || '');\n  source = 'generic';\n}\n\nreturn [{ json: {\n  is_verification_handshake: false,\n  matter_id: matterId,\n  source,\n  is_valid_event: !!matterId,\n  received_at: new Date().toISOString(),\n} }];"
+        "jsCode": "// Handles both Clio's real matter status-transition webhook and a generic practice-management\n// webhook shape, same dual-format pattern as the Review Request Engine (NTC-17). Only the matter\n// id is extracted here -- the actual current status, client, and attorney are re-fetched live from\n// Clio next, rather than trusted from whatever fields the webhook happened to include.\n//\n// Confirmed live: Clio's actual delivery shape for matter_opened/matter_pended/matter_closed is\n// { body: { data: { id, status }, meta: { event, webhook_id } } } -- NOT the { topic, payload }\n// shape originally guessed (and never actually confirmed against a real delivery until now, since\n// earlier live tests were accidentally changing a Task's status instead of the Matter's).\n//\n// Also detects Clio's one-time webhook verification handshake -- confirmed live that a newly\n// created webhook stays in 'pending' status and delivers nothing until this exact request is\n// answered: Clio POSTs here once with a secret in the X-Hook-Secret header, and the workflow must\n// echo it straight back in a response header (see 'Is Verification Handshake' next).\nconst raw = $input.first().json;\nconst headers = raw.headers || {};\nconst hookSecret = headers['x-hook-secret'];\nif (hookSecret) {\n  return [{ json: { is_verification_handshake: true, hook_secret: hookSecret } }];\n}\n\nconst body = raw.body || raw;\n\nlet matterId;\nlet source;\nlet eventType = '';\nif (body.data && body.data.id !== undefined) {\n  matterId = String(body.data.id);\n  source = 'clio';\n  eventType = (body.meta && body.meta.event) || '';\n} else {\n  matterId = String(body.matter_id || body.id || '');\n  source = 'generic';\n}\n\nreturn [{ json: {\n  is_verification_handshake: false,\n  matter_id: matterId,\n  source,\n  event_type: eventType,\n  is_valid_event: !!matterId,\n  received_at: new Date().toISOString(),\n} }];"
       },
       "id": "6600aa00-0066-4000-a000-000000000002",
       "name": "Normalize Matter Status Webhook",
@@ -111,7 +111,7 @@
         224,
         0
       ],
-      "notes": "Extracts only the matter id from whichever webhook shape arrived, OR detects Clio's verification handshake (an X-Hook-Secret header) and short-circuits to that instead. is_valid_event is false if no usable matter id was found anywhere in a real event payload — the next node routes that to a labelled Skip rather than continuing with an empty id (the CLAUDE.md guard pattern for external webhooks that fire on more events than the actionable ones)."
+      "notes": "Extracts only the matter id from whichever webhook shape arrived, OR detects Clio's verification handshake (an X-Hook-Secret header) and short-circuits to that instead. Confirmed live real Clio delivery shape: body.data.id (matter id), body.data.status (not trusted — re-fetched fresh next), body.meta.event (e.g. 'matter_closed'). is_valid_event is false if no usable matter id was found anywhere in a real event payload — the next node routes that to a labelled Skip rather than continuing with an empty id (the CLAUDE.md guard pattern for external webhooks that fire on more events than the actionable ones)."
     },
     {
       "parameters": {
@@ -748,16 +748,21 @@
       {
         "json": {
           "body": {
-            "topic": "matter",
-            "payload": {
-              "id": 41001
+            "data": {
+              "id": 41001,
+              "status": "Closed"
+            },
+            "meta": {
+              "event": "matter_closed",
+              "webhook_id": 1714459
             }
           },
           "query": {},
           "params": {},
           "headers": {
-            "user-agent": "Clio-Webhooks",
-            "content-type": "application/json"
+            "user-agent": "Go-http-client/2.0",
+            "content-type": "application/json",
+            "x-hook-signature": "example-signature"
           },
           "webhookUrl": "https://your-n8n.example.com/webhook/matter-status-update",
           "executionMode": "production"
