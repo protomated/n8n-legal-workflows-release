@@ -24,7 +24,7 @@ Get value in under 15 minutes. Every time a matter's status changes in Clio, thi
 
 **Confirmed live: the real delivery shape for matter_opened/matter_pended/matter_closed** is `{ body: { data: { id, status }, meta: { event, webhook_id } } }` — the matter id is under `body.data.id`, not the `body.payload.id` shape used elsewhere in this catalog for other Clio webhooks. This template already extracts it correctly from that real shape. Only the id is trusted from it either way — everything else is re-fetched fresh from Clio.
 
-**Not yet independently confirmed live:** whether a single-resource `GET /matters/{id}.json` call wraps its response in a `data` object the same way list endpoints do. Check your first real webhook delivery's output on `Fetch Matter Details From Clio` and adjust if it differs (this node already checks for both shapes defensively).
+**Confirmed live: a single-resource `GET /matters/{id}.json` call wraps its response in a `data` object**, same as list endpoints elsewhere in this catalog. `Fetch Matter Details From Clio` checks for both shapes defensively regardless.
 
 **Confirmed live: Clio has no Settings UI for webhook management at all — it's an API-only action, and requires its own OAuth scope.** The "Webhooks" scope (Read + Write) must be granted on your Clio OAuth2 app separately from Matters/Tasks/Users — if you add it after the credential was already authorized, you must reconnect the credential, same as the `ForbiddenError` lesson from PAC-64.
 
