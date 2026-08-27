@@ -4,9 +4,9 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Matter Milestone Updates\n\n### How it works\n\n1. Fires when Clio sends a matter-updated webhook. Only the matter id is trusted from the webhook payload — everything else (current status, client, responsible attorney) is re-fetched live from Clio, since webhook payloads can vary and Clio fires this event on any field edit, not just status changes.\n2. Fetches the matter's authoritative current state, then the firm's user directory (used to personalize with the assigned attorney's name).\n3. Compares the matter's current status against the last status this workflow saw for it — stored in n8n's own workflow static data, no external database or extra lookup call needed. The very first event ever seen for a matter is cached silently, without sending, since there's no way to know what the status was before that event.\n4. If the status genuinely changed, looks it up in a firm-edited, plain-English message map. A status with no configured message (e.g. an internal-only status) is silently skipped — no client email.\n5. Builds the update (styled HTML + plain text), personalized with the assigned attorney's name where resolvable, checks it against the compliance guardrail, then sends it if approved.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing update here goes through it.\n- [ ] Register the webhook with Clio's API directly — there is no Settings UI for this. POST to {CLIO_BASE_URL}/api/v4/webhooks.json with body {\"data\":{\"url\":\"<this workflow's Production URL>\",\"model\":\"matter\",\"events\":[\"updated\"],\"fields\":\"id,status\",\"expires_at\":\"<up to 31 days out>\"}}. Clio webhooks expire (31-day maximum) and must be re-created periodically — this is not a one-time setup.\n- [ ] Configure Clio OAuth2 credentials with matter, task, user-directory, AND Webhooks read+write scopes (Webhooks scope is required to create the subscription above, and is separate from Matters/Tasks/Users).\n- [ ] Configure SMTP credentials for sending.\n- [ ] Edit the STATUS_MESSAGES map in 'Look Up Status Update Message' to match your firm's actual Clio matter statuses and firm-approved plain-English copy — this is the one node every firm must customize before going live.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n\n### Customization\n\nThe STATUS_MESSAGES map is the entire content surface — add one entry per Clio status your firm wants to notify clients about. Everything else (dedupe, personalization, compliance) is generic and doesn't need editing.",
+        "content": "## Matter Milestone Updates\n\n### How it works\n\nThis workflow has TWO independent triggers on one canvas:\n\n**A. The matter-update flow (top row)**\n1. Fires when Clio sends a matter-updated webhook. Only the matter id is trusted from the webhook payload — everything else (current status, client, responsible attorney) is re-fetched live from Clio, since webhook payloads can vary and Clio fires this event on any field edit, not just status changes.\n2. Fetches the matter's authoritative current state, then the firm's user directory (used to personalize with the assigned attorney's name).\n3. Compares the matter's current status against the last status this workflow saw for it — stored in n8n's own workflow static data, no external database or extra lookup call needed. The very first event ever seen for a matter is cached silently, without sending, since there's no way to know what the status was before that event.\n4. If the status genuinely changed, looks it up in a firm-edited, plain-English message map. A status with no configured message (e.g. an internal-only status) is silently skipped — no client email.\n5. Builds the update (styled HTML + plain text), personalized with the assigned attorney's name where resolvable, checks it against the compliance guardrail, then sends it if approved.\n\n**B. The webhook self-maintenance flow (bottom row)**\nRuns daily and, separately, is also how you register the webhook the first time. Lists Clio's existing webhooks, checks whether one matching this workflow's URL still has enough life left, and (re)creates it if not — Clio webhooks expire after 31 days maximum and there's no Settings UI for managing them, so this replaces what would otherwise be a recurring manual API call outside n8n.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every client-facing update here goes through it.\n- [ ] Configure Clio OAuth2 credentials with matter, task, user-directory, AND Webhooks read+write scopes (Webhooks scope is required for the self-maintenance flow below, and is separate from Matters/Tasks/Users — reconnect the credential if you add the scope after it was first authorized).\n- [ ] Configure SMTP credentials for sending.\n- [ ] Edit the STATUS_MESSAGES map in 'Look Up Status Update Message' to match your firm's actual Clio matter statuses and firm-approved plain-English copy — this is the one node every firm must customize before going live.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, FIRM_MATTER_WEBHOOK_URL (copy this from 'When Matter Status Changes' → Production URL, after activating).\n- [ ] Activate the workflow, then manually run the webhook self-maintenance branch once ('Check Webhook Subscription Daily' → Execute step, then walk each following node the same way) to create the webhook for the first time — no external tools needed.\n\n### Customization\n\nThe STATUS_MESSAGES map is the entire content surface — add one entry per Clio status your firm wants to notify clients about. Everything else (dedupe, personalization, compliance, webhook maintenance) is generic and doesn't need editing.",
         "width": 480,
-        "height": 900
+        "height": 1080
       },
       "id": "b1a1c001-0001-4000-8000-000000000001",
       "name": "📖 Workflow doc",
@@ -96,7 +96,7 @@
         0,
         0
       ],
-      "notes": "Receives Clio's matter-updated webhook.\n\nConfirmed live: Clio has no Settings UI for webhook management — registering one is an API-only action. Copy this node's Production URL (visible after you activate this workflow), then POST it to {CLIO_BASE_URL}/api/v4/webhooks.json: { data: { url: '<Production URL>', model: 'matter', events: ['updated'], fields: 'id,status', expires_at: '<ISO date, up to 31 days out>' } }. This requires the Webhooks scope (Read + Write) on your Clio OAuth2 app, granted separately from Matters/Tasks/Users — if you add it after the credential was already authorized, reconnect the credential (same lesson as PAC-64's ForbiddenError).\n\nClio webhooks EXPIRE (31-day maximum, 3-day default if you omit expires_at) — this is not a one-time setup. The firm (or whoever deployed this) needs to re-create the webhook before it expires, or it silently stops delivering with no error visible in n8n.\n\nClio fires this on ANY field edit to a matter, not just status changes — the next few nodes are what filter this down to genuine status changes with a configured client message. Do not rely on this node's payload for the matter's current data; only the matter id is trusted from it, and everything else is re-fetched live from Clio.\n\nGeneric practice management systems: POST JSON with a 'matter_id' (or 'id') field; this workflow re-fetches the rest from Clio regardless, so a generic caller only needs to identify which matter changed.\n\nResponds immediately (default response mode) so your practice management system's webhook delivery doesn't time out waiting for the compliance check and email send to finish."
+      "notes": "Receives Clio's matter-updated webhook.\n\nConfirmed live: Clio has no Settings UI for webhook management — registering one is an API-only action, requiring its own Webhooks scope (Read + Write) on your Clio OAuth2 app, granted separately from Matters/Tasks/Users (if you add it after the credential was already authorized, reconnect the credential — same lesson as PAC-64's ForbiddenError). Clio webhooks also EXPIRE (31-day maximum) — not a one-time setup.\n\nRather than hand-crafting that API call yourself, this template ships with a self-maintaining branch further down the canvas ('Check Webhook Subscription Daily' and the nodes after it) that creates and renews the subscription automatically using this same Clio credential — see that branch's sticky note. Copy THIS node's Production URL (visible after you activate this workflow) into the FIRM_MATTER_WEBHOOK_URL n8n Variable once, and that branch takes care of the rest, including the very first registration (just run it manually via 'Execute step').\n\nClio fires this on ANY field edit to a matter, not just status changes — the next few nodes are what filter this down to genuine status changes with a configured client message. Do not rely on this node's payload for the matter's current data; only the matter id is trusted from it, and everything else is re-fetched live from Clio.\n\nGeneric practice management systems: POST JSON with a 'matter_id' (or 'id') field; this workflow re-fetches the rest from Clio regardless, so a generic caller only needs to identify which matter changed.\n\nResponds immediately (default response mode) so your practice management system's webhook delivery doesn't time out waiting for the compliance check and email send to finish."
     },
     {
       "parameters": {
@@ -490,6 +490,178 @@
         220
       ],
       "notes": "This client has opted out of firm emails. The suppression is already logged by the guardrail workflow. No email is sent."
+    },
+    {
+      "parameters": {
+        "content": "## Keep the webhook alive — no manual renewal, no external tools\n\nClio has no Settings UI for webhooks and the subscription expires after 31 days maximum — so this branch checks daily whether a valid one still exists and (re)creates it automatically if not. It runs completely independently of the branch above; it doesn't touch matter events at all.\n\nThis is also the easiest way to create the webhook the very first time: after setting the FIRM_MATTER_WEBHOOK_URL variable (step 4 of the deploy guide), just click on 'List Existing Clio Webhooks' and hit **Execute step**, then walk the rest of this branch node-by-node with the same button — no curl, no Postman, no temporary nodes, no copying a bearer token out of n8n. Everything needed is already on this canvas, using the same Clio credential as the rest of the workflow.",
+        "width": 928,
+        "height": 320,
+        "color": 4
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000006",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "6600aa00-0066-4000-a000-000000000018",
+      "name": "Check Webhook Subscription Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        680
+      ],
+      "notes": "Runs once a day (3am, n8n server timezone) purely to make sure Clio's webhook subscription is still alive — completely separate from the matter-update branch above. This is what replaces the manual 'POST to Clio's API by hand every few weeks' process: as long as this workflow is Active, the subscription renews itself before it can expire.\n\nYou can also trigger this branch manually at any time (click this node, then 'Execute step', then walk each following node the same way) — that's the recommended way to create the webhook for the very first time, since it uses this workflow's own already-authorized Clio credential instead of a hand-crafted API call."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/webhooks.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,url,model,events,expires_at,status"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6600aa00-0066-4000-a000-000000000019",
+      "name": "List Existing Clio Webhooks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        680
+      ],
+      "notes": "Lists every webhook currently registered on this Clio app, so the next step can tell whether the one this workflow depends on already exists and still has enough life left in it. Same Clio OAuth2 credential as the rest of this workflow — this is what makes self-renewal possible without a separate manual API call: n8n already holds a valid, auto-refreshing OAuth token for this credential.\n\nThis is also the safe first node to manually 'Execute step' on when setting up the webhook for the very first time.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Decides whether the webhook this workflow depends on needs to be (re)created. Looks for an\n// existing subscription matching this workflow's own URL that isn't within RENEWAL_BUFFER_DAYS of\n// expiring -- renewing a few days ahead of the deadline (rather than waiting for it to actually\n// lapse) means deliveries never really stop. If one already exists and is comfortably valid, this\n// daily check does nothing at all, so re-running it never piles up duplicate subscriptions.\nconst RENEWAL_BUFFER_DAYS = 5;\nconst targetUrl = $vars.FIRM_MATTER_WEBHOOK_URL;\n\nif (!targetUrl) {\n  throw new Error(\"FIRM_MATTER_WEBHOOK_URL n8n Variable is not set. Go to Settings \\u2192 Variables and set it to this workflow's own Production URL, copied from the 'When Matter Status Changes' node, before this maintenance check can do anything.\");\n}\n\nconst response = $input.first().json;\nconst webhooks = response.data || response;\nconst list = Array.isArray(webhooks) ? webhooks : [];\n\nconst cutoff = new Date(Date.now() + RENEWAL_BUFFER_DAYS * 24 * 60 * 60 * 1000);\n\nconst stillValid = list.find(w =>\n  w.url === targetUrl &&\n  (w.events || []).includes('updated') &&\n  w.expires_at && new Date(w.expires_at) > cutoff\n);\n\nreturn [{ json: {\n  needs_renewal: !stillValid,\n  matched_webhook_id: stillValid ? stillValid.id : null,\n  matched_expires_at: stillValid ? stillValid.expires_at : null,\n} }];"
+      },
+      "id": "6600aa00-0066-4000-a000-00000000001a",
+      "name": "Check If Webhook Needs Renewal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        680
+      ],
+      "notes": "needs_renewal is true if no webhook matches this workflow's own URL, or the one that does is within 5 days of expiring. False means it's already valid with plenty of life left — nothing to do today."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_needs_renewal",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.needs_renewal }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6600aa00-0066-4000-a000-00000000001b",
+      "name": "If Webhook Needs Renewal",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        680
+      ],
+      "notes": "Yes (missing, or expiring within 5 days) → (re)register it with Clio.\nNo (already valid with plenty of life left) → route to Skip. Nothing to do today.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "6600aa00-0066-4000-a000-00000000001c",
+      "name": "Skip — Webhook Still Valid",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        896,
+        860
+      ],
+      "notes": "The webhook this workflow depends on already exists and isn't close to expiring. Nothing to do today."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/webhooks.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { url: $vars.FIRM_MATTER_WEBHOOK_URL, model: 'matter', events: ['updated'], fields: 'id,status', expires_at: $now.plus({ days: 31 }).toISO() } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6600aa00-0066-4000-a000-00000000001d",
+      "name": "Register Or Renew Clio Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        680
+      ],
+      "notes": "Creates a fresh Clio webhook subscription for this workflow's own URL, valid for another 31 days (Clio's maximum). This is the same API call that used to require a hand-crafted curl/Postman request outside n8n — now it just runs automatically before the old one can expire, using the credential already wired up for every other Clio call in this workflow.\n\nThe target URL comes from the FIRM_MATTER_WEBHOOK_URL n8n Variable, set once during deployment (copy it from the 'When Matter Status Changes' node's Production URL tab) — n8n can't read a webhook node's own public URL back out via an expression, so this one manual copy-paste is unavoidable, but it only has to happen once, not every 31 days.\n\nCheck this node's output after it runs (or the Executions tab) to confirm Clio returned a new webhook id and expires_at rather than an error — if your Clio OAuth2 app doesn't have the Webhooks (Read + Write) scope granted and the credential reconnected afterward, this call fails with the same ForbiddenError pattern confirmed in PAC-64."
     }
   ],
   "active": false,
@@ -558,6 +730,29 @@
             },
             "records": 2
           }
+        }
+      }
+    ],
+    "Check Webhook Subscription Daily": [
+      {
+        "json": {}
+      }
+    ],
+    "List Existing Clio Webhooks": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 9001,
+              "url": "https://your-n8n.example.com/webhook/matter-status-update",
+              "model": "matter",
+              "events": [
+                "updated"
+              ],
+              "expires_at": "2026-08-30T00:00:00Z",
+              "status": "active"
+            }
+          ]
         }
       }
     ]
@@ -727,6 +922,57 @@
         [
           {
             "node": "Skip — Client Opted Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Webhook Subscription Daily": {
+      "main": [
+        [
+          {
+            "node": "List Existing Clio Webhooks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Existing Clio Webhooks": {
+      "main": [
+        [
+          {
+            "node": "Check If Webhook Needs Renewal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Webhook Needs Renewal": {
+      "main": [
+        [
+          {
+            "node": "If Webhook Needs Renewal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Webhook Needs Renewal": {
+      "main": [
+        [
+          {
+            "node": "Register Or Renew Clio Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Webhook Still Valid",
             "type": "main",
             "index": 0
           }

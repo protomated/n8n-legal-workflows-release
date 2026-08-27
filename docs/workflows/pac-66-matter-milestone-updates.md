@@ -20,9 +20,9 @@ Get value in under 15 minutes. Every time a matter's status changes in Clio, thi
 
 **A few Clio details haven't been independently confirmed live:** the exact payload shape of Clio's `matter.updated` webhook event (this template deliberately doesn't rely on it beyond extracting an id, precisely because of this uncertainty), a single-resource `GET /matters/{id}.json` call, `status` as a returned field, and whether that single-resource response is wrapped in a `data` object the same way list endpoints are. Check your first real webhook delivery's output on `Fetch Matter Details From Clio` and adjust if anything differs.
 
-**Confirmed live: Clio has no Settings UI for webhook management at all — it's an API-only action, and requires its own OAuth scope.** See Step 4 below for the exact API call. This also means the "Webhooks" scope (Read + Write) must be granted on your Clio OAuth2 app separately from Matters/Tasks/Users — if you add it after the credential was already authorized, you must reconnect the credential, same as the `ForbiddenError` lesson from PAC-64.
+**Confirmed live: Clio has no Settings UI for webhook management at all — it's an API-only action, and requires its own OAuth scope.** The "Webhooks" scope (Read + Write) must be granted on your Clio OAuth2 app separately from Matters/Tasks/Users — if you add it after the credential was already authorized, you must reconnect the credential, same as the `ForbiddenError` lesson from PAC-64.
 
-**Confirmed live: Clio webhooks expire.** 3 days by default, 31 days maximum. This is not a one-time setup — whoever deploys this needs a recurring reminder (or a separate small process) to re-create the webhook subscription before it expires, or it will silently stop delivering with no error visible anywhere in n8n.
+**Confirmed live: Clio webhooks expire (3 days by default, 31 days maximum) — but this template handles that for you.** Rather than asking you to remember a recurring manual API call, the workflow ships with a second, independent trigger branch — `Check Webhook Subscription Daily` and the nodes after it — that runs once a day, checks whether the webhook is still valid, and (re)creates it automatically if it's missing or close to expiring. This branch also doubles as the way you register the webhook the very first time: no curl, no Postman, no temporary nodes, no extracting a bearer token from n8n — just click through the same nodes already on the canvas with "Execute step," using the Clio credential you've already connected. See Step 4 below.
 
 ---
 
@@ -31,8 +31,9 @@ Get value in under 15 minutes. Every time a matter's status changes in Clio, thi
 - **The Bar-Compliance Guardrail (NTC-33) must be set up first** — this template cannot send a client update without it.
 - An n8n instance reachable from the internet (self-hosted with a public URL, or n8n Cloud) — Clio needs to be able to reach your webhook URL
 - A Clio account with API access — matter, user-directory, **and Webhooks (Read + Write)** scope (reuse the OAuth2 credential from PAC-18/20/55/57/58/59/61/63/64/65 if already deployed, but add the Webhooks scope and reconnect if it wasn't already granted)
-- A way to make one authenticated `POST` API call to Clio (curl, Postman, or a temporary n8n HTTP Request node) — there is no Settings UI for creating a webhook
 - An email account with SMTP access
+
+No curl, Postman, or external API tools needed — the webhook is registered and kept alive entirely from inside n8n. See Step 4.
 
 ---
 
@@ -69,35 +70,19 @@ Any Clio status you don't list here is treated as internal-only and never reache
 | `FIRM_EMAIL` | The generic contact address used when the responsible attorney can't be resolved |
 | `FIRM_FROM_EMAIL` | The sender address for update emails |
 | `GUARDRAIL_WORKFLOW_ID` | The numeric ID of the Bar-Compliance Guardrail workflow — find it in the n8n URL when you open NTC-33 |
+| `FIRM_MATTER_WEBHOOK_URL` | This workflow's own Production webhook URL — you'll copy this in step 4, below, right after you activate |
 
 ---
 
-## Step 4 — Activate and register the Clio webhook (10 min)
+## Step 4 — Activate and register the Clio webhook (5 min, entirely inside n8n)
 
 1. Toggle the workflow to **Active**.
 2. Open **"When Matter Status Changes"**, click the **Production URL** tab (not Test URL — the Test URL only works while you're actively in "Listen for test event" mode in the editor), and copy it.
-3. Confirm your Clio OAuth2 app has the **Webhooks** scope (Read + Write) granted, and that you've reconnected the credential in n8n if that scope was added after the credential was first authorized.
-4. Register the webhook by making one authenticated `POST` request to Clio's API — there's no Settings page for this:
+3. Go to **Settings → Variables**, set `FIRM_MATTER_WEBHOOK_URL` to the URL you just copied, and save.
+4. Confirm your Clio OAuth2 app has the **Webhooks** scope (Read + Write) granted, and that you've reconnected the credential in n8n if that scope was added after the credential was first authorized.
+5. Scroll down to the second, independent branch on the canvas that starts at **"Check Webhook Subscription Daily"**. Click **"List Existing Clio Webhooks"** and hit **Execute step**, then do the same for **"Check If Webhook Needs Renewal"**, **"If Webhook Needs Renewal"**, and finally **"Register Or Renew Clio Webhook"** — confirm its output shows a new webhook `id` and `expires_at` roughly 31 days out, not an error.
 
-   ```
-   POST https://eu.app.clio.com/api/v4/webhooks.json   (use your own CLIO_BASE_URL region)
-   Authorization: Bearer <your Clio access token>
-   Content-Type: application/json
-
-   {
-     "data": {
-       "url": "<the Production URL you copied in step 2>",
-       "model": "matter",
-       "events": ["updated"],
-       "fields": "id,status",
-       "expires_at": "2026-09-25T00:00:00Z"
-     }
-   }
-   ```
-
-   Set `expires_at` to the maximum allowed (31 days from today) so you're not re-doing this every few days. The easiest way to fire this one-time call if you don't have curl/Postman handy: add a temporary **HTTP Request** node anywhere on your n8n canvas (method POST, the URL and body above, authenticated with your Clio OAuth2 credential), click **Execute step**, confirm success, then delete the node — it's not part of the deployed workflow.
-
-5. **Set a reminder to redo step 4 before the webhook expires.** Clio webhooks are not permanent — 31 days is the maximum lifespan regardless of what you set. When it expires, deliveries stop silently; nothing in n8n will show an error, because n8n simply never receives another call. Recreating the webhook (repeat step 4 with a fresh `expires_at`) is the only fix.
+   That's it — no curl, no Postman, no bearer tokens, no temporary nodes to add and delete. The webhook is now live, and this same branch runs automatically every day from then on (`Check Webhook Subscription Daily`'s schedule trigger), checking whether the subscription is still valid and quietly re-creating it a few days before it would otherwise expire. You never have to repeat this step manually again as long as the workflow stays Active.
 
 ---
 
@@ -111,7 +96,9 @@ The workflow ships with pinned sample data on the webhook trigger and both Clio-
 4. Continue through **"Build Status Update Email"** and confirm the copy is personalized with the resolved attorney's contact details.
 5. Continue through **"Check Compliance Before Sending"** → **"If Update Approved"** → **"Send Status Update Email"** and confirm the delivered email carries the guardrail's unsubscribe footer and renders the styled HTML.
 
-**Testing against your real Clio account:** unpin all three Clio-facing nodes (trigger, matter fetch, users fetch), then actually change a real matter's status in Clio. The webhook should fire within seconds — check n8n's **Executions** tab for a run whose trigger source is the webhook, not a manually-started one. If nothing shows up there at all, the problem is upstream of n8n entirely: re-confirm the webhook was actually created (step 4) with the correct Production URL, that it hasn't expired, and that the workflow is Active. `GET https://eu.app.clio.com/api/v4/webhooks/{webhook_id}.json` (the id returned when you created it) should return the subscription's current status — a quick way to confirm it still exists and hasn't expired without needing any UI.
+**Testing against your real Clio account:** unpin all three Clio-facing nodes (trigger, matter fetch, users fetch), then actually change a real matter's status in Clio. The webhook should fire within seconds — check n8n's **Executions** tab for a run whose trigger source is the webhook, not a manually-started one. If nothing shows up there at all, the problem is upstream of n8n entirely: re-confirm the webhook was actually created (step 4) with the correct Production URL and that the workflow is Active. To check the subscription's status directly without any external tool, unpin **"List Existing Clio Webhooks"** and manually execute it — its output lists every webhook on the account along with each one's `expires_at`.
+
+**Testing the self-maintenance branch specifically:** run **"Check Webhook Subscription Daily"** manually at any time (it doesn't touch matter events at all). With a freshly-created webhook, **"Check If Webhook Needs Renewal"** should report `needs_renewal: false`; temporarily lower `RENEWAL_BUFFER_DAYS` in that node's code (or just wait until you're within 5 days of the real expiry) to see it flip to `true` and confirm **"Register Or Renew Clio Webhook"** creates a fresh one.
 
 ---
 
@@ -126,6 +113,8 @@ The workflow ships with pinned sample data on the webhook trigger and both Clio-
 | The webhook payload has no usable matter id | Skipped — invalid or unrelated event |
 | The client has opted out of firm emails | Guardrail suppresses the send; already logged to the audit sheet |
 | The Clio matter or user-directory fetch fails | Degrades gracefully (`neverError`) rather than crashing the run |
+| The Clio webhook is missing, or within 5 days of its 31-day expiry | The daily maintenance branch (re)creates it automatically — no manual renewal needed |
+| The Clio webhook already exists with plenty of life left | The daily check does nothing — no duplicate subscriptions pile up |
 
 ---
 
@@ -142,7 +131,7 @@ This template performs scheduling and templated operational notification only �
 | Money / leak test | Replaces a paid Case Status app; poor communication between milestones is a top driver of bar complaints and client attrition |
 | Compliance test | Firm-approved, non-legal template messages only, fully wrapped in OPS1 |
 | Searchability test | Ranks for "automated client case updates" |
-| Deployability test | Reuses Clio and SMTP credentials from earlier templates if already deployed — under 15 minutes, plus one webhook to wire in Clio |
+| Deployability test | Reuses Clio and SMTP credentials from earlier templates if already deployed — under 15 minutes; webhook setup and ongoing renewal are both handled entirely inside n8n, no external tools |
 | Upsell test | Clear Quick-Win Build path: SMS updates alongside email, a client portal timeline view, and richer status-specific content (next-steps checklists per milestone) |
 
 ---
