@@ -1,0 +1,591 @@
+{
+  "name": "Statute of Limitations Watchdog",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Statute of Limitations Watchdog\n\n### How it works\n\n1. Runs once a day. Fetches the firm's user directory, then every open (not-yet-complete) Clio task of a firm-configured type (default 'Statute of Limitations').\n2. Computes how many days remain until each task's due date — the actual deadline the firm entered, never calculated or interpreted by this workflow (ABA Op. 512). A matter can have more than one of these tasks (multiple claims, multiple deadlines).\n3. Determines an escalation tier: 180 days out, 90 days out, 30 days out, or overdue. The 180/90/30 tiers each alert exactly once (tracked in n8n's own workflow static data, no database) — but the overdue tier alerts on EVERY run for as long as the deadline has passed and the task is still open. Silence about a missed statute of limitations is a far worse risk than a repeated email.\n4. Builds an internal alert (color-coded by urgency), addressed to the task's assignee, CC'ing the firm's general alert address once a deadline reaches the 30-day or overdue tier.\n5. Logs the alert to the compliance audit sheet, then sends it. This is purely internal — no client is ever contacted, so there is no opt-out gate: a malpractice safety net must never be suppressible.\n\n### Setup steps\n\n- [ ] Configure Clio OAuth2 credentials with task and user-directory read scope (reuse the credential from other templates in this catalog if already deployed).\n- [ ] Configure SMTP credentials for sending.\n- [ ] Create a Clio task type named exactly 'Statute of Limitations' (or set FIRM_SOL_TASK_TYPE to whatever your firm already uses) — one task per deadline, due on the actual date, assigned to the responsible attorney or paralegal.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Activate the workflow. No webhook to wire anywhere.\n\n### Customization\n\nThere is no content to customize — every alert is generic, plain-English countdown language with no legal commentary, by design. The only thing firms configure is which Clio task type this watches (FIRM_SOL_TASK_TYPE) and the escalation contact (FIRM_EMAIL).",
+        "width": 480,
+        "height": 940
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Fetch open deadline tasks\n\nPulls the firm's user directory, then every not-yet-complete Clio task of the configured statute-of-limitations task type, and drops anything without a usable due date.",
+        "width": 928,
+        "height": 320,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Compute urgency and dedupe\n\nComputes days remaining (or overdue) against the firm-entered due date and determines which escalation tier applies, then checks n8n's own static data to decide whether today's tier actually needs a fresh alert.",
+        "width": 448,
+        "height": 320,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        928,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Build, log, and send\n\nBuilds the urgency-coded internal alert, logs it to the compliance audit sheet, then sends it — no opt-out gate, since this is an internal malpractice safety net, never a client message.",
+        "width": 928,
+        "height": 320,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000004",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "6700aa00-0067-4000-a000-000000000001",
+      "name": "Check Statute Of Limitations Deadlines Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Fires every day at 7am (n8n server timezone) — adjust the cron expression if a different time suits your firm better. Runs well before the business day starts so an overnight-added deadline is caught immediately."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/users.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,email,enabled"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6700aa00-0067-4000-a000-000000000002",
+      "name": "Fetch Firm Users From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Fetches the firm's user directory — used by 'Build Statute Of Limitations Alert Email' to resolve the task's assignee id to a real name and email. Requesting 'email' works here because /users.json is the primary resource, not a nested association (Clio rejects a nested User's email — confirmed live in PAC-63).\n\nRuns first in this single linear chain, feeding straight into the deadline-tasks fetch next — a genuine sequential dependency, not a disconnected side-fetch (confirmed live in PAC-63/64 that a disconnected side-fetch referenced only by name in code isn't reliably executed by n8n).\n\nCredential: same Clio OAuth2 credential as PAC-18/20/55/57/58/59/61/63/64/65/66 — reuse it if already deployed.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/tasks.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "pending"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,name,due_at,task_type{id,name},assignee{id,name},matter{id,display_number,description}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6700aa00-0067-4000-a000-000000000003",
+      "name": "Fetch Statute Of Limitations Tasks From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Fetches every not-yet-complete task, of any type — the next Filter narrows this down to the configured statute-of-limitations task type. Marking the Clio task complete once it's been filed (or is otherwise no longer a live risk) is the entire 'stop alerting' mechanism, same convention as PAC-65's document-request tasks — there's no separate list or field to keep in sync.\n\nThe matter's display_number/description come along nested one level deep on the task itself (matter{id,display_number,description}) — confirmed live convention for tasks.json in this catalog (PAC-59/65) — so no separate matters fetch is needed here; this is purely internal alerting and never needs the client's contact info.\n\ntask_type{id,name} and assignee{id,name} as nested fields on tasks.json are each confirmed live individually elsewhere in this catalog but not independently confirmed together with matter{...} in this exact combination — check your first real run's output and adjust field names if Clio rejects any of them.\n\nCredential: same Clio OAuth2 credential as the user directory fetch above.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "6700aa00-0067-4000-a000-000000000004",
+      "name": "Split Out Deadline Task Records",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Turns the single API response into one n8n item per task, so the Filter and Code nodes downstream can each operate on individual deadlines. An empty or missing 'data' array (e.g. after a Clio error, or genuinely no open tasks) simply produces zero items."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_is_sol_type",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.task_type && $json.task_type.name }}",
+              "rightValue": "={{ $vars.FIRM_SOL_TASK_TYPE || 'Statute of Limitations' }}"
+            },
+            {
+              "id": "c_has_due_at",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.due_at }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6700aa00-0067-4000-a000-000000000005",
+      "name": "Filter Statute Of Limitations Tasks With Due Date",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Drops anything that isn't a statute-of-limitations task (ordinary to-dos, deadlines, etc.), or one with no due date set — a deadline task with no date can't be countdown-tracked at all, and that gap itself is worth the firm noticing on its own, outside this workflow."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Computes how many days remain until this task's due date (negative if overdue) and determines\n// which escalation tier, if any, applies -- 180 / 90 / 30 days out, or overdue. The actual deadline\n// is never calculated or interpreted here: it's whatever due date the firm entered on this task.\n// This workflow is a pure countdown/reminder mechanism, never legal judgment (ABA Op. 512).\n//\n// Dedupe uses n8n's own workflow static data, keyed by task id (not matter id -- one matter can\n// have more than one statute-of-limitations task for different claims). Each of the three milestone\n// tiers fires exactly once, tracked against the LAST tier alerted rather than the exact day\n// crossed -- so a cron that runs late, or skips a day, still catches the crossing on its next run\n// instead of silently skipping a milestone entirely. Unlike other templates in this catalog, there\n// is no \"first sighting, cache silently\" grace period: if a firm deploys this against a matter\n// already 20 days from its deadline, it should alert immediately, not wait for a second run.\n//\n// The 'overdue' tier deliberately never dedupes -- it fires on every single run for as long as the\n// deadline has passed and the task is still open, because staying silent about a missed statute of\n// limitations is a malpractice risk far worse than a repeated email.\nconst task = $json;\n\nconst dueDate = new Date(task.due_at);\ndueDate.setHours(0, 0, 0, 0);\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\nconst msPerDay = 24 * 60 * 60 * 1000;\nconst daysRemaining = Math.round((dueDate - today) / msPerDay);\n\nlet tier = null;\nif (daysRemaining < 0) tier = 'overdue';\nelse if (daysRemaining <= 30) tier = 'tier_30';\nelse if (daysRemaining <= 90) tier = 'tier_90';\nelse if (daysRemaining <= 180) tier = 'tier_180';\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastAlertedTierByTask) staticData.lastAlertedTierByTask = {};\nconst cache = staticData.lastAlertedTierByTask;\n\n// Self-prune entries older than 400 days so this doesn't grow forever on a long-running instance.\nconst CUTOFF_MS = 400 * 24 * 60 * 60 * 1000;\nconst now = Date.now();\nfor (const [id, entry] of Object.entries(cache)) {\n  if (now - (entry.seenAt || 0) > CUTOFF_MS) delete cache[id];\n}\n\nconst previousTier = cache[task.id] ? cache[task.id].tier : null;\nconst needsAlert = tier !== null && (tier === 'overdue' || previousTier !== tier);\n\nif (tier !== null) {\n  cache[task.id] = { tier, seenAt: now };\n}\n\nreturn { json: {\n  task_id: task.id,\n  task_name: task.name || '',\n  due_at: task.due_at,\n  matter_id: (task.matter && task.matter.id) || null,\n  matter_ref: (task.matter && task.matter.display_number) || '',\n  matter_description: (task.matter && task.matter.description) || '',\n  assignee_id: (task.assignee && task.assignee.id) || null,\n  days_remaining: daysRemaining,\n  tier,\n  needs_alert: needsAlert,\n} };"
+      },
+      "id": "6700aa00-0067-4000-a000-000000000006",
+      "name": "Compute Escalation Tier And Check If Alert Needed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "Static data is local to this n8n instance's execution store — it won't sync across multiple workers if the instance ever moves to queue mode. Fine for the single-instance deployment this template targets; flag it if the firm later scales to a multi-worker n8n setup."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_needs_alert",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.needs_alert }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "6700aa00-0067-4000-a000-000000000007",
+      "name": "Filter Deadlines Needing An Alert Today",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "Drops any deadline that's more than 180 days out, or already alerted for its current tier today. Everything that survives gets its own alert email — on most days this drops to zero items, which is normal, not a failure."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the internal statute-of-limitations alert -- addressed to the task's assignee, with the\n// firm's general alert address CC'd once a deadline reaches the urgent tiers (30 days or overdue),\n// so it is never just one person's inbox standing between the firm and a missed deadline. Purely a\n// countdown/reminder: never generates, paraphrases, or interprets any legal content (ABA Op. 512).\nconst item = $json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_EMAIL = $vars.FIRM_EMAIL;\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL) throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst users = ($('Fetch Firm Users From Clio').first().json.data) || [];\nconst assignee = item.assignee_id ? users.find(u => u.id === item.assignee_id) : null;\nconst assigneeName = (assignee && assignee.name) || '';\nconst recipient = (assignee && assignee.email) || FIRM_EMAIL;\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction formatDate(iso) {\n  try {\n    return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(iso));\n  } catch (e) {\n    return iso;\n  }\n}\n\nconst TIERS = {\n  tier_180: { color: '#d97706', label: '180 days out', urgent: false, subjectPrefix: '' },\n  tier_90: { color: '#ea580c', label: '90 days out', urgent: false, subjectPrefix: '' },\n  tier_30: { color: '#dc2626', label: '30 days out — action needed', urgent: true, subjectPrefix: 'URGENT — ' },\n  overdue: { color: '#7f1d1d', label: 'OVERDUE', urgent: true, subjectPrefix: '🚨 OVERDUE — ' },\n};\nconst tierInfo = TIERS[item.tier];\n\nconst matterLabel = item.matter_ref + (item.matter_description ? ' (' + item.matter_description + ')' : '');\nconst cc = tierInfo.urgent && FIRM_EMAIL !== recipient ? FIRM_EMAIL : '';\n\nconst daysPhrase = item.days_remaining >= 0\n  ? `${item.days_remaining} day${item.days_remaining === 1 ? '' : 's'} remaining`\n  : `overdue by ${Math.abs(item.days_remaining)} day${Math.abs(item.days_remaining) === 1 ? '' : 's'}`;\n\nconst subject = `${tierInfo.subjectPrefix}Statute of limitations — ${daysPhrase}: ${item.matter_ref}`;\n\nconst actionLine = item.tier === 'overdue'\n  ? 'This deadline has already passed. Confirm immediately whether this was filed — if not, escalate to a partner right away.'\n  : (assigneeName ? `${assigneeName}, please confirm this is on track.` : 'Please confirm this is on track.');\n\nconst body = `${item.tier === 'overdue' ? 'OVERDUE ALERT' : 'DEADLINE ALERT'} — ${matterLabel}\\n\\nTask: ${item.task_name}\\nDue: ${formatDate(item.due_at)} (${daysPhrase})\\n\\n${actionLine}\\n\\nMark the task complete in Clio once it's been filed (or is otherwise resolved) to stop future reminders for it.\\n\\n${FIRM_NAME}`;\n\nconst bodyHtml = `\n  <div style=\"color:#334155;font-size:14px;margin-bottom:16px;\">${escapeHtml(matterLabel)}</div>\n  <div style=\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:20px;background:#f8fafc;\">\n    <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(item.task_name)}</div>\n    <div style=\"font-size:13px;color:#64748b;margin-top:2px;\">Due ${escapeHtml(formatDate(item.due_at))} — ${escapeHtml(daysPhrase)}</div>\n  </div>\n  <div style=\"color:#334155;font-size:14px;margin-bottom:18px;font-weight:600;\">${escapeHtml(actionLine)}</div>\n  <div style=\"color:#64748b;font-size:13px;\">Mark the task complete in Clio once it's been filed (or is otherwise resolved) to stop future reminders for it.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:${tierInfo.color};padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\">Statute of limitations — ${escapeHtml(tierInfo.label)}</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${escapeHtml(item.matter_ref)}</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n    <div style=\"padding:16px 32px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\">${escapeHtml(FIRM_NAME)} internal alert — not a client communication.</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: {\n  ...item,\n  channel: 'email',\n  recipient,\n  cc,\n  subject,\n  message: body,\n  email_html: emailHtml,\n  template_id: 'PAC-67-sol-alert',\n} };"
+      },
+      "id": "6700aa00-0067-4000-a000-000000000008",
+      "name": "Build Statute Of Limitations Alert Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Explicitly set to 'Run Once for Each Item' — a real bug found elsewhere in this catalog (PAC-63/65's build-email steps default to 'Run Once for All Items' while only reading the first input item, silently dropping every additional item when more than one qualifies in the same run). Multiple statute-of-limitations deadlines hitting a tier on the same day is entirely plausible and must not be silently dropped.\n\nColor-codes by urgency (amber → orange → red → dark red for overdue) and CC's FIRM_EMAIL once a deadline reaches the 30-day or overdue tier, so it's never just one person's inbox standing between the firm and a missed filing."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "={{ $json.channel }}",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "={{ $json.template_id }}",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "6700aa00-0067-4000-a000-000000000009",
+      "name": "Log Alert For Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "Logs the alert to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33) — internal record-keeping only, not a message to a client. Its 'approved'/opt-out result is deliberately ignored: a malpractice safety net must never be suppressible, same fire-and-forget pattern already used for internal-only notifications in PAC-59/60/61/63.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable. This REPLACES $json with the guardrail's own response, so 'Send Statute Of Limitations Alert Email' reaches back to 'Build Statute Of Limitations Alert Email' by name for every field it needs (confirmed pattern from PAC-65/66 — reading $json here would send a blank email)."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Statute Of Limitations Alert Email').item.json.recipient }}",
+        "ccEmail": "={{ $('Build Statute Of Limitations Alert Email').item.json.cc }}",
+        "subject": "={{ $('Build Statute Of Limitations Alert Email').item.json.subject }}",
+        "text": "={{ $('Build Statute Of Limitations Alert Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Statute Of Limitations Alert Email').item.json.email_html }}"
+      },
+      "id": "6700aa00-0067-4000-a000-00000000000a",
+      "name": "Send Statute Of Limitations Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        0
+      ],
+      "notes": "Delivers the internal alert to the task's assignee (CC'd to FIRM_EMAIL on urgent tiers). Reads every field explicitly from 'Build Statute Of Limitations Alert Email' by name rather than $json, since the guardrail call immediately upstream replaced the item's json with its own response. An empty 'cc' expression is safe — n8n simply omits the header.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "Fetch Firm Users From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 21,
+              "name": "A. Attorney",
+              "email": "attorney@smithlaw.com",
+              "enabled": true
+            },
+            {
+              "id": 22,
+              "name": "B. Barrister",
+              "email": "b.barrister@smithlaw.com",
+              "enabled": true
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ],
+    "Fetch Statute Of Limitations Tasks From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 51001,
+              "name": "File complaint before statute of limitations expires",
+              "due_at": "2027-02-23",
+              "task_type": {
+                "id": 901,
+                "name": "Statute of Limitations"
+              },
+              "assignee": {
+                "id": 21,
+                "name": "A. Attorney"
+              },
+              "matter": {
+                "id": 41001,
+                "display_number": "2026-CH-050",
+                "description": "Personal Injury — Auto Accident"
+              }
+            },
+            {
+              "id": 51002,
+              "name": "File claim before statute of limitations expires",
+              "due_at": "2026-09-26",
+              "task_type": {
+                "id": 901,
+                "name": "Statute of Limitations"
+              },
+              "assignee": {
+                "id": 22,
+                "name": "B. Barrister"
+              },
+              "matter": {
+                "id": 41002,
+                "display_number": "2026-CH-051",
+                "description": "Slip and Fall"
+              }
+            },
+            {
+              "id": 51003,
+              "name": "File complaint before statute of limitations expires",
+              "due_at": "2026-08-20",
+              "task_type": {
+                "id": 901,
+                "name": "Statute of Limitations"
+              },
+              "assignee": null,
+              "matter": {
+                "id": 41003,
+                "display_number": "2026-CH-052",
+                "description": "Contract Dispute"
+              }
+            },
+            {
+              "id": 51004,
+              "name": "Follow up with client on documents",
+              "due_at": "2026-09-01",
+              "task_type": {
+                "id": 902,
+                "name": "Document Request"
+              },
+              "assignee": {
+                "id": 21,
+                "name": "A. Attorney"
+              },
+              "matter": {
+                "id": 41004,
+                "display_number": "2026-CH-053",
+                "description": "Custody Modification"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 4
+          }
+        }
+      }
+    ]
+  },
+  "settings": {
+    "availableInMCP": false,
+    "executionOrder": "v1",
+    "executionTimeout": 120,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "Check Statute Of Limitations Deadlines Daily": {
+      "main": [
+        [
+          {
+            "node": "Fetch Firm Users From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Firm Users From Clio": {
+      "main": [
+        [
+          {
+            "node": "Fetch Statute Of Limitations Tasks From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Statute Of Limitations Tasks From Clio": {
+      "main": [
+        [
+          {
+            "node": "Split Out Deadline Task Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Deadline Task Records": {
+      "main": [
+        [
+          {
+            "node": "Filter Statute Of Limitations Tasks With Due Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Statute Of Limitations Tasks With Due Date": {
+      "main": [
+        [
+          {
+            "node": "Compute Escalation Tier And Check If Alert Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Escalation Tier And Check If Alert Needed": {
+      "main": [
+        [
+          {
+            "node": "Filter Deadlines Needing An Alert Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Deadlines Needing An Alert Today": {
+      "main": [
+        [
+          {
+            "node": "Build Statute Of Limitations Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Statute Of Limitations Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Log Alert For Compliance Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Alert For Compliance Audit": {
+      "main": [
+        [
+          {
+            "node": "Send Statute Of Limitations Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Runs once a day: fetches every open Clio task of a firm-configured statute-of-limitations task type, and computes days remaining (or overdue) against the firm-entered due date — never calculating or interpreting the deadline itself (ABA Op. 512). Escalates at 180, 90, and 30 days out (each firing once, tracked via n8n's own workflow static data, no external database), plus a continuous daily alert for as long as a deadline is overdue and still open, since silence about a missed statute of limitations is a malpractice risk far worse than a repeated email. Sends a color-coded internal alert to the responsible attorney, CC'ing the firm's general alert address on urgent tiers — purely internal, no client is ever contacted, and there is no opt-out gate. Replaces manual docketing suites — a missed statute of limitations is a worst-case malpractice event."
+}
