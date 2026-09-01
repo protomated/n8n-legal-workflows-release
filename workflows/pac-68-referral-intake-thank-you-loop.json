@@ -4,82 +4,146 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Referral Intake & Thank-You Loop\n\n### How it works\n\nThis workflow has TWO independent triggers on one canvas:\n\n**A. Referral intake (top row)**\n1. Fires on any web form submission that identifies a referrer (Fluent Forms, or any generic JSON/form-encoded POST) — same dual-format normalization pattern as PAC-32's Lead-Source ROI Tracker. A submission with no referrer name AND no referrer email isn't a referral and this workflow drops it immediately.\n2. Logs the referral to a Google Sheets ledger — the permanent, human-reviewable record of who referred whom and when.\n3. If the referrer left an email address, thanks them personally through the compliance guardrail (so an opt-out is respected, and the send is logged) — a short, warm note that never mentions the lead's legal matter or practice area, since that's not the referrer's information to know.\n4. Always emails the firm a summary of the new referral, regardless of whether a thank-you could be sent.\n\n**B. Monthly reciprocal-referral reminder (bottom row) — a second, independent branch**\nRuns once a month, re-reads the entire ledger, and surfaces every referrer who's sent 2 or more referrals in the trailing 90 days. This is a business-development nudge only — it never decides who to refer back to or drafts anything on the firm's behalf; it just makes sure a generous referral source doesn't go unnoticed and unreciprocated.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the referrer thank-you goes through it.\n- [ ] Create a Google Sheet with a 'Referrals' tab and columns: date, lead_name, lead_email, referrer_name, referrer_email, referrer_type, matter_type, status.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, REFERRAL_LEDGER_SHEET_ID.\n- [ ] Add a 'Referred by' (name) and optional 'Referred by email' field to your intake form, and point its webhook feed at this workflow's Production URL.\n- [ ] Activate the workflow.\n\n### Customization\n\nEdit the wording in 'Build Referral Thank You Email' and 'Build Reciprocal Referral Reminder Email' to match your firm's voice. The reciprocity threshold (2 referrals in 90 days) is set at the top of 'Compute Referral Counts By Referrer' if you want it more or less sensitive.",
+        "content": "## Referral Intake & Thank-You Loop\n\n### How it works\n\n1. The workflow receives and normalizes referral form submissions via webhook.\n2. It validates the referral, logs it to a Google Sheets ledger, and conditionally sends thank-you emails to referrers.\n3. Notifications about each referral are sent to the firm regardless of thank-you email outcomes.\n4. A scheduled monthly trigger reads the referral ledger, computes referral counts, and filters referrers needing a reciprocity reminder.\n5. It builds and logs a monthly reminder email for referrers to encourage reciprocal referrals and sends this email.\n\n### Setup steps\n\n- [ ] Set up webhook credentials for \"When Referral Form Is Submitted\" node to receive referral forms.\n- [ ] Configure Google Sheets credentials and specify the spreadsheet for referral logging in \"Log Referral To Ledger\" and \"Read Referral Ledger\" nodes.\n- [ ] Ensure email credentials are configured for the \"Send Referral Thank You Email\" and \"Send Firm Referral Notification\" and \"Send Reciprocal Referral Reminder Email\" nodes.\n- [ ] Set up and configure the compliance sub-workflows used in \"Check Compliance Before Thanking Referrer\" and \"Log Reminder For Compliance Audit\" nodes.\n- [ ] Configure the schedule trigger for the \"Send Reciprocal Referral Reminder Monthly\" node.\n\n### Customization\n\nCustomize email content in the code nodes building thank-you and reminder emails to match your branding and messaging tone. Adjust referral validation logic in the normalization code node as needed to fit your specific form data structure.",
         "width": 480,
-        "height": 940
+        "height": 896
       },
-      "id": "b1a1c001-0001-4000-8000-000000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -700,
-        -460
-      ]
+        -608,
+        -352
+      ],
+      "id": "e4770a42-502a-4de1-ae50-c59db84eae24",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Receive and validate the referral\n\nAccepts a submission from Fluent Forms or any generic JSON/form-encoded POST, trusting that a referrer name or a referrer email was provided. Anything with neither is dropped — this workflow has nothing to do with a non-referred lead.",
+        "content": "## Referral form intake and normalization\n\nReceives referral form submissions via webhook and normalizes the input data for validation.",
         "width": 640,
-        "height": 320,
+        "height": 304,
         "color": 7
       },
-      "id": "b1a1c001-0001-4000-8000-000000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -128
+      ],
+      "id": "76b695cd-73f6-41b2-a0c3-e94b0e18bf12",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Log to the ledger, then thank the referrer\n\nEvery valid referral is appended to the Google Sheets ledger first, unconditionally. The referrer only gets thanked if they left an email address and haven't opted out — the ledger entry happens either way.",
-        "width": 928,
-        "height": 320,
+        "content": "## Referral logging and validation\n\nLogs valid referrals to the Google Sheets ledger and handles invalid submissions by skipping.",
+        "width": 240,
+        "height": 592,
         "color": 7
       },
-      "id": "b1a1c001-0001-4000-8000-000000000003",
-      "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        592,
-        -200
-      ]
+        624,
+        -208
+      ],
+      "id": "491cd742-2cdd-41ac-a5c3-3c20d0f04f41",
+      "name": "Sticky Note2"
     },
     {
       "parameters": {
-        "content": "## Notify the firm\n\nAlways fires, regardless of which thank-you path was taken above — the firm gets a summary of every new referral either way.",
-        "width": 448,
-        "height": 320,
+        "content": "## Referrer email check and thank-you build\n\nChecks if referrer has an email, builds a thank-you email if so, otherwise skips to firm notification.",
+        "width": 416,
+        "height": 592,
         "color": 7
       },
-      "id": "b1a1c001-0001-4000-8000-000000000004",
-      "name": "Sticky Note3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1520,
-        -200
-      ]
+        896,
+        -304
+      ],
+      "id": "8754d856-e2bc-4341-94b1-a5607e54994c",
+      "name": "Sticky Note3"
     },
     {
       "parameters": {
-        "content": "## Monthly reciprocal-referral reminder — a second, independent branch\n\nRuns on its own schedule, completely separate from the intake branch above. Re-reads the whole ledger and surfaces any referrer who's sent 2+ referrals in the last 90 days — a business-development nudge, not an automated action. Never fires if nobody qualifies.",
-        "width": 1792,
+        "content": "## Compliance check and thank-you email send\n\nRuns compliance check on thank-you email content and conditionally sends the thank-you email or skips sending.",
+        "width": 640,
+        "height": 464,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        -352
+      ],
+      "id": "07ae10e0-5693-4bb9-9324-c2694171401b",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Firm referral notification\n\nBuilds and sends the firm's referral notification regardless of previous thank-you email outcomes.",
+        "width": 416,
         "height": 320,
         "color": 7
       },
-      "id": "b1a1c001-0001-4000-8000-000000000005",
-      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        -160
+      ],
+      "id": "da1d49ef-7466-4686-80ef-88bccae6632a",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Monthly reminder trigger and ledger read\n\nScheduled monthly trigger that initiates reading the referral ledger for referral count processing.",
+        "width": 416,
+        "height": 320,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        560
-      ]
+        608
+      ],
+      "id": "543781dc-e9fd-4dec-a7a5-df4ada58b050",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Referral counts calculation and filtering\n\nComputes referral counts by referrer over 90 days and filters those needing a reciprocity reminder.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        624
+      ],
+      "id": "117fbd08-22c2-48be-9faa-d0e5aeb4ec8e",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## Build, log, and send reminder emails\n\nBuilds the reciprocal referral reminder email, logs it for compliance, and sends the reminder to referrers.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        624
+      ],
+      "id": "1ca0cce2-516f-4bac-9ddf-bcec26515617",
+      "name": "Sticky Note8"
     },
     {
       "parameters": {
@@ -88,7 +152,7 @@
         "httpMethod": "POST"
       },
       "id": "6800aa00-0068-4000-a000-000000000001",
-      "name": "When Referral Form Is Submitted",
+      "name": "When Referral Form Submitted",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "webhookId": "6800aa00-0068-4000-b000-000000000001",
@@ -103,7 +167,7 @@
         "jsCode": "// Handles a referral-intake submission from Fluent Forms or any generic JSON/form-encoded POST --\n// same dual-format normalization approach as PAC-32's Lead-Source ROI Tracker. A submission counts\n// as a genuine referral when EITHER a referrer name OR a referrer email was provided -- confirmed\n// live that the Protomated test form only asks for a referrer's email ('Referred by'), with no\n// separate name field at all, so requiring a name here would have rejected every real referral.\n//\n// extractName()/extractEmailFromNameObject() below handle Fluent Forms' 'Name Fields' widget, which\n// submits as a NESTED OBJECT -- { first_name, last_name, email } -- rather than a plain string;\n// calling .trim() directly on that object threw a TypeError live before this was added. Kept\n// generic (handles a plain string too) since not every form/field will use the Name Fields widget.\nconst raw = $input.first().json;\nconst body = raw.body || raw;\n\nfunction extractName(value) {\n  if (value && typeof value === 'object') {\n    const first = value.first_name || value.firstName || '';\n    const last = value.last_name || value.lastName || '';\n    return `${first} ${last}`.trim();\n  }\n  return (value || '').toString().trim();\n}\n\nfunction extractEmailFromNameObject(value) {\n  return (value && typeof value === 'object' && value.email) ? String(value.email).trim() : '';\n}\n\nconst leadNameRaw = body.lead_name || body.full_name || body.name || body.names;\nconst leadName = extractName(leadNameRaw) || `${body.first_name || ''} ${body.last_name || ''}`.trim();\nconst leadEmail = (body.lead_email || body.email || body.email_address || extractEmailFromNameObject(leadNameRaw) || '').trim();\n\nconst referrerNameRaw = body.referrer_name || body.referred_by || body.referral_name || body.how_did_you_hear;\nconst referrerName = extractName(referrerNameRaw);\nconst referrerEmail = (body.referrer_email || body.referred_by_email || extractEmailFromNameObject(referrerNameRaw) || '').trim();\n\nconst referrerType = (body.referrer_type || body.referral_type || '').trim();\nconst matterType = (body.matter_type || body.practice_area || body.legal_issue || '').trim();\n\nreturn [{ json: {\n  lead_name: leadName || 'Unknown',\n  lead_email: leadEmail,\n  referrer_name: referrerName,\n  referrer_email: referrerEmail,\n  referrer_type: referrerType,\n  matter_type: matterType,\n  received_at: new Date().toISOString(),\n  is_valid_referral: !!(referrerName || referrerEmail),\n} }];"
       },
       "id": "6800aa00-0068-4000-a000-000000000002",
-      "name": "Normalize Referral Submission",
+      "name": "Normalize Referral Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -138,7 +202,7 @@
         }
       },
       "id": "6800aa00-0068-4000-a000-000000000003",
-      "name": "If Valid Referral Submission",
+      "name": "If Referral Submission Valid",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -151,7 +215,7 @@
     {
       "parameters": {},
       "id": "6800aa00-0068-4000-a000-000000000004",
-      "name": "Skip — Not A Referral",
+      "name": "Skip Invalid Referral",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -191,7 +255,7 @@
         "options": {}
       },
       "id": "6800aa00-0068-4000-a000-000000000005",
-      "name": "Log Referral To Ledger",
+      "name": "Append Referral To Ledger",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -232,11 +296,11 @@
         }
       },
       "id": "6800aa00-0068-4000-a000-000000000006",
-      "name": "If Referrer Has Email",
+      "name": "If Referrer Email Exists",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        896,
+        944,
         0
       ],
       "notes": "Yes (referrer left an email) → check compliance, then thank them personally.\nNo (name only, e.g. 'a friend told them') → route to Skip. The referral is still logged in the ledger above; there's just no address to send a thank-you to.",
@@ -245,12 +309,12 @@
     {
       "parameters": {},
       "id": "6800aa00-0068-4000-a000-000000000007",
-      "name": "Skip — No Referrer Email On File",
+      "name": "Skip Missing Referrer Email",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        1120,
-        140
+        1168,
+        144
       ],
       "notes": "The referrer's name is logged in the ledger, but no email address was captured, so there's no way to send a personal thank-you. The firm still gets notified of this referral next."
     },
@@ -259,12 +323,12 @@
         "jsCode": "// Builds a short, warm thank-you to the referrer. Deliberately never mentions the lead's legal\n// matter, practice area, or anything about their situation -- that's the lead's confidential\n// business, not the referrer's, and this workflow only ever handles operational relationship\n// management, never legal content of any kind (ABA Op. 512).\nconst item = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst referrerFirstName = (item.referrer_name || '').split(' ')[0] || 'there';\n\nconst message = `Hi ${referrerFirstName},\\n\\nWe wanted to say thank you — ${item.lead_name} recently reached out to us and mentioned you referred them. Referrals like yours mean a great deal to our firm, and we don't take that trust for granted.\\n\\nThank you again for thinking of us.\\n\\n${FIRM_NAME}`;\n\nreturn [{ json: {\n  ...item,\n  channel: 'email',\n  recipient: item.referrer_email,\n  subject: `Thank you for the referral`,\n  message,\n  template_id: 'PAC-68-referral-thank-you',\n  matter_id: '',\n} }];"
       },
       "id": "6800aa00-0068-4000-a000-000000000008",
-      "name": "Build Referral Thank You Email",
+      "name": "Build Thank You Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
-        -140
+        1168,
+        -144
       ],
       "notes": "Plain-text, deliberately light content — no case details, no practice area, nothing that could reveal anything about why the referred lead is seeking legal help. Just gratitude."
     },
@@ -292,12 +356,12 @@
         }
       },
       "id": "6800aa00-0068-4000-a000-000000000009",
-      "name": "Check Compliance Before Thanking Referrer",
+      "name": "Check Thank You Compliance",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        1344,
-        -140
+        1392,
+        -144
       ],
       "notes": "Checks whether this referrer has opted out of firm emails — a referrer is a real contact receiving an automated firm communication, so the same opt-out respect applies as any other outbound message. Appends the required unsubscribe footer and logs the attempt to the audit sheet.\n\nThe guardrail workflow ID is read from the GUARDRAIL_WORKFLOW_ID n8n Variable. This REPLACES $json with the guardrail's own response, so 'Send Referral Thank You Email' reaches back to 'Build Referral Thank You Email' by name for the subject line (confirmed pattern from PAC-65/66/67 — reading $json.subject here would be blank)."
     },
@@ -331,8 +395,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1568,
-        -140
+        1616,
+        -144
       ],
       "notes": "Yes (referrer hasn't opted out) → send the thank-you.\nNo (opted out) → route to Skip. The suppression is already logged by the guardrail.",
       "onError": "continueErrorOutput"
@@ -341,17 +405,17 @@
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
         "toEmail": "={{ $json.recipient }}",
-        "subject": "={{ $('Build Referral Thank You Email').item.json.subject }}",
+        "subject": "={{ $('Build Thank You Email').item.json.subject }}",
         "text": "={{ $json.message_out }}",
         "options": {}
       },
       "id": "6800aa00-0068-4000-a000-00000000000b",
-      "name": "Send Referral Thank You Email",
+      "name": "Send Thank You Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        1792,
-        -220
+        1840,
+        -224
       ],
       "notes": "Sends the compliance-approved thank-you — the plain-text body (message_out from the guardrail, carrying the required unsubscribe footer). Subject reaches back to 'Build Referral Thank You Email' by name since the guardrail call replaced $json.\n\nCredential: project → Credentials tab → New → search SMTP → save as 'Email account (SMTP)'.",
       "credentials": {
@@ -364,25 +428,25 @@
     {
       "parameters": {},
       "id": "6800aa00-0068-4000-a000-00000000000c",
-      "name": "Skip — Referrer Opted Out",
+      "name": "Skip Referrer Opt-Out",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        1792,
-        -60
+        1840,
+        -64
       ],
       "notes": "This referrer has opted out of firm emails. The suppression is already logged by the guardrail workflow. The referral is still in the ledger, and the firm still gets notified next."
     },
     {
       "parameters": {
-        "jsCode": "// Assembles the firm notification content -- runs regardless of which thank-you path was taken\n// (sent, suppressed for opt-out, or skipped for no email on file). Pulls the original referral\n// details back from 'Normalize Referral Submission' by name, since each of the three possible\n// upstream paths carries different fields into $json.\nconst referral = $('Normalize Referral Submission').first().json;\nconst current = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_EMAIL = $vars.FIRM_EMAIL;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL) throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nlet thankYouStatus;\nif (current.approved === true) {\n  thankYouStatus = 'Sent';\n} else if (current.approved === false) {\n  thankYouStatus = 'Not sent (referrer opted out)';\n} else {\n  thankYouStatus = 'Not sent (no referrer email on file)';\n}\n\nconst subject = `New referral: ${referral.lead_name} — via ${referral.referrer_name}`;\nconst body = `New referral logged\\n\\nLead: ${referral.lead_name}${referral.lead_email ? ' (' + referral.lead_email + ')' : ''}\\nMatter type: ${referral.matter_type || '(not specified)'}\\n\\nReferred by: ${referral.referrer_name}${referral.referrer_email ? ' (' + referral.referrer_email + ')' : ''}${referral.referrer_type ? ' — ' + referral.referrer_type : ''}\\n\\nThank-you email: ${thankYouStatus}\\nLogged to the referral ledger.`;\n\nreturn [{ json: {\n  firm_email: FIRM_EMAIL,\n  firm_from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n} }];"
+        "jsCode": "// Assembles the firm notification content -- runs regardless of which thank-you path was taken\n// (sent, suppressed for opt-out, or skipped for no email on file). Pulls the original referral\n// details back from 'Normalize Referral Submission' by name, since each of the three possible\n// upstream paths carries different fields into $json.\nconst referral = $('Normalize Referral Data').first().json;\nconst current = $input.first().json;\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_EMAIL = $vars.FIRM_EMAIL;\nconst FIRM_FROM_EMAIL = $vars.FIRM_FROM_EMAIL;\n\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL) throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nlet thankYouStatus;\nif (current.approved === true) {\n  thankYouStatus = 'Sent';\n} else if (current.approved === false) {\n  thankYouStatus = 'Not sent (referrer opted out)';\n} else {\n  thankYouStatus = 'Not sent (no referrer email on file)';\n}\n\nconst subject = `New referral: ${referral.lead_name} — via ${referral.referrer_name}`;\nconst body = `New referral logged\\n\\nLead: ${referral.lead_name}${referral.lead_email ? ' (' + referral.lead_email + ')' : ''}\\nMatter type: ${referral.matter_type || '(not specified)'}\\n\\nReferred by: ${referral.referrer_name}${referral.referrer_email ? ' (' + referral.referrer_email + ')' : ''}${referral.referrer_type ? ' — ' + referral.referrer_type : ''}\\n\\nThank-you email: ${thankYouStatus}\\nLogged to the referral ledger.`;\n\nreturn [{ json: {\n  firm_email: FIRM_EMAIL,\n  firm_from_email: FIRM_FROM_EMAIL,\n  subject,\n  message: body,\n} }];"
       },
       "id": "6800aa00-0068-4000-a000-00000000000d",
-      "name": "Build Firm Referral Notification",
+      "name": "Build Firm Notification Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2016,
+        2064,
         0
       ],
       "notes": "Converges here from all three possible thank-you outcomes (sent, opted out, no email) — same convergence pattern as PAC-32's Build Firm Alert. Always fires exactly once per referral."
@@ -396,11 +460,11 @@
         "options": {}
       },
       "id": "6800aa00-0068-4000-a000-00000000000e",
-      "name": "Send Firm Referral Notification",
+      "name": "Send Firm Notification Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2240,
+        2288,
         0
       ],
       "notes": "Emails the firm a summary of every new referral, whatever the thank-you outcome was. Same SMTP credential as the thank-you email — no separate setup.",
@@ -423,7 +487,7 @@
         }
       },
       "id": "6800aa00-0068-4000-a000-00000000000f",
-      "name": "Send Reciprocal Referral Reminder Monthly",
+      "name": "Monthly Referral Reminder Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -448,7 +512,7 @@
         "options": {}
       },
       "id": "6800aa00-0068-4000-a000-000000000010",
-      "name": "Read Referral Ledger",
+      "name": "Read Referral Ledger Data",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -469,7 +533,7 @@
         "jsCode": "// Computes, per referrer, how many referrals they've sent in the trailing 90 days. This is a\n// business-development nudge only -- it never decides who the firm should refer back to or drafts\n// anything on the firm's behalf; it just makes sure a generous referral source doesn't go unnoticed.\n//\n// Runs once for the whole ledger (not per row) since it needs every row together to compute counts.\nconst RECIPROCITY_WINDOW_DAYS = 90;\nconst rows = $input.all().map(i => i.json);\n\nconst cutoffMs = RECIPROCITY_WINDOW_DAYS * 24 * 60 * 60 * 1000;\nconst now = Date.now();\n\nconst byReferrer = {};\nfor (const row of rows) {\n  const key = (row.referrer_email || row.referrer_name || '').trim().toLowerCase();\n  if (!key) continue;\n\n  const rowDate = new Date(row.date);\n  if (isNaN(rowDate.getTime()) || now - rowDate.getTime() > cutoffMs) continue;\n\n  if (!byReferrer[key]) {\n    byReferrer[key] = {\n      referrer_name: row.referrer_name || '',\n      referrer_email: row.referrer_email || '',\n      count: 0,\n      most_recent_ms: 0,\n    };\n  }\n  byReferrer[key].count += 1;\n  if (rowDate.getTime() > byReferrer[key].most_recent_ms) byReferrer[key].most_recent_ms = rowDate.getTime();\n}\n\nreturn Object.values(byReferrer).map(r => ({ json: {\n  referrer_name: r.referrer_name,\n  referrer_email: r.referrer_email,\n  referral_count_last_90_days: r.count,\n  most_recent_referral: r.most_recent_ms ? new Date(r.most_recent_ms).toISOString() : '',\n} }));"
       },
       "id": "6800aa00-0068-4000-a000-000000000011",
-      "name": "Compute Referral Counts By Referrer",
+      "name": "Compute Referral Counts",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -503,7 +567,7 @@
         }
       },
       "id": "6800aa00-0068-4000-a000-000000000012",
-      "name": "Filter Referrers Needing A Reciprocity Nudge",
+      "name": "Filter Referrers For Reminder",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
@@ -519,7 +583,7 @@
         "options": {}
       },
       "id": "6800aa00-0068-4000-a000-000000000013",
-      "name": "Aggregate Referrers For Reminder",
+      "name": "Aggregate Referrers Data",
       "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
       "position": [
@@ -533,7 +597,7 @@
         "jsCode": "// Builds the monthly reciprocal-referral reminder digest -- a business-development nudge only,\n// never anything that decides or drafts what the firm should do about it.\nconst FIRM_NAME = $vars.FIRM_NAME;\nconst FIRM_EMAIL = $vars.FIRM_EMAIL;\nif (!FIRM_NAME) throw new Error('FIRM_NAME n8n Variable is not set. Go to Settings → Variables and add it.');\nif (!FIRM_EMAIL) throw new Error('FIRM_EMAIL n8n Variable is not set. Go to Settings → Variables and add it.');\n\nconst raw = $input.first().json.referrers || [];\n// Defensive against either shape n8n's Aggregate node might produce -- plain objects, or each\n// wrapped in its own { json: {...} }.\nconst referrers = raw.map(r => r.json || r).sort((a, b) => b.referral_count_last_90_days - a.referral_count_last_90_days);\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst subject = referrers.length\n  ? `Reciprocal referral reminder — ${referrers.length} referrer(s) to thank`\n  : `Reciprocal referral reminder — no repeat referrers this period`;\n\nconst rowsHtml = referrers.map(r => `\n  <div style=\"border-bottom:1px solid #e2e8f0;padding:10px 0;\">\n    <div style=\"font-size:14px;font-weight:600;color:#0f172a;\">${escapeHtml(r.referrer_name)}</div>\n    <div style=\"font-size:13px;color:#64748b;\">${escapeHtml(r.referrer_email || 'no email on file')} — ${r.referral_count_last_90_days} referral(s) in the last 90 days</div>\n  </div>`).join('');\n\nconst bodyHtml = referrers.length\n  ? `<div style=\"color:#334155;font-size:14px;margin-bottom:16px;\">These referrers have sent 2 or more referrals in the last 90 days. Consider a personal thank-you, a gift, or a referral back their way.</div>${rowsHtml}`\n  : `<div style=\"color:#334155;font-size:14px;\">No referrer sent 2 or more referrals in the last 90 days. Nothing to act on this month.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>\n<body style=\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\">\n  <div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">\n    <div style=\"background:#0e7490;padding:28px 32px;\">\n      <div style=\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.85;\">Reciprocal Referral Reminder</div>\n      <div style=\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\">${referrers.length} referrer(s) flagged</div>\n    </div>\n    <div style=\"padding:28px 32px;\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n\nconst textLines = referrers.length\n  ? referrers.map(r => `  • ${r.referrer_name} (${r.referrer_email || 'no email on file'}) — ${r.referral_count_last_90_days} referral(s) in the last 90 days`)\n  : ['No referrer sent 2 or more referrals in the last 90 days. Nothing to act on this month.'];\n\nconst textBody = `${subject}\\n\\n${textLines.join('\\n')}\\n\\n— ${FIRM_NAME} Referral Intake & Thank-You Loop`;\n\nreturn [{ json: {\n  channel: 'email',\n  recipient: FIRM_EMAIL,\n  subject,\n  message: textBody,\n  email_html: emailHtml,\n  template_id: 'PAC-68-reciprocal-referral-reminder',\n  matter_id: '',\n} }];"
       },
       "id": "6800aa00-0068-4000-a000-000000000014",
-      "name": "Build Reciprocal Referral Reminder Email",
+      "name": "Build Reminder Email Content",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -566,7 +630,7 @@
         }
       },
       "id": "6800aa00-0068-4000-a000-000000000015",
-      "name": "Log Reminder For Compliance Audit",
+      "name": "Log Reminder For Compliance",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -578,15 +642,15 @@
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $('Build Reciprocal Referral Reminder Email').item.json.recipient }}",
-        "subject": "={{ $('Build Reciprocal Referral Reminder Email').item.json.subject }}",
-        "text": "={{ $('Build Reciprocal Referral Reminder Email').item.json.message }}",
+        "toEmail": "={{ $('Build Reminder Email Content').item.json.recipient }}",
+        "subject": "={{ $('Build Reminder Email Content').item.json.subject }}",
+        "text": "={{ $('Build Reminder Email Content').item.json.message }}",
         "options": {},
         "emailFormat": "html",
-        "html": "={{ $('Build Reciprocal Referral Reminder Email').item.json.email_html }}"
+        "html": "={{ $('Build Reminder Email Content').item.json.email_html }}"
       },
       "id": "6800aa00-0068-4000-a000-000000000016",
-      "name": "Send Reciprocal Referral Reminder Email",
+      "name": "Send Reminder Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -604,7 +668,7 @@
   ],
   "active": false,
   "pinData": {
-    "When Referral Form Is Submitted": [
+    "When Referral Form Submitted": [
       {
         "json": {
           "headers": {
@@ -626,7 +690,7 @@
         }
       }
     ],
-    "Read Referral Ledger": [
+    "Read Referral Ledger Data": [
       {
         "json": {
           "date": "2026-06-05T10:00:00.000Z",
@@ -676,87 +740,87 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "When Referral Form Is Submitted": {
+    "When Referral Form Submitted": {
       "main": [
         [
           {
-            "node": "Normalize Referral Submission",
+            "node": "Normalize Referral Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalize Referral Submission": {
+    "Normalize Referral Data": {
       "main": [
         [
           {
-            "node": "If Valid Referral Submission",
+            "node": "If Referral Submission Valid",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Valid Referral Submission": {
+    "If Referral Submission Valid": {
       "main": [
         [
           {
-            "node": "Log Referral To Ledger",
+            "node": "Append Referral To Ledger",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — Not A Referral",
+            "node": "Skip Invalid Referral",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Referral To Ledger": {
+    "Append Referral To Ledger": {
       "main": [
         [
           {
-            "node": "If Referrer Has Email",
+            "node": "If Referrer Email Exists",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Referrer Has Email": {
+    "If Referrer Email Exists": {
       "main": [
         [
           {
-            "node": "Build Referral Thank You Email",
+            "node": "Build Thank You Email",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — No Referrer Email On File",
+            "node": "Skip Missing Referrer Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Referral Thank You Email": {
+    "Build Thank You Email": {
       "main": [
         [
           {
-            "node": "Check Compliance Before Thanking Referrer",
+            "node": "Check Thank You Compliance",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Compliance Before Thanking Referrer": {
+    "Check Thank You Compliance": {
       "main": [
         [
           {
@@ -771,135 +835,135 @@
       "main": [
         [
           {
-            "node": "Send Referral Thank You Email",
+            "node": "Send Thank You Email",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — Referrer Opted Out",
+            "node": "Skip Referrer Opt-Out",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Referral Thank You Email": {
+    "Send Thank You Email": {
       "main": [
         [
           {
-            "node": "Build Firm Referral Notification",
+            "node": "Build Firm Notification Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Skip — Referrer Opted Out": {
+    "Skip Referrer Opt-Out": {
       "main": [
         [
           {
-            "node": "Build Firm Referral Notification",
+            "node": "Build Firm Notification Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Skip — No Referrer Email On File": {
+    "Skip Missing Referrer Email": {
       "main": [
         [
           {
-            "node": "Build Firm Referral Notification",
+            "node": "Build Firm Notification Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Firm Referral Notification": {
+    "Build Firm Notification Email": {
       "main": [
         [
           {
-            "node": "Send Firm Referral Notification",
+            "node": "Send Firm Notification Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Reciprocal Referral Reminder Monthly": {
+    "Monthly Referral Reminder Trigger": {
       "main": [
         [
           {
-            "node": "Read Referral Ledger",
+            "node": "Read Referral Ledger Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Referral Ledger": {
+    "Read Referral Ledger Data": {
       "main": [
         [
           {
-            "node": "Compute Referral Counts By Referrer",
+            "node": "Compute Referral Counts",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Referral Counts By Referrer": {
+    "Compute Referral Counts": {
       "main": [
         [
           {
-            "node": "Filter Referrers Needing A Reciprocity Nudge",
+            "node": "Filter Referrers For Reminder",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Referrers Needing A Reciprocity Nudge": {
+    "Filter Referrers For Reminder": {
       "main": [
         [
           {
-            "node": "Aggregate Referrers For Reminder",
+            "node": "Aggregate Referrers Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Aggregate Referrers For Reminder": {
+    "Aggregate Referrers Data": {
       "main": [
         [
           {
-            "node": "Build Reciprocal Referral Reminder Email",
+            "node": "Build Reminder Email Content",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Reciprocal Referral Reminder Email": {
+    "Build Reminder Email Content": {
       "main": [
         [
           {
-            "node": "Log Reminder For Compliance Audit",
+            "node": "Log Reminder For Compliance",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Reminder For Compliance Audit": {
+    "Log Reminder For Compliance": {
       "main": [
         [
           {
-            "node": "Send Reciprocal Referral Reminder Email",
+            "node": "Send Reminder Email",
             "type": "main",
             "index": 0
           }
