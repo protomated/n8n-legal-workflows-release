@@ -672,7 +672,7 @@
       "typeVersion": 4,
       "position": [
         672,
-        1280
+        1040
       ],
       "notes": "Reads every ledger row so the next step can find the one matching this decision's matter_id — same 'read everything, filter in code' approach as the reminder branch, avoiding any dependency on Google Sheets' own row-filter syntax.\n\nCredential: same Google Sheets OAuth2 credential as the rest of this workflow.",
       "onError": "continueRegularOutput",
@@ -693,7 +693,7 @@
       "typeVersion": 2,
       "position": [
         896,
-        1280
+        1040
       ],
       "notes": "found is false if the matter_id in the link doesn't match any ledger row (e.g. the row was deleted, or the link is stale) — routes to a distinct error page rather than silently writing a new row."
     },
@@ -728,7 +728,7 @@
       "typeVersion": 2.3,
       "position": [
         1120,
-        1280
+        1040
       ],
       "notes": "Yes (matching row found) → update the ledger and show the confirmation page.\nNo (no ledger row matches this matter_id) → show a distinct 'not found' page without writing anything.",
       "onError": "continueErrorOutput"
@@ -793,7 +793,7 @@
       "typeVersion": 4,
       "position": [
         1344,
-        1280
+        1040
       ],
       "notes": "Updates the matching row (matched on matter_id) with the new status, retention date, and decision timestamp. This is the ONLY write this branch performs — it updates a spreadsheet row, never a Clio record, and never deletes any client data or file.\n\nCredential: same Google Sheets OAuth2 credential as the rest of this workflow.",
       "onError": "continueRegularOutput",
@@ -825,7 +825,7 @@
       "typeVersion": 1.1,
       "position": [
         1568,
-        1280
+        1040
       ],
       "notes": "Shows the attorney a plain confirmation of exactly what was recorded — reads action_label back from 'Find Matching Row And Compute Update' by name, since the Sheets update immediately upstream replaced $json with its own response. Same confirmation-page pattern as PAC-55/62."
     }
