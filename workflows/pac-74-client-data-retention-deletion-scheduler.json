@@ -828,6 +828,20 @@
         1280
       ],
       "notes": "Shows the attorney a plain confirmation of exactly what was recorded — reads action_label back from 'Find Matching Row And Compute Update' by name, since the Sheets update immediately upstream replaced $json with its own response. Same confirmation-page pattern as PAC-55/62."
+    },
+    {
+      "parameters": {
+        "jsCode": "// TESTING ONLY -- delete this node before this template ships.\n// Wipes the 'this matter was already logged' memory (scheduledMatterIds) so a matter\n// you've already scheduled during testing can flow through the scheduling branch again,\n// without needing to close a brand new matter in Clio every time you want to retest.\nconst staticData = $getWorkflowStaticData('global');\nstaticData.scheduledMatterIds = {};\nreturn [{ json: { cleared: true, message: 'scheduledMatterIds reset -- re-run \"Check For Newly Closed Matters Daily\" to re-log matters.' } }];"
+      },
+      "id": "7400aa00-0074-4000-a000-0000000000ff",
+      "name": "Clear Static Data (testing only)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        0
+      ],
+      "notes": "TEMPORARY -- testing-only node, not part of the shipped template. Click 'Execute step' on this once to wipe the dedupe memory so already-logged test matters can be re-scheduled during testing. Delete before publishing/shipping this workflow."
     }
   ],
   "active": false,
@@ -915,13 +929,39 @@
                 "id": 603,
                 "name": "Mary Major"
               }
+            },
+            {
+              "id": 17104525,
+              "display_number": "00001-Adesugba",
+              "description": "Test matter for PAC-65",
+              "status": "Closed",
+              "close_date": "2026-08-27",
+              "practice_area": null,
+              "responsible_attorney": null,
+              "client": {
+                "id": 701,
+                "name": "Ademola Adesugba"
+              }
+            },
+            {
+              "id": 17125513,
+              "display_number": "00002-Adesugba",
+              "description": "testssttsts",
+              "status": "Closed",
+              "close_date": "2026-09-01",
+              "practice_area": null,
+              "responsible_attorney": null,
+              "client": {
+                "id": 702,
+                "name": "Ademola Adesugba"
+              }
             }
           ],
           "meta": {
             "paging": {
               "next": null
             },
-            "records": 3
+            "records": 5
           }
         }
       }
