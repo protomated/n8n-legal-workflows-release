@@ -4,82 +4,82 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Client Data Retention & Deletion Scheduler\n\n### How it works\n\n1. The workflow periodically checks for newly closed legal matters and applies a retention scheduling policy.\n2. It logs retention schedules to a Google Sheets ledger.\n3. It regularly sends retention deadline reminders via email to responsible users.\n4. It processes retention decision inputs via webhook links from reminder emails.\n5. It updates the retention ledger based on decisions and responds to validation or confirmation states.\n6. A dedicated testing node allows clearing static data during development.\n\n### Setup steps\n\n- [ ] Configure credentials for Clio API access using the base URL and authorization tokens.\n- [ ] Set up Google Sheets credentials and designate the retention ledger sheet.\n- [ ] Configure SMTP or email sending credentials for sending reminder emails.\n- [ ] Define firm's retention policy parameters in the code node for scheduling retention.\n- [ ] Deploy the webhook trigger URL for handling retention decision inputs.\n\n### Customization\n\nModify the retention policy logic in the 'Check If Retention Needs Scheduling' code node to adapt to changing legal requirements or firm policies. Adjust email templates and escalation timing in the reminder email build steps as needed.",
+        "content": "## Client Data Retention & Deletion Scheduler\n\n### How it works\n\nThis workflow has THREE independent parts on one canvas:\n\n**A. Schedule new retention reviews (top row)**\nRuns daily. Fetches every Clio matter with status Closed, applies the firm's own retention policy (by practice area, falling back to a firm-wide default), and logs a new row to a Google Sheets ledger with the computed retention review/deletion date — but only once per matter, ever (tracked via n8n's own workflow static data).\n\n**B. Escalate reminders (middle row)**\nRuns daily, independently. Re-reads the ledger and escalates at 90/30/7 days before each matter's retention date, plus a continuous daily alert for as long as a deadline has passed and nothing's been decided — same escalation philosophy as PAC-67's Statute of Limitations Watchdog. Each reminder email gives the responsible attorney three one-click actions: Confirm Deletion, Extend Retention, or Place on Legal Hold.\n\n**C. Record the attorney's decision (bottom row)**\nA webhook that fires when one of those links is clicked. Updates the ledger with the decision and timestamp, and shows a confirmation page. **This workflow never deletes anything itself, under any circumstance.** \"Confirm Deletion\" only records that the attorney has authorized it — actually carrying out the deletion in Clio and any document management system remains a manual, human-executed step every time (ABA Op. 512 — this is pure scheduling and record-keeping, never a legal or destructive action taken automatically).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — reminder logging goes through it.\n- [ ] Create a Google Sheet with a 'Retention' tab and EXACTLY these column headers (a missing one silently loses that field — confirmed live the hard way): matter_id, matter_ref, matter_description, practice_area, client_name, close_date, retention_years_applied, retention_deadline, attorney_name, attorney_email, status, last_action, last_action_at.\n- [ ] Configure Clio OAuth2, Google Sheets OAuth2, and SMTP credentials.\n- [ ] Edit RETENTION_POLICY_YEARS in 'Check If Retention Needs Scheduling' to match your firm's actual retention policy by practice area — this is the one node every firm must customize before going live.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, RETENTION_LEDGER_SHEET_ID, RETENTION_DECISION_WEBHOOK_URL (copy this from 'When Retention Decision Is Made' → Production URL, after activating).\n- [ ] Activate the workflow.\n\n### Customization\n\nRETENTION_POLICY_YEARS is the entire policy surface — add one entry per practice area your firm handles; anything not listed uses DEFAULT_RETENTION_YEARS. The 90/30/7-day escalation tiers are set at the top of 'Compute Retention Escalation Tier' if your firm wants different timing.",
         "width": 480,
-        "height": 896
+        "height": 1160
       },
+      "id": "b1a1c001-0001-4000-8000-000000000001",
+      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -608,
-        -256
-      ],
-      "id": "e36c59f0-d8bc-434e-a1a6-14c1f65babce",
-      "name": "Sticky Note"
+        -700,
+        -460
+      ]
     },
     {
       "parameters": {
-        "content": "## Schedule and fetch closed matters\n\nThis group starts the workflow with a daily trigger that fetches firm users and closed matters from Clio, then processes and filters the matters to determine retention scheduling needs according to the firm's policy. It ends by logging new retention schedules to Google Sheets.",
-        "width": 1760,
-        "height": 304,
+        "content": "## Find newly closed matters\n\nFetches every Clio matter with status Closed, then drops anything without a usable close date.",
+        "width": 928,
+        "height": 320,
         "color": 7
       },
+      "id": "b1a1c001-0001-4000-8000-000000000002",
+      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -128
-      ],
-      "id": "252ab40b-a261-470b-88ac-876afa3b0660",
-      "name": "Sticky Note1"
+        -200
+      ]
     },
     {
       "parameters": {
-        "content": "## Send retention reminders daily\n\nThis cluster triggers daily to read the retention ledger, determine which matters need reminders based on escalation tiers, builds reminder emails with actionable items, logs the reminders for auditing, and then sends the reminder emails out.",
-        "width": 1760,
-        "height": 304,
+        "content": "## Apply the retention policy and log it\n\nComputes the retention review date from the firm's own practice-area policy, then logs one ledger row per matter — ever, tracked via static data so re-running this never creates duplicates.",
+        "width": 448,
+        "height": 320,
         "color": 7
       },
+      "id": "b1a1c001-0001-4000-8000-000000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Escalate reminders — a second, independent daily branch\n\nRe-reads the whole ledger fresh every day. Only 'scheduled' rows (not yet confirmed, extended, or held) can ever alert. 90/30/7-day tiers each fire once; overdue fires every day until resolved — same philosophy as PAC-67's Statute of Limitations Watchdog. Each reminder gives the attorney three click-through actions, never an automatic deletion.",
+        "width": 2016,
+        "height": 320,
+        "color": 7
+      },
+      "id": "b1a1c001-0001-4000-8000-000000000004",
+      "name": "Sticky Note3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        512
-      ],
-      "id": "caa5c6b5-bec9-442e-9809-2e2a84597392",
-      "name": "Sticky Note2"
+        480
+      ]
     },
     {
       "parameters": {
-        "content": "## Process retention decision webhook\n\nThis group handles incoming retention decision webhook triggers, parses the requests, validates them, reads the retention ledger, and updates the ledger based on decisions. It also provides user feedback pages for invalid links, unrecognized matters, or confirms successful updates.",
-        "width": 1760,
-        "height": 464,
-        "color": 7
+        "content": "## Record the attorney's decision — a third, independent branch\n\nA webhook fired by clicking one of the reminder email's three links. Confirm/Extend/Hold only ever updates the ledger and shows a confirmation page — actually deleting anything in Clio or a document management system always remains a separate, manual, human-executed step. This workflow has no code path that deletes client data.",
+        "width": 2560,
+        "height": 320,
+        "color": 4
       },
+      "id": "b1a1c001-0001-4000-8000-000000000005",
+      "name": "Sticky Note4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        1152
-      ],
-      "id": "16e82548-d4b4-4dee-86f7-b33ea0d55a4f",
-      "name": "Sticky Note3"
-    },
-    {
-      "parameters": {
-        "content": "## Testing and data clearing node\n\nThis isolated node is intended for testing purposes only and allows clearing static data; it should be removed before deploying the workflow to production.",
-        "width": 240,
-        "height": 416,
-        "color": 7
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1760,
-        -256
-      ],
-      "id": "b86cde9c-0091-4b9f-b6f4-a73a23315e92",
-      "name": "Sticky Note4"
+        960
+      ]
     },
     {
       "parameters": {
@@ -93,7 +93,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000001",
-      "name": "Every Morning at 6am",
+      "name": "Check For Newly Closed Matters Daily",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -131,7 +131,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000002",
-      "name": "Fetch Firm Users from Clio API",
+      "name": "Fetch Firm Users From Clio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -180,7 +180,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000003",
-      "name": "Fetch Closed Matters from Clio",
+      "name": "Fetch Closed Matters From Clio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -202,7 +202,7 @@
         "options": {}
       },
       "id": "7400aa00-0074-4000-a000-000000000004",
-      "name": "Split Closed Matter Records",
+      "name": "Split Out Closed Matter Records",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
       "position": [
@@ -236,7 +236,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000005",
-      "name": "Filter Matters With Close Date",
+      "name": "Filter Closed Matters With Close Date",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
@@ -248,10 +248,10 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Applies the firm's own retention policy to a newly closed matter and computes its retention\n// review/deletion date. This workflow only calculates and tracks that date -- it never deletes\n// anything itself. Every actual retention decision (confirm, extend, place on legal hold) requires\n// the responsible attorney to click through from a reminder email, and even 'confirm' only records\n// authorization -- the real deletion always happens as a separate manual step (ABA Op. 512: pure\n// scheduling and record-keeping, never a legal determination about what must be kept or destroyed).\n//\n// Dedupe uses n8n's own workflow static data, keyed by matter id, so a matter only ever gets ONE\n// ledger row -- once scheduled, later runs skip it even though the Clio fetch keeps returning it.\nconst matter = $json;\n\n// ⚙️ Edit this map to match your firm's actual retention policy by practice area (in years).\n// Anything not listed here falls back to DEFAULT_RETENTION_YEARS.\nconst RETENTION_POLICY_YEARS = {\n  'Personal Injury': 7,\n  'Family Law': 7,\n  'Estate Planning': 10,\n  'Business Law': 7,\n  'Criminal Defense': 10,\n};\nconst DEFAULT_RETENTION_YEARS = Number($vars.DEFAULT_RETENTION_YEARS || 7);\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.scheduledMatterIds) staticData.scheduledMatterIds = {};\nconst alreadyScheduled = !!staticData.scheduledMatterIds[matter.id];\n\nconst practiceAreaName = (matter.practice_area && matter.practice_area.name) || '';\nconst retentionYears = RETENTION_POLICY_YEARS[practiceAreaName] || DEFAULT_RETENTION_YEARS;\n\nconst closeDateStr = matter.close_date.includes('T') ? matter.close_date : matter.close_date + 'T12:00:00Z';\nconst retentionDeadline = new Date(closeDateStr);\nretentionDeadline.setFullYear(retentionDeadline.getFullYear() + retentionYears);\n\nconst users = ($('Fetch Firm Users from Clio API').first().json.data) || [];\nconst attorneyId = (matter.responsible_attorney && matter.responsible_attorney.id) || null;\nconst attorney = attorneyId ? users.find(u => u.id === attorneyId && u.enabled !== false) : null;\n\nconst needsScheduling = !alreadyScheduled;\nif (needsScheduling) {\n  staticData.scheduledMatterIds[matter.id] = true;\n}\n\nreturn { json: {\n  matter_id: matter.id,\n  matter_ref: matter.display_number || '',\n  matter_description: matter.description || '',\n  practice_area: practiceAreaName,\n  client_name: (matter.client && matter.client.name) || '',\n  close_date: matter.close_date,\n  retention_years_applied: retentionYears,\n  retention_deadline: retentionDeadline.toISOString().slice(0, 10),\n  attorney_name: (attorney && attorney.name) || '',\n  attorney_email: (attorney && attorney.email) || '',\n  needs_scheduling: needsScheduling,\n} };"
+        "jsCode": "// Applies the firm's own retention policy to a newly closed matter and computes its retention\n// review/deletion date. This workflow only calculates and tracks that date -- it never deletes\n// anything itself. Every actual retention decision (confirm, extend, place on legal hold) requires\n// the responsible attorney to click through from a reminder email, and even 'confirm' only records\n// authorization -- the real deletion always happens as a separate manual step (ABA Op. 512: pure\n// scheduling and record-keeping, never a legal determination about what must be kept or destroyed).\n//\n// Dedupe uses n8n's own workflow static data, keyed by matter id, so a matter only ever gets ONE\n// ledger row -- once scheduled, later runs skip it even though the Clio fetch keeps returning it.\nconst matter = $json;\n\n// ⚙️ Edit this map to match your firm's actual retention policy by practice area (in years).\n// Anything not listed here falls back to DEFAULT_RETENTION_YEARS.\nconst RETENTION_POLICY_YEARS = {\n  'Personal Injury': 7,\n  'Family Law': 7,\n  'Estate Planning': 10,\n  'Business Law': 7,\n  'Criminal Defense': 10,\n};\nconst DEFAULT_RETENTION_YEARS = Number($vars.DEFAULT_RETENTION_YEARS || 7);\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.scheduledMatterIds) staticData.scheduledMatterIds = {};\nconst alreadyScheduled = !!staticData.scheduledMatterIds[matter.id];\n\nconst practiceAreaName = (matter.practice_area && matter.practice_area.name) || '';\nconst retentionYears = RETENTION_POLICY_YEARS[practiceAreaName] || DEFAULT_RETENTION_YEARS;\n\nconst closeDateStr = matter.close_date.includes('T') ? matter.close_date : matter.close_date + 'T12:00:00Z';\nconst retentionDeadline = new Date(closeDateStr);\nretentionDeadline.setFullYear(retentionDeadline.getFullYear() + retentionYears);\n\nconst users = ($('Fetch Firm Users From Clio').first().json.data) || [];\nconst attorneyId = (matter.responsible_attorney && matter.responsible_attorney.id) || null;\nconst attorney = attorneyId ? users.find(u => u.id === attorneyId && u.enabled !== false) : null;\n\nconst needsScheduling = !alreadyScheduled;\nif (needsScheduling) {\n  staticData.scheduledMatterIds[matter.id] = true;\n}\n\nreturn { json: {\n  matter_id: matter.id,\n  matter_ref: matter.display_number || '',\n  matter_description: matter.description || '',\n  practice_area: practiceAreaName,\n  client_name: (matter.client && matter.client.name) || '',\n  close_date: matter.close_date,\n  retention_years_applied: retentionYears,\n  retention_deadline: retentionDeadline.toISOString().slice(0, 10),\n  attorney_name: (attorney && attorney.name) || '',\n  attorney_email: (attorney && attorney.email) || '',\n  needs_scheduling: needsScheduling,\n} };"
       },
       "id": "7400aa00-0074-4000-a000-000000000006",
-      "name": "Compute Retention for Closed Matter",
+      "name": "Check If Retention Needs Scheduling",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -286,7 +286,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000007",
-      "name": "Filter Matters for Retention Scheduling",
+      "name": "Filter Matters Needing Retention Scheduling",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
@@ -331,7 +331,7 @@
         "options": {}
       },
       "id": "7400aa00-0074-4000-a000-000000000008",
-      "name": "Append Retention Schedule to Sheets",
+      "name": "Log New Retention Schedule",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -359,7 +359,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000009",
-      "name": "Every Morning at 7am",
+      "name": "Send Retention Deadline Reminders Daily",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -384,7 +384,7 @@
         "options": {}
       },
       "id": "7400aa00-0074-4000-a000-00000000000a",
-      "name": "Read Retention Ledger from Sheets",
+      "name": "Read Retention Ledger",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -425,7 +425,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-00000000000b",
-      "name": "Filter Still Scheduled Ledger Entries",
+      "name": "Filter Ledger Entries Still Scheduled",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
@@ -475,7 +475,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-00000000000d",
-      "name": "Filter Alerts Due Today",
+      "name": "Filter Entries Needing An Alert Today",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
@@ -523,7 +523,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-00000000000f",
-      "name": "Log Retention Reminder for Audit",
+      "name": "Log Reminder For Compliance Audit",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -566,7 +566,7 @@
         "responseMode": "responseNode"
       },
       "id": "7400aa00-0074-4000-a000-000000000011",
-      "name": "Retention Decision Webhook Trigger",
+      "name": "When Retention Decision Is Made",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "webhookId": "7400aa00-0074-4000-b000-000000000011",
@@ -616,7 +616,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000013",
-      "name": "If Retention Decision Request Valid",
+      "name": "If Decision Request Is Valid",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -642,7 +642,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000014",
-      "name": "Respond Invalid Decision Link",
+      "name": "Respond Invalid Link Page",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -667,7 +667,7 @@
         "options": {}
       },
       "id": "7400aa00-0074-4000-a000-000000000015",
-      "name": "Read Ledger for Retention Decision",
+      "name": "Read Retention Ledger For Decision",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -688,7 +688,7 @@
         "jsCode": "// Finds the ledger row matching this decision's matter_id and computes what should change.\n// 'confirm' only ever records authorization -- it never deletes anything; carrying out the actual\n// deletion in Clio and any document management system is always a separate, manual step for the\n// firm afterward. 'extend' pushes the retention deadline out by a firm-configured number of years.\n// 'hold' places the matter on an indefinite legal hold, which the reminder branch's status filter\n// already excludes from all future alerts.\nconst decision = $('Parse Retention Decision Request').first().json;\nconst rows = $input.all().map(i => i.json);\nconst row = rows.find(r => String(r.matter_id) === decision.matter_id);\n\nif (!row) {\n  return [{ json: { found: false, matter_id: decision.matter_id, action: decision.action } }];\n}\n\nconst EXTENSION_YEARS = Number($vars.RETENTION_EXTENSION_YEARS || 1);\nconst nowIso = new Date().toISOString();\n\nlet newStatus = row.status;\nlet newDeadline = row.retention_deadline;\nlet actionLabel = '';\n\nif (decision.action === 'confirm') {\n  newStatus = 'confirmed_for_deletion';\n  actionLabel = 'Deletion confirmed. This authorization has been recorded — the actual deletion still needs to be carried out manually in Clio and your document management system, then marked done.';\n} else if (decision.action === 'extend') {\n  newStatus = 'scheduled';\n  const deadlineStr = String(row.retention_deadline).includes('T') ? row.retention_deadline : row.retention_deadline + 'T12:00:00Z';\n  const deadlineDate = new Date(deadlineStr);\n  deadlineDate.setFullYear(deadlineDate.getFullYear() + EXTENSION_YEARS);\n  newDeadline = deadlineDate.toISOString().slice(0, 10);\n  actionLabel = `Retention extended by ${EXTENSION_YEARS} year(s) — new review date ${newDeadline}.`;\n} else if (decision.action === 'hold') {\n  newStatus = 'legal_hold';\n  actionLabel = 'This matter has been placed on an indefinite legal hold. No further retention reminders will be sent.';\n}\n\nreturn [{ json: {\n  found: true,\n  matter_id: row.matter_id,\n  matter_ref: row.matter_ref,\n  status: newStatus,\n  retention_deadline: newDeadline,\n  last_action: decision.action,\n  last_action_at: nowIso,\n  action_label: actionLabel,\n} }];"
       },
       "id": "7400aa00-0074-4000-a000-000000000016",
-      "name": "Find Ledger Row and Compute Update",
+      "name": "Find Matching Row And Compute Update",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -723,7 +723,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000017",
-      "name": "If Retention Matter Found in Ledger",
+      "name": "If Matter Found In Ledger",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -749,7 +749,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-000000000018",
-      "name": "Respond Retention Matter Not Found",
+      "name": "Respond Matter Not Found Page",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -788,7 +788,7 @@
         "options": {}
       },
       "id": "7400aa00-0074-4000-a000-000000000019",
-      "name": "Update Retention Ledger with Decision",
+      "name": "Update Retention Ledger With Decision",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -807,7 +807,7 @@
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ '<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body style=\"font-family:-apple-system,\\'Segoe UI\\',Roboto,Helvetica,Arial,sans-serif;background:#f8fafc;margin:0;padding:0;\"><div style=\"max-width:420px;margin:80px auto;background:#ffffff;border-radius:12px;padding:36px 32px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.08);\"><div style=\"font-size:40px;line-height:1;margin-bottom:12px;\">✅</div><div style=\"font-size:16px;color:#1e293b;font-weight:600;margin-bottom:6px;\">Recorded</div><div style=\"font-size:14px;color:#64748b;line-height:1.5;\">' + $('Find Ledger Row and Compute Update').item.json.action_label + '</div></div></body></html>' }}",
+        "responseBody": "={{ '<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body style=\"font-family:-apple-system,\\'Segoe UI\\',Roboto,Helvetica,Arial,sans-serif;background:#f8fafc;margin:0;padding:0;\"><div style=\"max-width:420px;margin:80px auto;background:#ffffff;border-radius:12px;padding:36px 32px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.08);\"><div style=\"font-size:40px;line-height:1;margin-bottom:12px;\">✅</div><div style=\"font-size:16px;color:#1e293b;font-weight:600;margin-bottom:6px;\">Recorded</div><div style=\"font-size:14px;color:#64748b;line-height:1.5;\">' + $('Find Matching Row And Compute Update').item.json.action_label + '</div></div></body></html>' }}",
         "options": {
           "responseHeaders": {
             "entries": [
@@ -820,7 +820,7 @@
         }
       },
       "id": "7400aa00-0074-4000-a000-00000000001a",
-      "name": "Respond Decision Confirmation",
+      "name": "Respond Decision Confirmation Page",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -828,25 +828,11 @@
         1280
       ],
       "notes": "Shows the attorney a plain confirmation of exactly what was recorded — reads action_label back from 'Find Matching Row And Compute Update' by name, since the Sheets update immediately upstream replaced $json with its own response. Same confirmation-page pattern as PAC-55/62."
-    },
-    {
-      "parameters": {
-        "jsCode": "// TESTING ONLY -- delete this node before this template ships.\n// Wipes the 'this matter was already logged' memory (scheduledMatterIds) so a matter\n// you've already scheduled during testing can flow through the scheduling branch again,\n// without needing to close a brand new matter in Clio every time you want to retest.\nconst staticData = $getWorkflowStaticData('global');\nstaticData.scheduledMatterIds = {};\nreturn [{ json: { cleared: true, message: 'scheduledMatterIds reset -- re-run \"Check For Newly Closed Matters Daily\" to re-log matters.' } }];"
-      },
-      "id": "7400aa00-0074-4000-a000-0000000000ff",
-      "name": "Clear Static Data for Testing Only",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1800,
-        0
-      ],
-      "notes": "TEMPORARY -- testing-only node, not part of the shipped template. Click 'Execute step' on this once to wipe the dedupe memory so already-logged test matters can be re-scheduled during testing. Delete before publishing/shipping this workflow."
     }
   ],
   "active": false,
   "pinData": {
-    "Fetch Firm Users from Clio API": [
+    "Fetch Firm Users From Clio": [
       {
         "json": {
           "data": [
@@ -872,7 +858,7 @@
         }
       }
     ],
-    "Fetch Closed Matters from Clio": [
+    "Fetch Closed Matters From Clio": [
       {
         "json": {
           "data": [
@@ -966,7 +952,7 @@
         }
       }
     ],
-    "Read Retention Ledger from Sheets": [
+    "Read Retention Ledger": [
       {
         "json": {
           "matter_id": "41010",
@@ -1016,7 +1002,7 @@
         }
       }
     ],
-    "Retention Decision Webhook Trigger": [
+    "When Retention Decision Is Made": [
       {
         "json": {
           "query": {
@@ -1032,7 +1018,7 @@
         }
       }
     ],
-    "Read Ledger for Retention Decision": [
+    "Read Retention Ledger For Decision": [
       {
         "json": {
           "matter_id": "41010",
@@ -1062,106 +1048,106 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Every Morning at 6am": {
+    "Check For Newly Closed Matters Daily": {
       "main": [
         [
           {
-            "node": "Fetch Firm Users from Clio API",
+            "node": "Fetch Firm Users From Clio",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Firm Users from Clio API": {
+    "Fetch Firm Users From Clio": {
       "main": [
         [
           {
-            "node": "Fetch Closed Matters from Clio",
+            "node": "Fetch Closed Matters From Clio",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Closed Matters from Clio": {
+    "Fetch Closed Matters From Clio": {
       "main": [
         [
           {
-            "node": "Split Closed Matter Records",
+            "node": "Split Out Closed Matter Records",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Split Closed Matter Records": {
+    "Split Out Closed Matter Records": {
       "main": [
         [
           {
-            "node": "Filter Matters With Close Date",
+            "node": "Filter Closed Matters With Close Date",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Matters With Close Date": {
+    "Filter Closed Matters With Close Date": {
       "main": [
         [
           {
-            "node": "Compute Retention for Closed Matter",
+            "node": "Check If Retention Needs Scheduling",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Retention for Closed Matter": {
+    "Check If Retention Needs Scheduling": {
       "main": [
         [
           {
-            "node": "Filter Matters for Retention Scheduling",
+            "node": "Filter Matters Needing Retention Scheduling",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Matters for Retention Scheduling": {
+    "Filter Matters Needing Retention Scheduling": {
       "main": [
         [
           {
-            "node": "Append Retention Schedule to Sheets",
+            "node": "Log New Retention Schedule",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Every Morning at 7am": {
+    "Send Retention Deadline Reminders Daily": {
       "main": [
         [
           {
-            "node": "Read Retention Ledger from Sheets",
+            "node": "Read Retention Ledger",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Retention Ledger from Sheets": {
+    "Read Retention Ledger": {
       "main": [
         [
           {
-            "node": "Filter Still Scheduled Ledger Entries",
+            "node": "Filter Ledger Entries Still Scheduled",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Still Scheduled Ledger Entries": {
+    "Filter Ledger Entries Still Scheduled": {
       "main": [
         [
           {
@@ -1176,14 +1162,14 @@
       "main": [
         [
           {
-            "node": "Filter Alerts Due Today",
+            "node": "Filter Entries Needing An Alert Today",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Alerts Due Today": {
+    "Filter Entries Needing An Alert Today": {
       "main": [
         [
           {
@@ -1198,14 +1184,14 @@
       "main": [
         [
           {
-            "node": "Log Retention Reminder for Audit",
+            "node": "Log Reminder For Compliance Audit",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Retention Reminder for Audit": {
+    "Log Reminder For Compliance Audit": {
       "main": [
         [
           {
@@ -1216,7 +1202,7 @@
         ]
       ]
     },
-    "Retention Decision Webhook Trigger": {
+    "When Retention Decision Is Made": {
       "main": [
         [
           {
@@ -1231,76 +1217,76 @@
       "main": [
         [
           {
-            "node": "If Retention Decision Request Valid",
+            "node": "If Decision Request Is Valid",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Retention Decision Request Valid": {
+    "If Decision Request Is Valid": {
       "main": [
         [
           {
-            "node": "Read Ledger for Retention Decision",
+            "node": "Read Retention Ledger For Decision",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Respond Invalid Decision Link",
+            "node": "Respond Invalid Link Page",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Ledger for Retention Decision": {
+    "Read Retention Ledger For Decision": {
       "main": [
         [
           {
-            "node": "Find Ledger Row and Compute Update",
+            "node": "Find Matching Row And Compute Update",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Find Ledger Row and Compute Update": {
+    "Find Matching Row And Compute Update": {
       "main": [
         [
           {
-            "node": "If Retention Matter Found in Ledger",
+            "node": "If Matter Found In Ledger",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Retention Matter Found in Ledger": {
+    "If Matter Found In Ledger": {
       "main": [
         [
           {
-            "node": "Update Retention Ledger with Decision",
+            "node": "Update Retention Ledger With Decision",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Respond Retention Matter Not Found",
+            "node": "Respond Matter Not Found Page",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Update Retention Ledger with Decision": {
+    "Update Retention Ledger With Decision": {
       "main": [
         [
           {
-            "node": "Respond Decision Confirmation",
+            "node": "Respond Decision Confirmation Page",
             "type": "main",
             "index": 0
           }
