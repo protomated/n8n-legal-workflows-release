@@ -21,7 +21,9 @@ Get value in under 15 minutes. When a matter closes in Clio, this workflow appli
 
 **Your firm's retention policy lives in one code node, not a config file.** Open `Check If Retention Needs Scheduling` and edit the `RETENTION_POLICY_YEARS` map to match your actual policy by practice area. This is the one thing every firm must customize before going live — the defaults in this template are placeholder examples, not a real policy recommendation.
 
-**Not yet independently confirmed live:** the exact Clio field name for a matter's closed date (`close_date` is this template's best guess, matching Clio's naming convention and the "Closed date" label visible in Clio's own UI) and whether `practice_area{id,name}` reads the same way it's confirmed writable when creating a matter (PAC-20). Check `Fetch Closed Matters From Clio`'s raw output on your first real run and adjust field names if Clio rejects either.
+**Confirmed live:** `close_date` and `practice_area{id,name}` both read correctly from `Fetch Closed Matters From Clio` — though on real test matters with no practice area or responsible attorney assigned in Clio, those fields correctly come back blank and the template falls back to `DEFAULT_RETENTION_YEARS` and `FIRM_EMAIL` respectively, exactly as designed. Google Sheets also confirmed to return date columns back as the exact plain-text string they were written as (no reformatting).
+
+**Confirmed live, the hard way: every column header in the Retention sheet must be spelled exactly right, or that field silently has nowhere to go.** A sheet missing the `status`/`last_action`/`last_action_at` headers caused every ledger row to come back with an empty `status` on read — which made `Filter Ledger Entries Still Scheduled` in Branch B drop every single row and never send a reminder, with no error anywhere to point at the cause. Copy the column list in Step 1 exactly; don't rely on whatever a spreadsheet UI suggests auto-adding.
 
 ---
 
@@ -39,7 +41,7 @@ Get value in under 15 minutes. When a matter closes in Clio, this workflow appli
 Create a new Google Sheet. Add a tab named exactly **Retention** with these column headers in row 1:
 
 ```
-matter_id | matter_ref | matter_description | practice_area | client_name | close_date | retention_deadline | attorney_name | attorney_email | status | last_action | last_action_at
+matter_id | matter_ref | matter_description | practice_area | client_name | close_date | retention_years_applied | retention_deadline | attorney_name | attorney_email | status | last_action | last_action_at
 ```
 
 Copy the Sheet's ID from its URL — the long string between `/d/` and `/edit`.
@@ -116,7 +118,9 @@ The workflow ships with pinned sample data across all Clio- and Sheets-facing no
 9. Edit the pinned webhook data's `action` to `confirm`, then to `hold`, re-running each time, and confirm the correct status and message for each.
 10. Edit the pinned webhook data's `matter_id` to something not in the ledger (e.g. `99999`) and confirm it routes to **"Respond Matter Not Found Page"**.
 
-**Testing against your real setup:** unpin every Clio- and Sheets-facing node, connect real credentials, close a real test matter in Clio, and manually run the scheduling branch — then manually run the reminder branch and click one of the three links in the actual delivered email to confirm the full round trip.
+**Testing against your real setup:** unpin every Clio- and Sheets-facing node, connect real credentials, close a real test matter in Clio, and manually run the scheduling branch (Execute step from `Check For Newly Closed Matters Daily` — don't wait for 6am). A real retention deadline will land years in the future, so to test the reminder branch without waiting: open the Sheet, edit that row's `retention_deadline` cell to a few days from today, and set `attorney_email` to an inbox you can check — then manually run the reminder branch (Execute step from `Send Retention Deadline Reminders Daily`) and click one of the three links in the actual delivered email to confirm the full round trip.
+
+**If a real run produces rows with an empty `status` and Branch B never alerts on anything:** double-check every column header in your Sheet against the exact list in Step 1 — a single missing or misspelled header (most commonly `status`) silently drops that field with no error, which is exactly what happened during this template's own live testing.
 
 ---
 
