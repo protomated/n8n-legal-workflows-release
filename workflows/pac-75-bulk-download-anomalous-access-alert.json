@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "content": "## Watch for bulk downloads and access bursts\n\nEvery hour, pulls Google Drive access activity, counts downloads/views per user, and emails the firm admin the moment anyone crosses a threshold — with the matter, user, and volume. A per-user cooldown keeps it from re-alerting every hour while still elevated.",
+        "content": "## Watch for bulk downloads and access bursts\n\nEvery hour, pulls Google Drive access activity, counts downloads/views per user, and checks two independent signals: volume over threshold, and access from an IP never seen from that user before. Either one emails the firm admin — with the matter, user, and volume. A per-user cooldown keeps it from re-alerting every hour while still elevated.",
         "width": 640,
         "height": 560,
         "color": 7
@@ -125,7 +125,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Pulls the useful fields out of one raw Google Workspace Drive audit-log entry and tags whether\n// it's an access-relevant event (view/download/print) worth counting toward this hour's totals.\n// Also tries to recognize the firm's own matter numbering convention in the file name so the\n// eventual alert can say WHICH MATTER was touched, not just which file.\nconst item = $json;\nconst actorEmail = (item.actor && item.actor.email) || 'unknown@unknown';\nconst event = (item.events && item.events[0]) || {};\nconst eventType = event.name || 'unknown';\nconst params = event.parameters || [];\nfunction getParam(paramName) {\n  const p = params.find(p => p.name === paramName);\n  if (!p) return '';\n  return p.value || (p.multiValue && p.multiValue.join(', ')) || '';\n}\nconst docTitle = getParam('doc_title') || '(untitled document)';\nconst timestamp = (item.id && item.id.time) || '';\n\n// ⚙️ Edit this to match your firm's actual matter numbering convention.\nconst MATTER_REF_PATTERN = /\\d{4}-[A-Z]{2}-\\d{3}/;\nconst matterMatch = docTitle.match(MATTER_REF_PATTERN);\nconst matterRef = matterMatch ? matterMatch[0] : 'Unmatched / General Files';\n\nconst ACCESS_EVENTS = ['view', 'download', 'print'];\nconst DOWNLOAD_EVENTS = ['download', 'print'];\n\nreturn { json: {\n  actor_email: actorEmail,\n  event_type: eventType,\n  doc_title: docTitle,\n  matter_ref: matterRef,\n  timestamp,\n  is_access_event: ACCESS_EVENTS.includes(eventType),\n  is_download_event: DOWNLOAD_EVENTS.includes(eventType),\n} };",
+        "jsCode": "// Pulls the useful fields out of one raw Google Workspace Drive audit-log entry and tags whether\n// it's an access-relevant event (view/download/print) worth counting toward this hour's totals.\n// Also tries to recognize the firm's own matter numbering convention in the file name so the\n// eventual alert can say WHICH MATTER was touched, not just which file, and carries the source IP\n// through for the separate new-location anomaly check downstream.\nconst item = $json;\nconst actorEmail = (item.actor && item.actor.email) || 'unknown@unknown';\nconst event = (item.events && item.events[0]) || {};\nconst eventType = event.name || 'unknown';\nconst params = event.parameters || [];\nfunction getParam(paramName) {\n  const p = params.find(p => p.name === paramName);\n  if (!p) return '';\n  return p.value || (p.multiValue && p.multiValue.join(', ')) || '';\n}\nconst docTitle = getParam('doc_title') || '(untitled document)';\nconst timestamp = (item.id && item.id.time) || '';\nconst ipAddress = (item.id && item.id.ipAddress) || '';\n\n// ⚙️ Edit this to match your firm's actual matter numbering convention.\nconst MATTER_REF_PATTERN = /\\d{4}-[A-Z]{2}-\\d{3}/;\nconst matterMatch = docTitle.match(MATTER_REF_PATTERN);\nconst matterRef = matterMatch ? matterMatch[0] : 'Unmatched / General Files';\n\nconst ACCESS_EVENTS = ['view', 'download', 'print'];\nconst DOWNLOAD_EVENTS = ['download', 'print'];\n\nreturn { json: {\n  actor_email: actorEmail,\n  event_type: eventType,\n  doc_title: docTitle,\n  matter_ref: matterRef,\n  timestamp,\n  ip_address: ipAddress,\n  is_access_event: ACCESS_EVENTS.includes(eventType),\n  is_download_event: DOWNLOAD_EVENTS.includes(eventType),\n} };",
         "mode": "runOnceForEachItem"
       },
       "id": "7500aa00-0075-4000-a000-0000000013",
@@ -175,7 +175,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Groups this hour's access events by user, so each user's total volume can be checked against\n// the firm's thresholds in one place, with the matters and file names they touched attached.\nconst items = $input.all().map(i => i.json);\nconst byUser = {};\nfor (const it of items) {\n  if (!byUser[it.actor_email]) {\n    byUser[it.actor_email] = { actor_email: it.actor_email, access_count: 0, download_count: 0, matterCounts: {}, sampleTitles: [] };\n  }\n  const u = byUser[it.actor_email];\n  u.access_count += 1;\n  if (it.is_download_event) u.download_count += 1;\n  u.matterCounts[it.matter_ref] = (u.matterCounts[it.matter_ref] || 0) + 1;\n  if (u.sampleTitles.length < 5 && !u.sampleTitles.includes(it.doc_title)) u.sampleTitles.push(it.doc_title);\n}\nreturn Object.values(byUser).map(u => {\n  const topMatters = Object.entries(u.matterCounts)\n    .sort((a, b) => b[1] - a[1])\n    .slice(0, 5)\n    .map(([ref, count]) => `${ref} (${count})`);\n  return { json: {\n    actor_email: u.actor_email,\n    access_count: u.access_count,\n    download_count: u.download_count,\n    top_matters: topMatters,\n    sample_titles: u.sampleTitles,\n  } };\n});"
+        "jsCode": "// Groups this hour's access events by user, so each user's total volume can be checked against\n// the firm's thresholds in one place, with the matters, file names, and distinct IPs they touched\n// attached -- the IP list feeds the separate new-location anomaly check downstream.\nconst items = $input.all().map(i => i.json);\nconst byUser = {};\nfor (const it of items) {\n  if (!byUser[it.actor_email]) {\n    byUser[it.actor_email] = { actor_email: it.actor_email, access_count: 0, download_count: 0, matterCounts: {}, sampleTitles: [], ips: new Set() };\n  }\n  const u = byUser[it.actor_email];\n  u.access_count += 1;\n  if (it.is_download_event) u.download_count += 1;\n  u.matterCounts[it.matter_ref] = (u.matterCounts[it.matter_ref] || 0) + 1;\n  if (u.sampleTitles.length < 5 && !u.sampleTitles.includes(it.doc_title)) u.sampleTitles.push(it.doc_title);\n  if (it.ip_address) u.ips.add(it.ip_address);\n}\nreturn Object.values(byUser).map(u => {\n  const topMatters = Object.entries(u.matterCounts)\n    .sort((a, b) => b[1] - a[1])\n    .slice(0, 5)\n    .map(([ref, count]) => `${ref} (${count})`);\n  return { json: {\n    actor_email: u.actor_email,\n    access_count: u.access_count,\n    download_count: u.download_count,\n    top_matters: topMatters,\n    sample_titles: u.sampleTitles,\n    ip_addresses: Array.from(u.ips),\n  } };\n});"
       },
       "id": "7500aa00-0075-4000-a000-0000000015",
       "name": "Aggregate Access Counts By User",
@@ -189,7 +189,22 @@
     },
     {
       "parameters": {
-        "jsCode": "// Compares each user's hourly totals against the firm's thresholds, and enforces a cooldown so the\n// same user doesn't re-trigger an email every single hour while they're still above the line --\n// tracked via n8n's own workflow static data, keyed by user, same pattern used elsewhere in this\n// catalog for escalation dedupe.\nconst user = $json;\nconst BULK_DOWNLOAD_THRESHOLD = Number($vars.BULK_DOWNLOAD_THRESHOLD || 15);\nconst ACCESS_BURST_THRESHOLD = Number($vars.ACCESS_BURST_THRESHOLD || 40);\nconst ALERT_COOLDOWN_HOURS = Number($vars.ALERT_COOLDOWN_HOURS || 6);\n\nconst overDownloadThreshold = user.download_count >= BULK_DOWNLOAD_THRESHOLD;\nconst overAccessThreshold = user.access_count >= ACCESS_BURST_THRESHOLD;\nconst isAnomalous = overDownloadThreshold || overAccessThreshold;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastAlertedAt) staticData.lastAlertedAt = {};\nconst lastAlertedAt = staticData.lastAlertedAt[user.actor_email];\nconst cooldownMs = ALERT_COOLDOWN_HOURS * 60 * 60 * 1000;\nconst now = Date.now();\nconst offCooldown = !lastAlertedAt || (now - new Date(lastAlertedAt).getTime()) >= cooldownMs;\n\nconst needsAlert = isAnomalous && offCooldown;\nif (needsAlert) {\n  staticData.lastAlertedAt[user.actor_email] = new Date(now).toISOString();\n}\n\nreturn { json: {\n  ...user,\n  over_download_threshold: overDownloadThreshold,\n  over_access_threshold: overAccessThreshold,\n  needs_alert: needsAlert,\n} };",
+        "jsCode": "// Tracks each user's previously-seen access IPs in workflow static data, and flags when this\n// hour introduces a genuinely new one -- a location/device signal independent of raw volume.\n// The very first time a user is ever seen just establishes their baseline rather than alerting\n// (every IP would otherwise look 'new' on day one of deployment).\nconst user = $json;\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.knownIpsByUser) staticData.knownIpsByUser = {};\nconst knownIps = staticData.knownIpsByUser[user.actor_email] || [];\nconst thisRunIps = user.ip_addresses || [];\n\nconst newIps = thisRunIps.filter(ip => ip && !knownIps.includes(ip));\nconst hasBaseline = knownIps.length > 0;\nconst isNewLocation = hasBaseline && newIps.length > 0;\n\nconst MAX_KNOWN_IPS = 20;\nconst updatedKnown = Array.from(new Set([...knownIps, ...thisRunIps])).slice(-MAX_KNOWN_IPS);\nstaticData.knownIpsByUser[user.actor_email] = updatedKnown;\n\nreturn { json: {\n  ...user,\n  is_new_location: isNewLocation,\n  new_location_ips: isNewLocation ? newIps : [],\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "7500aa00-0075-4000-a000-000000000029",
+      "name": "Check For New Access Location",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "A second, independent anomaly signal alongside the volume thresholds: flags when a user accesses Drive from an IP never seen from them before. The first hour a user is ever observed just builds their baseline silently -- nothing alerts until a genuinely new IP shows up after that."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compares each user's hourly totals against the firm's thresholds -- plus the new-location signal\n// computed upstream -- and enforces a cooldown so the same user doesn't re-trigger an email every\n// single hour while they're still flagged -- tracked via n8n's own workflow static data, keyed by\n// user, same pattern used elsewhere in this catalog for escalation dedupe.\nconst user = $json;\nconst BULK_DOWNLOAD_THRESHOLD = Number($vars.BULK_DOWNLOAD_THRESHOLD || 15);\nconst ACCESS_BURST_THRESHOLD = Number($vars.ACCESS_BURST_THRESHOLD || 40);\nconst ALERT_COOLDOWN_HOURS = Number($vars.ALERT_COOLDOWN_HOURS || 6);\n\nconst overDownloadThreshold = user.download_count >= BULK_DOWNLOAD_THRESHOLD;\nconst overAccessThreshold = user.access_count >= ACCESS_BURST_THRESHOLD;\nconst isAnomalous = overDownloadThreshold || overAccessThreshold || user.is_new_location;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastAlertedAt) staticData.lastAlertedAt = {};\nconst lastAlertedAt = staticData.lastAlertedAt[user.actor_email];\nconst cooldownMs = ALERT_COOLDOWN_HOURS * 60 * 60 * 1000;\nconst now = Date.now();\nconst offCooldown = !lastAlertedAt || (now - new Date(lastAlertedAt).getTime()) >= cooldownMs;\n\nconst needsAlert = isAnomalous && offCooldown;\nif (needsAlert) {\n  staticData.lastAlertedAt[user.actor_email] = new Date(now).toISOString();\n}\n\nreturn { json: {\n  ...user,\n  over_download_threshold: overDownloadThreshold,\n  over_access_threshold: overAccessThreshold,\n  needs_alert: needsAlert,\n} };",
         "mode": "runOnceForEachItem"
       },
       "id": "7500aa00-0075-4000-a000-0000000016",
@@ -197,7 +212,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1344,
+        1568,
         0
       ],
       "notes": "The firm's actual alert thresholds live here (BULK_DOWNLOAD_THRESHOLD, ACCESS_BURST_THRESHOLD) as n8n Variables, plus a cooldown so one elevated user doesn't spam an email every hour."
@@ -232,14 +247,14 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
-        1568,
+        1792,
         0
       ],
       "notes": "Only users who just crossed a threshold and are off cooldown make it through to an actual email."
     },
     {
       "parameters": {
-        "jsCode": "// Builds a plain-language security alert email for the firm admin -- what was flagged, why, which\n// matters/files were involved, and an explicit reminder this is metadata only, not a content review.\nconst u = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\n\nconst reasonParts = [];\nif (u.over_download_threshold) reasonParts.push(`${u.download_count} downloads/prints in the last hour`);\nif (u.over_access_threshold) reasonParts.push(`${u.access_count} total file accesses in the last hour`);\nconst reason = reasonParts.join(' and ');\n\nconst mattersList = u.top_matters.length ? u.top_matters.join(', ') : 'no matter reference recognized in the file names';\nconst titlesList = (u.sample_titles || []).map(t => `<li>${t}</li>`).join('');\n\nconst subject = `Unusual file access detected — ${u.actor_email}`;\nconst html = `<p>${FIRM_NAME}'s security watchdog noticed unusual Google Drive activity in the last hour.</p>` +\n  `<p><strong>User:</strong> ${u.actor_email}<br/>` +\n  `<strong>Why flagged:</strong> ${reason}<br/>` +\n  `<strong>Matters touched (top 5):</strong> ${mattersList}</p>` +\n  `<p><strong>Sample file names accessed:</strong></p><ul>${titlesList}</ul>` +\n  `<p>This alert is based on file names and access metadata only — no document contents were read or analyzed. ` +\n  `If this doesn't match the user's normal work pattern, confirm with them directly and consider reviewing the account for compromise.</p>`;\n\nreturn { json: {\n  ...u,\n  recipient: $vars.SECURITY_ALERT_EMAIL || $vars.FIRM_EMAIL,\n  subject,\n  message: `${reason} for ${u.actor_email}. Matters touched: ${mattersList}.`,\n  email_html: html,\n} };",
+        "jsCode": "// Builds a plain-language, styled security alert email for the firm admin -- what was flagged, why,\n// which matters/files were involved, and an explicit reminder this is metadata only, not a content\n// review. Severity color escalates if a new-location signal is involved, since that's typically a\n// stronger compromise indicator than volume alone.\nconst u = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\n\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst reasonParts = [];\nif (u.over_download_threshold) reasonParts.push(`${u.download_count} downloads/prints in the last hour`);\nif (u.over_access_threshold) reasonParts.push(`${u.access_count} total file accesses in the last hour`);\nif (u.is_new_location) reasonParts.push(`access from a location/IP never seen from this user before (${u.new_location_ips.join(', ')})`);\nconst reason = reasonParts.join(' and ');\n\nconst mattersList = u.top_matters.length ? u.top_matters.join(', ') : 'no matter reference recognized in the file names';\nconst titlesList = (u.sample_titles || []).map(t => `<li style=\\\"margin-bottom:4px;\\\">${escapeHtml(t)}</li>`).join('');\n\nconst severityColor = u.is_new_location ? '#dc2626' : '#ea580c';\nconst severityLabel = u.is_new_location ? 'New location + volume anomaly' : 'Volume anomaly';\n\nconst subject = `Unusual file access detected — ${u.actor_email}`;\nconst message = `${reason} for ${u.actor_email}. Matters touched: ${mattersList}.`;\n\nconst bodyHtml = `\n  <div style=\\\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:20px;background:#f8fafc;\\\">\n    <div style=\\\"font-size:14px;font-weight:600;color:#0f172a;\\\">${escapeHtml(u.actor_email)}</div>\n    <div style=\\\"font-size:13px;color:#64748b;margin-top:2px;\\\">${escapeHtml(reason)}</div>\n  </div>\n  <div style=\\\"color:#334155;font-size:14px;margin-bottom:6px;font-weight:600;\\\">Matters touched (top 5)</div>\n  <div style=\\\"color:#334155;font-size:14px;margin-bottom:18px;\\\">${escapeHtml(mattersList)}</div>\n  <div style=\\\"color:#334155;font-size:14px;margin-bottom:6px;font-weight:600;\\\">Sample file names accessed</div>\n  <ul style=\\\"color:#334155;font-size:14px;margin:0 0 20px 0;padding-left:20px;\\\">${titlesList}</ul>\n  <div style=\\\"color:#64748b;font-size:13px;\\\">This alert is based on file names and access metadata only — no document contents were read or analyzed. If this doesn't match the user's normal work pattern, confirm with them directly and consider reviewing the account for compromise.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:${severityColor};padding:28px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">${escapeHtml(severityLabel)}</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\\\">Unusual Drive access detected</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n    <div style=\\\"padding:16px 32px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\\\">${escapeHtml(FIRM_NAME)} security watchdog — internal alert, not a client communication.</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: {\n  ...u,\n  recipient: $vars.SECURITY_ALERT_EMAIL || $vars.FIRM_EMAIL,\n  subject,\n  message,\n  email_html: emailHtml,\n} };",
         "mode": "runOnceForEachItem"
       },
       "id": "7500aa00-0075-4000-a000-0000000018",
@@ -247,7 +262,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1792,
+        2016,
         0
       ],
       "notes": "Writes the actual alert email content. SECURITY_ALERT_EMAIL is an optional n8n Variable if you want these routed somewhere different from general firm alerts (falls back to FIRM_EMAIL)."
@@ -280,7 +295,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        2016,
+        2240,
         0
       ],
       "notes": "Logs the alert to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33) — internal record-keeping only, not a client message. Its 'approved' result is deliberately ignored: this is an internal firm security safety net and must never be suppressible, same fire-and-forget pattern used for internal-only notifications elsewhere in this catalog (PAC-59/60/61/63/67/74)."
@@ -300,7 +315,7 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2240,
+        2464,
         0
       ],
       "notes": "Sends the actual alert to the firm admin. Uses the FIRM_FROM_EMAIL variable as sender and the SMTP credential configured on this node."
@@ -381,7 +396,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Same normalization as the hourly branch -- pulls out user, event type, file name/matter reference --\n// just applied to a week's worth of events instead of an hour's.\nconst item = $json;\nconst actorEmail = (item.actor && item.actor.email) || 'unknown@unknown';\nconst event = (item.events && item.events[0]) || {};\nconst eventType = event.name || 'unknown';\nconst params = event.parameters || [];\nfunction getParam(paramName) {\n  const p = params.find(p => p.name === paramName);\n  if (!p) return '';\n  return p.value || (p.multiValue && p.multiValue.join(', ')) || '';\n}\nconst docTitle = getParam('doc_title') || '(untitled document)';\n\nconst MATTER_REF_PATTERN = /\\d{4}-[A-Z]{2}-\\d{3}/;\nconst matterMatch = docTitle.match(MATTER_REF_PATTERN);\nconst matterRef = matterMatch ? matterMatch[0] : 'Unmatched / General Files';\n\nconst ACCESS_EVENTS = ['view', 'download', 'print'];\nconst DOWNLOAD_EVENTS = ['download', 'print'];\n\nreturn { json: {\n  actor_email: actorEmail,\n  event_type: eventType,\n  doc_title: docTitle,\n  matter_ref: matterRef,\n  is_access_event: ACCESS_EVENTS.includes(eventType),\n  is_download_event: DOWNLOAD_EVENTS.includes(eventType),\n} };",
+        "jsCode": "// Same normalization as the hourly branch -- pulls out user, event type, file name/matter reference,\n// and source IP -- just applied to a week's worth of events instead of an hour's.\nconst item = $json;\nconst actorEmail = (item.actor && item.actor.email) || 'unknown@unknown';\nconst event = (item.events && item.events[0]) || {};\nconst eventType = event.name || 'unknown';\nconst params = event.parameters || [];\nfunction getParam(paramName) {\n  const p = params.find(p => p.name === paramName);\n  if (!p) return '';\n  return p.value || (p.multiValue && p.multiValue.join(', ')) || '';\n}\nconst docTitle = getParam('doc_title') || '(untitled document)';\nconst ipAddress = (item.id && item.id.ipAddress) || '';\n\nconst MATTER_REF_PATTERN = /\\d{4}-[A-Z]{2}-\\d{3}/;\nconst matterMatch = docTitle.match(MATTER_REF_PATTERN);\nconst matterRef = matterMatch ? matterMatch[0] : 'Unmatched / General Files';\n\nconst ACCESS_EVENTS = ['view', 'download', 'print'];\nconst DOWNLOAD_EVENTS = ['download', 'print'];\n\nreturn { json: {\n  actor_email: actorEmail,\n  event_type: eventType,\n  doc_title: docTitle,\n  matter_ref: matterRef,\n  ip_address: ipAddress,\n  is_access_event: ACCESS_EVENTS.includes(eventType),\n  is_download_event: DOWNLOAD_EVENTS.includes(eventType),\n} };",
         "mode": "runOnceForEachItem"
       },
       "id": "7500aa00-0075-4000-a000-0000000023",
@@ -445,7 +460,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Builds the weekly digest email. Explicitly handles the zero-activity week rather than sending a\n// blank or malformed table -- same 'never go silent' philosophy used for other periodic digests in\n// this catalog.\nconst data = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\nlet rows;\nif (!data.top_users || data.top_users.length === 0) {\n  rows = '<tr><td colspan=\"4\">No Google Drive activity logged this week.</td></tr>';\n} else {\n  rows = data.top_users.map(u => `<tr><td>${u.actor_email}</td><td>${u.access_count}</td><td>${u.download_count}</td><td>${u.matters_touched}</td></tr>`).join('');\n}\nconst subject = `Weekly Drive access pattern summary — ${data.total_events} events`;\nconst html = `<p>Here's ${FIRM_NAME}'s weekly Google Drive access summary — for visibility, not necessarily anything alarming.</p>` +\n  `<table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse;\">` +\n  `<tr><th>User</th><th>Total accesses</th><th>Downloads/prints</th><th>Matters touched</th></tr>${rows}</table>` +\n  `<p>Total events this week: ${data.total_events} across ${data.total_users} user(s). This is metadata only — no document contents were reviewed.</p>`;\n\nreturn [{ json: {\n  ...data,\n  recipient: $vars.SECURITY_ALERT_EMAIL || $vars.FIRM_EMAIL,\n  subject,\n  message: `${data.total_events} Drive access events across ${data.total_users} user(s) this week.`,\n  email_html: html,\n} }];"
+        "jsCode": "// Builds the styled weekly digest email. Explicitly handles the zero-activity week rather than\n// sending a blank or malformed table -- same 'never go silent' philosophy used for other periodic\n// digests in this catalog.\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst data = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\n\nlet rowsHtml;\nif (!data.top_users || data.top_users.length === 0) {\n  rowsHtml = '<tr><td colspan=\\\"4\\\" style=\\\"padding:12px;color:#64748b;\\\">No Google Drive activity logged this week.</td></tr>';\n} else {\n  rowsHtml = data.top_users.map((u, i) => `\n    <tr style=\\\"background:${i % 2 === 0 ? '#ffffff' : '#f8fafc'};\\\">\n      <td style=\\\"padding:10px 12px;font-size:13px;color:#0f172a;\\\">${escapeHtml(u.actor_email)}</td>\n      <td style=\\\"padding:10px 12px;font-size:13px;color:#334155;text-align:center;\\\">${u.access_count}</td>\n      <td style=\\\"padding:10px 12px;font-size:13px;color:#334155;text-align:center;\\\">${u.download_count}</td>\n      <td style=\\\"padding:10px 12px;font-size:13px;color:#334155;text-align:center;\\\">${u.matters_touched}</td>\n    </tr>`).join('');\n}\n\nconst subject = `Weekly Drive access pattern summary — ${data.total_events} events`;\nconst message = `${data.total_events} Drive access events across ${data.total_users} user(s) this week.`;\n\nconst bodyHtml = `\n  <div style=\\\"color:#334155;font-size:14px;margin-bottom:18px;\\\">Here's ${escapeHtml(FIRM_NAME)}'s weekly Google Drive access summary — for visibility, not necessarily anything alarming.</div>\n  <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\">\n    <thead>\n      <tr style=\\\"background:#f1f5f9;\\\">\n        <th style=\\\"padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:left;\\\">User</th>\n        <th style=\\\"padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:center;\\\">Total accesses</th>\n        <th style=\\\"padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:center;\\\">Downloads/prints</th>\n        <th style=\\\"padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:center;\\\">Matters touched</th>\n      </tr>\n    </thead>\n    <tbody>${rowsHtml}</tbody>\n  </table>\n  <div style=\\\"color:#64748b;font-size:13px;margin-top:16px;\\\">Total events this week: ${data.total_events} across ${data.total_users} user(s). This is metadata only — no document contents were reviewed.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:28px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Weekly visibility digest</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\\\">Drive access pattern summary</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n    <div style=\\\"padding:16px 32px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\\\">${escapeHtml(FIRM_NAME)} security watchdog — internal digest, not a client communication.</div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: {\n  ...data,\n  recipient: $vars.SECURITY_ALERT_EMAIL || $vars.FIRM_EMAIL,\n  subject,\n  message,\n  email_html: emailHtml,\n} }];"
       },
       "id": "7500aa00-0075-4000-a000-0000000026",
       "name": "Build Weekly Access Pattern Summary Email",
@@ -521,8 +536,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:05:00.000Z",
-                "uniqueQualifier": "1",
-                "applicationName": "drive"
+                "uniqueQualifier": "5",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -538,7 +554,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc1"
+                      "value": "doc5"
                     }
                   ]
                 }
@@ -547,8 +563,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:07:00.000Z",
-                "uniqueQualifier": "2",
-                "applicationName": "drive"
+                "uniqueQualifier": "7",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -564,7 +581,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc2"
+                      "value": "doc7"
                     }
                   ]
                 }
@@ -573,8 +590,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:09:00.000Z",
-                "uniqueQualifier": "3",
-                "applicationName": "drive"
+                "uniqueQualifier": "9",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -590,7 +608,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc3"
+                      "value": "doc9"
                     }
                   ]
                 }
@@ -599,8 +617,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:10:00.000Z",
-                "uniqueQualifier": "4",
-                "applicationName": "drive"
+                "uniqueQualifier": "0",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -616,7 +635,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc3"
+                      "value": "doc0"
                     }
                   ]
                 }
@@ -625,8 +644,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:11:00.000Z",
-                "uniqueQualifier": "5",
-                "applicationName": "drive"
+                "uniqueQualifier": "1",
+                "applicationName": "drive",
+                "ipAddress": "198.51.100.20"
               },
               "actor": {
                 "email": "attorney@smithlaw.com"
@@ -642,7 +662,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc4"
+                      "value": "doc1"
                     }
                   ]
                 }
@@ -651,8 +671,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:12:00.000Z",
-                "uniqueQualifier": "6",
-                "applicationName": "drive"
+                "uniqueQualifier": "2",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -668,7 +689,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc5"
+                      "value": "doc2"
                     }
                   ]
                 }
@@ -686,8 +707,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:05:00.000Z",
-                "uniqueQualifier": "1",
-                "applicationName": "drive"
+                "uniqueQualifier": "5",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -703,7 +725,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc1"
+                      "value": "doc5"
                     }
                   ]
                 }
@@ -712,8 +734,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:07:00.000Z",
-                "uniqueQualifier": "2",
-                "applicationName": "drive"
+                "uniqueQualifier": "7",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -729,7 +752,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc2"
+                      "value": "doc7"
                     }
                   ]
                 }
@@ -738,8 +761,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:09:00.000Z",
-                "uniqueQualifier": "3",
-                "applicationName": "drive"
+                "uniqueQualifier": "9",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -755,7 +779,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc3"
+                      "value": "doc9"
                     }
                   ]
                 }
@@ -764,8 +788,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:10:00.000Z",
-                "uniqueQualifier": "4",
-                "applicationName": "drive"
+                "uniqueQualifier": "0",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -781,7 +806,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc3"
+                      "value": "doc0"
                     }
                   ]
                 }
@@ -790,8 +815,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:11:00.000Z",
-                "uniqueQualifier": "5",
-                "applicationName": "drive"
+                "uniqueQualifier": "1",
+                "applicationName": "drive",
+                "ipAddress": "198.51.100.20"
               },
               "actor": {
                 "email": "attorney@smithlaw.com"
@@ -807,7 +833,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc4"
+                      "value": "doc1"
                     }
                   ]
                 }
@@ -816,8 +842,9 @@
             {
               "id": {
                 "time": "2026-09-03T08:12:00.000Z",
-                "uniqueQualifier": "6",
-                "applicationName": "drive"
+                "uniqueQualifier": "2",
+                "applicationName": "drive",
+                "ipAddress": "203.0.113.10"
               },
               "actor": {
                 "email": "paralegal@smithlaw.com"
@@ -833,7 +860,7 @@
                     },
                     {
                       "name": "doc_id",
-                      "value": "doc5"
+                      "value": "doc2"
                     }
                   ]
                 }
@@ -907,7 +934,7 @@
       "main": [
         [
           {
-            "node": "Check Against Anomaly Thresholds",
+            "node": "Check For New Access Location",
             "type": "main",
             "index": 0
           }
@@ -1040,6 +1067,17 @@
         [
           {
             "node": "Send Weekly Access Pattern Summary Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check For New Access Location": {
+      "main": [
+        [
+          {
+            "node": "Check Against Anomaly Thresholds",
             "type": "main",
             "index": 0
           }
