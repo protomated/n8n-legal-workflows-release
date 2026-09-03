@@ -1,0 +1,1043 @@
+{
+  "name": "Bulk-Download & Anomalous-Access Alert",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Bulk-Download & Anomalous-Access Alert\n\n### How it works\n\nThis workflow has TWO independent parts on one canvas:\n\n**A. Real-time anomaly alert (top row)**\nRuns hourly. Pulls Google Drive access activity from Google Workspace's own admin audit log, counts how many files each user viewed/downloaded/printed in that hour, and immediately emails the firm admin if anyone crosses a bulk-download or access-burst threshold — with the user, the matters touched, and the volume. A per-user cooldown stops the same person from re-triggering an alert every single hour while still elevated.\n\n**B. Weekly visibility digest (bottom row)**\nRuns weekly, independently. Re-pulls the last 7 days of the same audit log and emails a plain summary of who accessed the most files firm-wide — sent every week regardless of whether anything crossed a threshold, so the firm always has visibility into normal access patterns, not just alarms.\n\n**This only ever reads metadata — who accessed which file name and when — never document contents.** It cannot tell you what's inside a file, only that it was opened, downloaded, or printed. That's a deliberate boundary: this is security monitoring, not legal review (ABA Op. 512).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every alert's audit logging goes through it.\n- [ ] In Google Workspace Admin Console, enable API access and grant a service account domain-wide delegation with the `https://www.googleapis.com/auth/admin.reports.audit.readonly` scope (Super Admin required — this is the one non-trivial setup step here).\n- [ ] Add that as a Google API (OAuth2) credential in n8n.\n- [ ] Configure an SMTP credential for sending alert/digest emails.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_FROM_EMAIL, SECURITY_ALERT_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally tune BULK_DOWNLOAD_THRESHOLD (default 15/hour), ACCESS_BURST_THRESHOLD (default 40/hour), ALERT_COOLDOWN_HOURS (default 6), LOOKBACK_HOURS (default 1).\n- [ ] Activate the workflow.\n\n### Customization\n\nThe matter reference shown in alerts is extracted from the file name itself (matching a `YYYY-XX-###` pattern) — rename files without that pattern and they'll just show as 'Unmatched / General Files', which is still useful, just less specific. Adjust the MATTER_REF_PATTERN regex in 'Normalize Drive Access Event' if your firm uses a different matter numbering convention. Coverage today is Google Workspace only — Microsoft 365 / SharePoint audit log support is a natural extension (coming soon)."
+      },
+      "id": "7500aa00-0075-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Watch for bulk downloads and access bursts\n\nEvery hour, pulls Google Drive access activity, counts downloads/views per user, and emails the firm admin the moment anyone crosses a threshold — with the matter, user, and volume. A per-user cooldown keeps it from re-alerting every hour while still elevated."
+      },
+      "id": "7500aa00-0075-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Weekly access visibility digest — a second, independent branch\n\nRe-reads the last 7 days of the same audit log and always sends a plain summary of firm-wide access activity, even when nothing crossed an alert threshold — visibility, not just alarms."
+      },
+      "id": "7500aa00-0075-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "7500aa00-0075-4000-a000-0000000010",
+      "name": "Check Google Drive Access Logs Hourly",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Runs every hour on the hour. Adjust the cron expression here if your firm wants a different polling cadence — the LOOKBACK_HOURS variable should match whatever you set."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/drive",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "googleApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startTime",
+              "value": "={{ $now.minus({ hours: Number($vars.LOOKBACK_HOURS || 1) }).toISO() }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7500aa00-0075-4000-a000-0000000011",
+      "name": "Fetch Recent Drive Activity From Google Workspace",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Pulls the firm's Google Workspace Drive audit log (who viewed/downloaded/printed which file, and when) for the last LOOKBACK_HOURS. Needs a Google API (OAuth2) credential with domain-wide delegation and the admin.reports.audit.readonly scope — this is the one real setup step in this template; see the workflow doc sticky. Firms with over 1000 relevant events per hour will need pagination added (not built here — most solo/small firms won't hit this)."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "id": "7500aa00-0075-4000-a000-0000000012",
+      "name": "Split Out Drive Activity Records",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Breaks the audit log response into one item per access event, so each can be checked and counted individually."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pulls the useful fields out of one raw Google Workspace Drive audit-log entry and tags whether\n// it's an access-relevant event (view/download/print) worth counting toward this hour's totals.\n// Also tries to recognize the firm's own matter numbering convention in the file name so the\n// eventual alert can say WHICH MATTER was touched, not just which file.\nconst item = $json;\nconst actorEmail = (item.actor && item.actor.email) || 'unknown@unknown';\nconst event = (item.events && item.events[0]) || {};\nconst eventType = event.name || 'unknown';\nconst params = event.parameters || [];\nfunction getParam(paramName) {\n  const p = params.find(p => p.name === paramName);\n  if (!p) return '';\n  return p.value || (p.multiValue && p.multiValue.join(', ')) || '';\n}\nconst docTitle = getParam('doc_title') || '(untitled document)';\nconst timestamp = (item.id && item.id.time) || '';\n\n// ⚙️ Edit this to match your firm's actual matter numbering convention.\nconst MATTER_REF_PATTERN = /\\d{4}-[A-Z]{2}-\\d{3}/;\nconst matterMatch = docTitle.match(MATTER_REF_PATTERN);\nconst matterRef = matterMatch ? matterMatch[0] : 'Unmatched / General Files';\n\nconst ACCESS_EVENTS = ['view', 'download', 'print'];\nconst DOWNLOAD_EVENTS = ['download', 'print'];\n\nreturn { json: {\n  actor_email: actorEmail,\n  event_type: eventType,\n  doc_title: docTitle,\n  matter_ref: matterRef,\n  timestamp,\n  is_access_event: ACCESS_EVENTS.includes(eventType),\n  is_download_event: DOWNLOAD_EVENTS.includes(eventType),\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "7500aa00-0075-4000-a000-0000000013",
+      "name": "Normalize Drive Access Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Extracts the user, the file, whether it was a download/print (higher risk) or just a view, and tries to recognize a matter reference in the file name."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_is_access",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_access_event }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "7500aa00-0075-4000-a000-0000000014",
+      "name": "Filter Access-Relevant Events",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Drops edits, creates, renames, and other non-access events — only views/downloads/prints count toward this hour's volume."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Groups this hour's access events by user, so each user's total volume can be checked against\n// the firm's thresholds in one place, with the matters and file names they touched attached.\nconst items = $input.all().map(i => i.json);\nconst byUser = {};\nfor (const it of items) {\n  if (!byUser[it.actor_email]) {\n    byUser[it.actor_email] = { actor_email: it.actor_email, access_count: 0, download_count: 0, matterCounts: {}, sampleTitles: [] };\n  }\n  const u = byUser[it.actor_email];\n  u.access_count += 1;\n  if (it.is_download_event) u.download_count += 1;\n  u.matterCounts[it.matter_ref] = (u.matterCounts[it.matter_ref] || 0) + 1;\n  if (u.sampleTitles.length < 5 && !u.sampleTitles.includes(it.doc_title)) u.sampleTitles.push(it.doc_title);\n}\nreturn Object.values(byUser).map(u => {\n  const topMatters = Object.entries(u.matterCounts)\n    .sort((a, b) => b[1] - a[1])\n    .slice(0, 5)\n    .map(([ref, count]) => `${ref} (${count})`);\n  return { json: {\n    actor_email: u.actor_email,\n    access_count: u.access_count,\n    download_count: u.download_count,\n    top_matters: topMatters,\n    sample_titles: u.sampleTitles,\n  } };\n});"
+      },
+      "id": "7500aa00-0075-4000-a000-0000000015",
+      "name": "Aggregate Access Counts By User",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "Runs once for the whole batch (not once per item) — turns the list of individual access events into one summary row per user for this hour."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compares each user's hourly totals against the firm's thresholds, and enforces a cooldown so the\n// same user doesn't re-trigger an email every single hour while they're still above the line --\n// tracked via n8n's own workflow static data, keyed by user, same pattern used elsewhere in this\n// catalog for escalation dedupe.\nconst user = $json;\nconst BULK_DOWNLOAD_THRESHOLD = Number($vars.BULK_DOWNLOAD_THRESHOLD || 15);\nconst ACCESS_BURST_THRESHOLD = Number($vars.ACCESS_BURST_THRESHOLD || 40);\nconst ALERT_COOLDOWN_HOURS = Number($vars.ALERT_COOLDOWN_HOURS || 6);\n\nconst overDownloadThreshold = user.download_count >= BULK_DOWNLOAD_THRESHOLD;\nconst overAccessThreshold = user.access_count >= ACCESS_BURST_THRESHOLD;\nconst isAnomalous = overDownloadThreshold || overAccessThreshold;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastAlertedAt) staticData.lastAlertedAt = {};\nconst lastAlertedAt = staticData.lastAlertedAt[user.actor_email];\nconst cooldownMs = ALERT_COOLDOWN_HOURS * 60 * 60 * 1000;\nconst now = Date.now();\nconst offCooldown = !lastAlertedAt || (now - new Date(lastAlertedAt).getTime()) >= cooldownMs;\n\nconst needsAlert = isAnomalous && offCooldown;\nif (needsAlert) {\n  staticData.lastAlertedAt[user.actor_email] = new Date(now).toISOString();\n}\n\nreturn { json: {\n  ...user,\n  over_download_threshold: overDownloadThreshold,\n  over_access_threshold: overAccessThreshold,\n  needs_alert: needsAlert,\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "7500aa00-0075-4000-a000-0000000016",
+      "name": "Check Against Anomaly Thresholds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "The firm's actual alert thresholds live here (BULK_DOWNLOAD_THRESHOLD, ACCESS_BURST_THRESHOLD) as n8n Variables, plus a cooldown so one elevated user doesn't spam an email every hour."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_needs_alert",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.needs_alert }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "7500aa00-0075-4000-a000-0000000017",
+      "name": "Filter Users Needing An Alert",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Only users who just crossed a threshold and are off cooldown make it through to an actual email."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds a plain-language security alert email for the firm admin -- what was flagged, why, which\n// matters/files were involved, and an explicit reminder this is metadata only, not a content review.\nconst u = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\n\nconst reasonParts = [];\nif (u.over_download_threshold) reasonParts.push(`${u.download_count} downloads/prints in the last hour`);\nif (u.over_access_threshold) reasonParts.push(`${u.access_count} total file accesses in the last hour`);\nconst reason = reasonParts.join(' and ');\n\nconst mattersList = u.top_matters.length ? u.top_matters.join(', ') : 'no matter reference recognized in the file names';\nconst titlesList = (u.sample_titles || []).map(t => `<li>${t}</li>`).join('');\n\nconst subject = `Unusual file access detected — ${u.actor_email}`;\nconst html = `<p>${FIRM_NAME}'s security watchdog noticed unusual Google Drive activity in the last hour.</p>` +\n  `<p><strong>User:</strong> ${u.actor_email}<br/>` +\n  `<strong>Why flagged:</strong> ${reason}<br/>` +\n  `<strong>Matters touched (top 5):</strong> ${mattersList}</p>` +\n  `<p><strong>Sample file names accessed:</strong></p><ul>${titlesList}</ul>` +\n  `<p>This alert is based on file names and access metadata only — no document contents were read or analyzed. ` +\n  `If this doesn't match the user's normal work pattern, confirm with them directly and consider reviewing the account for compromise.</p>`;\n\nreturn { json: {\n  ...u,\n  recipient: $vars.SECURITY_ALERT_EMAIL || $vars.FIRM_EMAIL,\n  subject,\n  message: `${reason} for ${u.actor_email}. Matters touched: ${mattersList}.`,\n  email_html: html,\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "7500aa00-0075-4000-a000-0000000018",
+      "name": "Build Anomalous Access Alert Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "Writes the actual alert email content. SECURITY_ALERT_EMAIL is an optional n8n Variable if you want these routed somewhere different from general firm alerts (falls back to FIRM_EMAIL)."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "security-anomalous-access-alert",
+            "matter_id": "={{ $json.top_matters[0] || '' }}"
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "7500aa00-0075-4000-a000-0000000019",
+      "name": "Log Anomalous Access Alert For Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2016,
+        0
+      ],
+      "notes": "Logs the alert to the OPS1 compliance audit sheet via the Bar-Compliance Guardrail (NTC-33) — internal record-keeping only, not a client message. Its 'approved' result is deliberately ignored: this is an internal firm security safety net and must never be suppressible, same fire-and-forget pattern used for internal-only notifications elsewhere in this catalog (PAC-59/60/61/63/67/74)."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Anomalous Access Alert Email').item.json.recipient }}",
+        "subject": "={{ $('Build Anomalous Access Alert Email').item.json.subject }}",
+        "text": "={{ $('Build Anomalous Access Alert Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Anomalous Access Alert Email').item.json.email_html }}"
+      },
+      "id": "7500aa00-0075-4000-a000-000000001a",
+      "name": "Send Anomalous Access Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        0
+      ],
+      "notes": "Sends the actual alert to the firm admin. Uses the FIRM_FROM_EMAIL variable as sender and the SMTP credential configured on this node."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "7500aa00-0075-4000-a000-0000000020",
+      "name": "Send Weekly Access Pattern Summary",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        640
+      ],
+      "notes": "Runs weekly, Monday 8am by default — adjust the cron expression if a different day/time suits your firm."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/drive",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "googleApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startTime",
+              "value": "={{ $now.minus({ days: 7 }).toISO() }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7500aa00-0075-4000-a000-0000000021",
+      "name": "Fetch Weekly Drive Activity From Google Workspace",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        640
+      ],
+      "notes": "Same Google Workspace Drive audit log as the hourly branch, just pulled over the trailing 7 days instead of the last hour, for a firm-wide visibility digest rather than a threshold alert."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "id": "7500aa00-0075-4000-a000-0000000022",
+      "name": "Split Out Weekly Activity Records",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        448,
+        640
+      ],
+      "notes": "Breaks the week's audit log response into one item per access event."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Same normalization as the hourly branch -- pulls out user, event type, file name/matter reference --\n// just applied to a week's worth of events instead of an hour's.\nconst item = $json;\nconst actorEmail = (item.actor && item.actor.email) || 'unknown@unknown';\nconst event = (item.events && item.events[0]) || {};\nconst eventType = event.name || 'unknown';\nconst params = event.parameters || [];\nfunction getParam(paramName) {\n  const p = params.find(p => p.name === paramName);\n  if (!p) return '';\n  return p.value || (p.multiValue && p.multiValue.join(', ')) || '';\n}\nconst docTitle = getParam('doc_title') || '(untitled document)';\n\nconst MATTER_REF_PATTERN = /\\d{4}-[A-Z]{2}-\\d{3}/;\nconst matterMatch = docTitle.match(MATTER_REF_PATTERN);\nconst matterRef = matterMatch ? matterMatch[0] : 'Unmatched / General Files';\n\nconst ACCESS_EVENTS = ['view', 'download', 'print'];\nconst DOWNLOAD_EVENTS = ['download', 'print'];\n\nreturn { json: {\n  actor_email: actorEmail,\n  event_type: eventType,\n  doc_title: docTitle,\n  matter_ref: matterRef,\n  is_access_event: ACCESS_EVENTS.includes(eventType),\n  is_download_event: DOWNLOAD_EVENTS.includes(eventType),\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "7500aa00-0075-4000-a000-0000000023",
+      "name": "Normalize Weekly Access Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        640
+      ],
+      "notes": "Same field extraction as the hourly branch's normalize step, applied to the week's events."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_is_access",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_access_event }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "7500aa00-0075-4000-a000-0000000024",
+      "name": "Filter Access-Relevant Events For Weekly Summary",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        640
+      ],
+      "notes": "Same as the hourly branch: only views/downloads/prints count."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rolls the whole week up into one firm-wide summary: total events, total users active, and the\n// top 10 users by access volume -- always produces exactly one output item, even if the firm had\n// zero Drive activity this week.\nconst items = $input.all().map(i => i.json);\nconst byUser = {};\nfor (const it of items) {\n  if (!byUser[it.actor_email]) byUser[it.actor_email] = { actor_email: it.actor_email, access_count: 0, download_count: 0, matters: new Set() };\n  const u = byUser[it.actor_email];\n  u.access_count += 1;\n  if (it.is_download_event) u.download_count += 1;\n  u.matters.add(it.matter_ref);\n}\nconst users = Object.values(byUser).map(u => ({\n  actor_email: u.actor_email,\n  access_count: u.access_count,\n  download_count: u.download_count,\n  matters_touched: u.matters.size,\n})).sort((a, b) => b.access_count - a.access_count);\n\nreturn [{ json: {\n  total_events: items.length,\n  total_users: users.length,\n  top_users: users.slice(0, 10),\n} }];"
+      },
+      "id": "7500aa00-0075-4000-a000-0000000025",
+      "name": "Aggregate Weekly Access By User",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        640
+      ],
+      "notes": "Runs once for the whole batch -- produces a single firm-wide summary row, not one row per event."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the weekly digest email. Explicitly handles the zero-activity week rather than sending a\n// blank or malformed table -- same 'never go silent' philosophy used for other periodic digests in\n// this catalog.\nconst data = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\nlet rows;\nif (!data.top_users || data.top_users.length === 0) {\n  rows = '<tr><td colspan=\"4\">No Google Drive activity logged this week.</td></tr>';\n} else {\n  rows = data.top_users.map(u => `<tr><td>${u.actor_email}</td><td>${u.access_count}</td><td>${u.download_count}</td><td>${u.matters_touched}</td></tr>`).join('');\n}\nconst subject = `Weekly Drive access pattern summary — ${data.total_events} events`;\nconst html = `<p>Here's ${FIRM_NAME}'s weekly Google Drive access summary — for visibility, not necessarily anything alarming.</p>` +\n  `<table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse;\">` +\n  `<tr><th>User</th><th>Total accesses</th><th>Downloads/prints</th><th>Matters touched</th></tr>${rows}</table>` +\n  `<p>Total events this week: ${data.total_events} across ${data.total_users} user(s). This is metadata only — no document contents were reviewed.</p>`;\n\nreturn [{ json: {\n  ...data,\n  recipient: $vars.SECURITY_ALERT_EMAIL || $vars.FIRM_EMAIL,\n  subject,\n  message: `${data.total_events} Drive access events across ${data.total_users} user(s) this week.`,\n  email_html: html,\n} }];"
+      },
+      "id": "7500aa00-0075-4000-a000-0000000026",
+      "name": "Build Weekly Access Pattern Summary Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        640
+      ],
+      "notes": "Explicitly sends a 'no activity this week' message rather than an empty table when the firm had zero Drive events."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "security-weekly-access-summary",
+            "matter_id": ""
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "7500aa00-0075-4000-a000-0000000027",
+      "name": "Log Weekly Access Summary For Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        640
+      ],
+      "notes": "Same fire-and-forget audit logging as the hourly branch's guardrail call — internal record-keeping only."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Weekly Access Pattern Summary Email').item.json.recipient }}",
+        "subject": "={{ $('Build Weekly Access Pattern Summary Email').item.json.subject }}",
+        "text": "={{ $('Build Weekly Access Pattern Summary Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Weekly Access Pattern Summary Email').item.json.email_html }}"
+      },
+      "id": "7500aa00-0075-4000-a000-0000000028",
+      "name": "Send Weekly Access Pattern Summary Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        640
+      ],
+      "notes": "Sends the weekly digest to the same recipient as the hourly alert."
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "Fetch Recent Drive Activity From Google Workspace": [
+      {
+        "json": {
+          "kind": "admin#reports#activities",
+          "items": [
+            {
+              "id": {
+                "time": "2026-09-03T08:05:00.000Z",
+                "uniqueQualifier": "1",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "download",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-050 - Jane Doe - Medical Records.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc1"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:07:00.000Z",
+                "uniqueQualifier": "2",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "download",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-050 - Jane Doe - Intake Form.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc2"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:09:00.000Z",
+                "uniqueQualifier": "3",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "download",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-051 - John Roe - Trust Draft.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc3"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:10:00.000Z",
+                "uniqueQualifier": "4",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "view",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-051 - John Roe - Trust Draft.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc3"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:11:00.000Z",
+                "uniqueQualifier": "5",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "attorney@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "view",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-052 - Mary Major - Consult Notes.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc4"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:12:00.000Z",
+                "uniqueQualifier": "6",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "edit",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "Firm Handbook.docx"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc5"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "Fetch Weekly Drive Activity From Google Workspace": [
+      {
+        "json": {
+          "kind": "admin#reports#activities",
+          "items": [
+            {
+              "id": {
+                "time": "2026-09-03T08:05:00.000Z",
+                "uniqueQualifier": "1",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "download",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-050 - Jane Doe - Medical Records.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc1"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:07:00.000Z",
+                "uniqueQualifier": "2",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "download",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-050 - Jane Doe - Intake Form.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc2"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:09:00.000Z",
+                "uniqueQualifier": "3",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "download",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-051 - John Roe - Trust Draft.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc3"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:10:00.000Z",
+                "uniqueQualifier": "4",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "view",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-051 - John Roe - Trust Draft.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc3"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:11:00.000Z",
+                "uniqueQualifier": "5",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "attorney@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "view",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "2026-CH-052 - Mary Major - Consult Notes.pdf"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc4"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": {
+                "time": "2026-09-03T08:12:00.000Z",
+                "uniqueQualifier": "6",
+                "applicationName": "drive"
+              },
+              "actor": {
+                "email": "paralegal@smithlaw.com"
+              },
+              "events": [
+                {
+                  "type": "access",
+                  "name": "edit",
+                  "parameters": [
+                    {
+                      "name": "doc_title",
+                      "value": "Firm Handbook.docx"
+                    },
+                    {
+                      "name": "doc_id",
+                      "value": "doc5"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "Check Google Drive Access Logs Hourly": {
+      "main": [
+        [
+          {
+            "node": "Fetch Recent Drive Activity From Google Workspace",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Recent Drive Activity From Google Workspace": {
+      "main": [
+        [
+          {
+            "node": "Split Out Drive Activity Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Drive Activity Records": {
+      "main": [
+        [
+          {
+            "node": "Normalize Drive Access Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Drive Access Event": {
+      "main": [
+        [
+          {
+            "node": "Filter Access-Relevant Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Access-Relevant Events": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Access Counts By User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Access Counts By User": {
+      "main": [
+        [
+          {
+            "node": "Check Against Anomaly Thresholds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Against Anomaly Thresholds": {
+      "main": [
+        [
+          {
+            "node": "Filter Users Needing An Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Users Needing An Alert": {
+      "main": [
+        [
+          {
+            "node": "Build Anomalous Access Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Anomalous Access Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Log Anomalous Access Alert For Compliance Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Anomalous Access Alert For Compliance Audit": {
+      "main": [
+        [
+          {
+            "node": "Send Anomalous Access Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Weekly Access Pattern Summary": {
+      "main": [
+        [
+          {
+            "node": "Fetch Weekly Drive Activity From Google Workspace",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Weekly Drive Activity From Google Workspace": {
+      "main": [
+        [
+          {
+            "node": "Split Out Weekly Activity Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Weekly Activity Records": {
+      "main": [
+        [
+          {
+            "node": "Normalize Weekly Access Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Weekly Access Event": {
+      "main": [
+        [
+          {
+            "node": "Filter Access-Relevant Events For Weekly Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Access-Relevant Events For Weekly Summary": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Weekly Access By User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Weekly Access By User": {
+      "main": [
+        [
+          {
+            "node": "Build Weekly Access Pattern Summary Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Weekly Access Pattern Summary Email": {
+      "main": [
+        [
+          {
+            "node": "Log Weekly Access Summary For Compliance Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Weekly Access Summary For Compliance Audit": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Access Pattern Summary Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Runs on two independent schedules. Hourly: pulls Google Workspace Drive access activity, counts views/downloads/prints per user, and emails the firm admin the moment anyone crosses a bulk-download or access-burst threshold, with a per-user cooldown so the same person doesn't re-trigger every hour. Weekly (separate): re-reads the last 7 days of the same audit log and always sends a firm-wide access summary for visibility. Reads metadata only -- who accessed which file name and when -- never document contents (ABA Op. 512). Replaces enterprise SIEM/DLP tools and manual log review."
+}
