@@ -4,9 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Case-Study Proof Auto-Assembler\n\n### Internal Protomated tool — not a law firm template\n\nUnlike everything else in this catalog, this workflow runs on **Protomated's own** Salesmate CRM, not a client's system. It exists because publishing a case study today means a partner blocking time for interviews, data-pulling, and copywriting weeks after a Build closes — so it never gets prioritized. This automates the assembly, but never the publish decision.\n\n### How it works\n\n**A. Draft assembly (top row)** — Fires when a Build/Deep Assessment deal moves to Closed Won in Salesmate. Looks up the client's before/after metrics (response time, no-show rate, hours saved) from a manually-maintained results tracker, drafts a one-pager, logs it to a review ledger, and emails Dele plus the client contact for review and sign-off. If metrics haven't been entered yet, it tells Dele that instead of drafting anything.\n\n**B. Stale review reminder (bottom row)** — Runs daily, independently. Nudges Dele about any draft that's sat in 'pending review' past a configurable number of days, so a drafted case study doesn't quietly die in an inbox.\n\n**This never publishes anything on its own.** It only ever produces a DRAFT and routes it for two human approvals — Dele's, and the client's own sign-off plus quote. Nothing goes out the door without both. It only aggregates operational metrics the client has already agreed can be shared (ABA Op. 512 doesn't even apply here — this is Protomated's own marketing operations, not legal work — but the human sign-off gate exists regardless because it's still someone else's business results).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the client-facing sign-off request goes through it.\n- [ ] Create a Salesmate automation rule that fires a webhook to this workflow's URL when a deal in the Build or Deep Assessment pipeline moves to Closed Won.\n- [ ] Create a Google Sheet with a 'Results Tracker' tab (manually filled in by the team during the engagement) and a 'Case Studies' tab (this workflow's own review ledger) — see the deploy guide for exact columns.\n- [ ] Add a Header Auth credential for the Salesmate API token.\n- [ ] Set the required n8n Variables: DELE_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, RESULTS_TRACKER_SHEET_ID, CASE_STUDY_LEDGER_SHEET_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe Salesmate response shapes here are built from Salesmate's documented v4 API and the sample payloads already used elsewhere in Protomated's own automations — confirm the exact field names against a real webhook delivery on first live test and adjust 'Parse Closed Won Deal Webhook' if anything differs.",
-        "width": 480,
-        "height": 1700
+        "content": "## Case-Study Proof Auto-Assembler\n\n### Internal Protomated tool — not a law firm template\n\nUnlike everything else in this catalog, this workflow tracks Protomated's own client deals, not a client's system. It exists because publishing a case study today means a partner blocking time for interviews, data-pulling, and copywriting weeks after a Build closes — so it never gets prioritized. This automates the assembly, but never the publish decision.\n\n### How it works\n\n**A. Draft assembly (top row)** — Runs daily. Scans a manually-maintained Deals Tracker sheet for any Build/Deep Assessment deal the team has just marked Closed Won, looks up that client's before/after metrics (response time, no-show rate, hours saved) from a second results tracker, drafts a one-pager, logs it to a review ledger, and emails Dele plus the client contact for review and sign-off. If metrics haven't been entered yet, it tells Dele that instead of drafting anything.\n\n**B. Stale review reminder (bottom row)** — Runs daily, independently. Nudges Dele about any draft that's sat in 'pending review' past a configurable number of days, so a drafted case study doesn't quietly die in an inbox.\n\n**This never publishes anything on its own.** It only ever produces a DRAFT and routes it for two human approvals — Dele's, and the client's own sign-off plus quote. Nothing goes out the door without both. It only aggregates operational metrics the client has already agreed can be shared (ABA Op. 512 doesn't even apply here — this is Protomated's own marketing operations, not legal work — but the human sign-off gate exists regardless because it's still someone else's business results).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the client-facing sign-off request goes through it.\n- [ ] Create a Google Sheet with a 'Deals Tracker' tab (manually updated whenever a deal closes) and a 'Results Tracker' tab (metrics entered during the engagement) and a 'Case Studies' tab (this workflow's own review ledger) — see the deploy guide for exact columns.\n- [ ] Add a Google Sheets OAuth2 credential.\n- [ ] Set the required n8n Variables: DELE_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, DEALS_TRACKER_SHEET_ID, RESULTS_TRACKER_SHEET_ID, CASE_STUDY_LEDGER_SHEET_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe whole trigger surface is one manually-updated 'stage' column in the Deals Tracker sheet — whoever closes a deal flips it to 'Closed Won' and this picks it up on the next daily run. There's deliberately no CRM API dependency here, since Protomated's CRM tooling has changed before and will likely change again; a spreadsheet the team already opens every day is the most durable trigger for an internal tool like this one."
       },
       "id": "7600aa00-0076-4000-a000-0000000001",
       "name": "📖 Workflow doc",
@@ -19,10 +17,7 @@
     },
     {
       "parameters": {
-        "content": "## Draft the case study and route it for approval\n\nFires when a deal closes won. Pulls the client's before/after metrics, drafts a one-pager, logs it for review, and emails Dele and the client for sign-off — never publishes anything itself.",
-        "width": 640,
-        "height": 440,
-        "color": 7
+        "content": "## Draft the case study and route it for approval\n\nRuns daily. Scans the Deals Tracker for newly Closed Won deals, pulls the client's before/after metrics, drafts a one-pager, logs it for review, and emails Dele and the client for sign-off — never publishes anything itself."
       },
       "id": "7600aa00-0076-4000-a000-0000000002",
       "name": "Sticky Note1",
@@ -35,10 +30,7 @@
     },
     {
       "parameters": {
-        "content": "## Stale review reminder — a second, independent daily branch\n\nNudges Dele about any draft that's sat in 'pending review' too long, so a drafted case study doesn't quietly die in an inbox.",
-        "width": 640,
-        "height": 350,
-        "color": 7
+        "content": "## Stale review reminder — a second, independent daily branch\n\nNudges Dele about any draft that's sat in 'pending review' too long, so a drafted case study doesn't quietly die in an inbox."
       },
       "id": "7600aa00-0076-4000-a000-0000000003",
       "name": "Sticky Note2",
@@ -51,34 +43,64 @@
     },
     {
       "parameters": {
-        "httpMethod": "POST",
-        "path": "case-study-deal-closed",
-        "responseMode": "responseNode",
-        "options": {}
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
       },
       "id": "7600aa00-0076-4000-a000-0000000010",
-      "name": "When Deal Moves To Closed Won",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
+      "name": "Check For Newly Closed Deals Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
       "position": [
         0,
         0
       ],
-      "notes": "Wire this to a Salesmate automation rule: 'When a deal's stage changes to Closed Won' -> 'Call webhook' -> this URL. Scope the Salesmate rule to the Build and Deep Assessment pipelines if possible; this workflow double-checks that anyway."
+      "notes": "Runs daily, 9am by default — adjust the cron expression if a different time suits. Whoever closes a deal just flips its 'stage' cell to 'Closed Won' in the Deals Tracker sheet; this picks it up on the next run."
     },
     {
       "parameters": {
-        "jsCode": "// Salesmate automation webhooks are lean -- just confirm this is actually a Build/Deep Assessment\n// deal that just closed won, before doing any further API calls. Non-matching events are routed to\n// a labelled skip rather than silently continuing (same guard pattern used for every external\n// webhook in this catalog, since Salesmate may fire this rule for other stage changes too if it's\n// ever broadened).\nconst body = $json.body || $json;\nconst dealId = String(body.dealId || body.id || '');\nconst stage = body.stage || '';\nconst pipeline = body.pipeline || '';\nconst CASE_STUDY_PIPELINES = ['Build', 'Deep Assessment'];\n\nreturn { json: {\n  deal_id: dealId,\n  stage,\n  pipeline,\n  is_valid_case_study_deal: stage === 'Closed Won' && CASE_STUDY_PIPELINES.includes(pipeline) && !!dealId,\n} };"
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.DEALS_TRACKER_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Deals Tracker",
+          "mode": "name"
+        },
+        "options": {}
       },
       "id": "7600aa00-0076-4000-a000-0000000011",
-      "name": "Parse Closed Won Deal Webhook",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "name": "Read Deals Tracker",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
       "position": [
         224,
         0
       ],
-      "notes": "Confirms this is really a Closed Won deal in the Build or Deep Assessment pipeline. Adjust CASE_STUDY_PIPELINES if Salesmate's pipeline names differ from what's configured here."
+      "notes": "Reads the manually-maintained sheet where the team tracks every deal: deal_id, client_name, pipeline, stage, contact_name, contact_email. This IS the trigger surface for this workflow — no CRM API involved."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Scans the Deals Tracker for rows the team has marked Closed Won in the Build or Deep Assessment\n// pipeline, and skips any deal already processed -- tracked via n8n's own workflow static data,\n// keyed by deal_id, so a row sitting at 'Closed Won' for weeks never re-drafts the same case study\n// on every subsequent daily run.\nconst row = $json;\nconst CASE_STUDY_PIPELINES = ['Build', 'Deep Assessment'];\nconst dealId = String(row.deal_id || '');\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.processedDealIds) staticData.processedDealIds = {};\nconst alreadyProcessed = !!staticData.processedDealIds[dealId];\n\nconst isClosedWonCaseStudyDeal = row.stage === 'Closed Won' && CASE_STUDY_PIPELINES.includes(row.pipeline) && !!dealId;\nconst isNew = isClosedWonCaseStudyDeal && !alreadyProcessed;\n\nif (isNew) {\n  staticData.processedDealIds[dealId] = true;\n}\n\nreturn { json: {\n  deal_id: dealId,\n  client_name: row.client_name || 'Unknown client',\n  contact_name: row.contact_name || 'there',\n  contact_email: row.contact_email || '',\n  is_new_closed_won_deal: isNew,\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "7600aa00-0076-4000-a000-0000000012",
+      "name": "Compute Which Deals Just Closed Won",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "The dedupe here is what keeps this safe to run daily forever -- a deal only ever drafts once, no matter how many days its row sits at 'Closed Won.'"
     },
     {
       "parameters": {
@@ -93,122 +115,31 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "c_is_valid",
+              "id": "c_is_new",
               "operator": {
                 "type": "boolean",
                 "operation": "true",
                 "singleValue": true
               },
-              "leftValue": "={{ $json.is_valid_case_study_deal }}",
+              "leftValue": "={{ $json.is_new_closed_won_deal }}",
               "rightValue": ""
             }
           ]
         }
       },
-      "id": "7600aa00-0076-4000-a000-0000000012",
-      "name": "Is Valid Case Study Deal",
-      "type": "n8n-nodes-base.if",
+      "id": "7600aa00-0076-4000-a000-0000000013",
+      "name": "Filter Newly Closed Deals",
+      "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
-        448,
-        0
-      ],
-      "notes": "True continues to draft the case study; false means this stage change wasn't a Build/Deep Assessment Closed Won deal and gets a quick acknowledgment instead."
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { status: 'ignored', reason: 'not a Build/Deep Assessment deal closing won' } }}",
-        "options": {}
-      },
-      "id": "7600aa00-0076-4000-a000-0000000013",
-      "name": "Respond Not A Case Study Deal",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        672,
-        160
-      ],
-      "notes": "Acknowledges the webhook so Salesmate doesn't retry — this event just isn't relevant to case studies."
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "=https://protomated.salesmate.io/apis/deal/v4/{{ $json.deal_id }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "x-linkname",
-              "value": "protomated.salesmate.io"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true,
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "7600aa00-0076-4000-a000-0000000014",
-      "name": "Fetch Full Deal Details From Salesmate",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
         672,
         0
       ],
-      "notes": "The webhook payload is lean, so this re-fetches the full deal record -- client/company name, deal value, and the primary contact ID -- using a Header Auth credential holding the Salesmate API token."
+      "notes": "Most days this drops every row -- that's normal. Only genuinely new Closed Won deals in the right pipelines survive."
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "=https://protomated.salesmate.io/apis/contact/v4/{{ $json.data.primaryContact }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "x-linkname",
-              "value": "protomated.salesmate.io"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true,
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "7600aa00-0076-4000-a000-0000000015",
-      "name": "Fetch Primary Contact From Salesmate",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        896,
-        0
-      ],
-      "notes": "The deal record only carries the contact's ID, not their email -- this looks up the actual client contact who needs to review and sign off."
-    },
-    {
-      "parameters": {
+        "operation": "read",
         "documentId": {
           "__rl": true,
           "value": "={{ $vars.RESULTS_TRACKER_SHEET_ID }}",
@@ -226,24 +157,24 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        1120,
+        896,
         0
       ],
       "notes": "Reads the manually-maintained sheet where the team logs each client's before/after metrics during the engagement. Columns: deal_id, client_name, response_time_before_hours, response_time_after_hours, no_show_rate_before_pct, no_show_rate_after_pct, hours_saved_per_week."
     },
     {
       "parameters": {
-        "jsCode": "// Matches this deal against the manually-maintained results tracker by deal_id. If nobody's entered\n// the before/after numbers yet, there's nothing to draft a case study from -- that's a normal state,\n// not an error, so it's handled explicitly rather than crashing on missing data.\nconst dealId = String($('Parse Closed Won Deal Webhook').first().json.deal_id);\nconst rows = $input.all().map(i => i.json);\nconst match = rows.find(r => String(r.deal_id) === dealId);\n\nconst dealDetails = $('Fetch Full Deal Details From Salesmate').first().json.data || {};\nconst contact = $('Fetch Primary Contact From Salesmate').first().json.data || {};\n\n// A blank/missing cell means 'not entered yet' -- but a literal 0 is a real, meaningful value\n// (e.g. 'saved 0 hours' or 'already had 0 no-shows'), so it must NOT collapse to null too.\nfunction parseMetric(v) {\n  return (v === undefined || v === null || v === '') ? null : Number(v);\n}\n\nif (!match) {\n  return { json: {\n    deal_id: dealId,\n    client_name: dealDetails.title || 'Unknown client',\n    is_found: false,\n  } };\n}\n\nreturn { json: {\n  deal_id: dealId,\n  client_name: match.client_name || dealDetails.title || 'Unknown client',\n  contact_name: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'there',\n  contact_email: contact.email || '',\n  response_time_before_hours: parseMetric(match.response_time_before_hours),\n  response_time_after_hours: parseMetric(match.response_time_after_hours),\n  no_show_rate_before_pct: parseMetric(match.no_show_rate_before_pct),\n  no_show_rate_after_pct: parseMetric(match.no_show_rate_after_pct),\n  hours_saved_per_week: parseMetric(match.hours_saved_per_week),\n  is_found: true,\n} };"
+        "jsCode": "// Matches every newly-closed deal against the results tracker by deal_id. Runs once for the whole\n// batch (not once per item) because it needs both lists -- the deals that just closed AND every\n// tracker row -- at the same time, and produces one output item per deal so this handles any number\n// of deals closing on the same day correctly, not just one at a time. If nobody's entered the\n// before/after numbers yet for a deal, that's a normal state, not an error -- handled explicitly\n// rather than crashing on missing data.\nconst deals = $('Filter Newly Closed Deals').all().map(i => i.json);\nconst rows = $input.all().map(i => i.json);\n\nfunction parseMetric(v) {\n  // A blank/missing cell means 'not entered yet' -- but a literal 0 is a real, meaningful value\n  // (e.g. 'saved 0 hours'), so it must NOT collapse to null too.\n  return (v === undefined || v === null || v === '') ? null : Number(v);\n}\n\nreturn deals.map(deal => {\n  const match = rows.find(r => String(r.deal_id) === deal.deal_id);\n  if (!match) {\n    return { json: { deal_id: deal.deal_id, client_name: deal.client_name, contact_name: deal.contact_name, contact_email: deal.contact_email, is_found: false } };\n  }\n  return { json: {\n    deal_id: deal.deal_id,\n    client_name: match.client_name || deal.client_name,\n    contact_name: deal.contact_name,\n    contact_email: deal.contact_email,\n    response_time_before_hours: parseMetric(match.response_time_before_hours),\n    response_time_after_hours: parseMetric(match.response_time_after_hours),\n    no_show_rate_before_pct: parseMetric(match.no_show_rate_before_pct),\n    no_show_rate_after_pct: parseMetric(match.no_show_rate_after_pct),\n    hours_saved_per_week: parseMetric(match.hours_saved_per_week),\n    is_found: true,\n  } };\n});"
       },
       "id": "7600aa00-0076-4000-a000-0000000017",
       "name": "Find Matching Results Entry",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1344,
+        1120,
         0
       ],
-      "notes": "Looks up this deal's row in the results tracker by deal_id. Missing numeric fields come through as null rather than 0, so the drafting step can tell 'not entered' apart from 'genuinely zero.'"
+      "notes": "Deliberately in 'Run Once For All Items' mode -- it needs the full deals list and the full tracker at once. If more than one deal closes the same day, this is what keeps each one matched to its own metrics instead of only the first one being processed."
     },
     {
       "parameters": {
@@ -275,24 +206,25 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1568,
+        1344,
         0
       ],
       "notes": "True means the team has already logged before/after metrics for this deal and drafting can proceed; false means Dele needs to fill in the Results Tracker first."
     },
     {
       "parameters": {
-        "jsCode": "const d = $json;\nreturn { json: {\n  recipient: $vars.DELE_EMAIL,\n  subject: `Case study ready to draft, but metrics are missing — ${d.client_name}`,\n  message: `${d.client_name}'s deal (${d.deal_id}) just closed won, but there's no row yet in the Results Tracker sheet — add response time, no-show rate, and hours-saved before/after numbers, then this will draft automatically on the next run.`,\n} };"
+        "jsCode": "const d = $json;\nreturn { json: {\n  recipient: $vars.DELE_EMAIL,\n  subject: `Case study ready to draft, but metrics are missing — ${d.client_name}`,\n  message: `${d.client_name}'s deal (${d.deal_id}) just closed won, but there's no row yet in the Results Tracker sheet — add response time, no-show rate, and hours-saved before/after numbers, then this will draft automatically on the next run.`,\n} };",
+        "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-0000000019",
       "name": "Build Missing Metrics Notice Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1792,
+        1568,
         160
       ],
-      "notes": "Tells Dele the metrics are missing instead of silently doing nothing -- this deal will need the sheet filled in and this branch re-run manually (there's no automatic retry, since there's nothing new to poll for)."
+      "notes": "Tells Dele the metrics are missing instead of silently doing nothing -- this deal will need the sheet filled in; the dedupe means it won't be re-flagged every day, so check the Deals Tracker periodically for deals stuck in this state."
     },
     {
       "parameters": {
@@ -308,51 +240,37 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2016,
+        1792,
         160
       ],
       "notes": "A plain heads-up, not an error — this is the normal state until someone fills in the Results Tracker row for this deal."
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { status: 'metrics_missing' } }}",
-        "options": {}
-      },
-      "id": "7600aa00-0076-4000-a000-000000001b",
-      "name": "Respond Metrics Not Yet Logged",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        2240,
-        160
-      ],
-      "notes": "Acknowledges the webhook so Salesmate doesn't retry — the deal was valid, there's just nothing to draft from yet."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Picks whichever of the three metrics improved the most, in percentage terms, as the headline\n// stat -- guards against divide-by-zero on any 'before' value that's zero or missing.\nconst d = $json;\nfunction pctImprovement(before, after, lowerIsBetter) {\n  if (before === null || after === null || !before) return null;\n  const raw = lowerIsBetter ? (before - after) / before : (after - before) / before;\n  return Math.round(raw * 1000) / 10; // one decimal place\n}\nconst responseTimeImprovementPct = pctImprovement(d.response_time_before_hours, d.response_time_after_hours, true);\nconst noShowImprovementPct = pctImprovement(d.no_show_rate_before_pct, d.no_show_rate_after_pct, true);\n\nconst candidates = [];\nif (responseTimeImprovementPct !== null) candidates.push({ label: `${responseTimeImprovementPct}% faster response time`, value: responseTimeImprovementPct });\nif (noShowImprovementPct !== null) candidates.push({ label: `${noShowImprovementPct}% fewer no-shows`, value: noShowImprovementPct });\nif (d.hours_saved_per_week !== null) candidates.push({ label: `${d.hours_saved_per_week} hours saved per week`, value: d.hours_saved_per_week });\ncandidates.sort((a, b) => b.value - a.value);\nconst headlineStat = candidates.length ? candidates[0].label : 'measurable operational improvement';\n\nreturn { json: {\n  ...d,\n  response_time_improvement_pct: responseTimeImprovementPct,\n  no_show_improvement_pct: noShowImprovementPct,\n  headline_stat: headlineStat,\n} };"
+        "jsCode": "// Picks whichever of the three metrics improved the most, in percentage terms, as the headline\n// stat -- guards against divide-by-zero on any 'before' value that's zero or missing.\nconst d = $json;\nfunction pctImprovement(before, after, lowerIsBetter) {\n  if (before === null || after === null || !before) return null;\n  const raw = lowerIsBetter ? (before - after) / before : (after - before) / before;\n  return Math.round(raw * 1000) / 10; // one decimal place\n}\nconst responseTimeImprovementPct = pctImprovement(d.response_time_before_hours, d.response_time_after_hours, true);\nconst noShowImprovementPct = pctImprovement(d.no_show_rate_before_pct, d.no_show_rate_after_pct, true);\n\nconst candidates = [];\nif (responseTimeImprovementPct !== null) candidates.push({ label: `${responseTimeImprovementPct}% faster response time`, value: responseTimeImprovementPct });\nif (noShowImprovementPct !== null) candidates.push({ label: `${noShowImprovementPct}% fewer no-shows`, value: noShowImprovementPct });\nif (d.hours_saved_per_week !== null) candidates.push({ label: `${d.hours_saved_per_week} hours saved per week`, value: d.hours_saved_per_week });\ncandidates.sort((a, b) => b.value - a.value);\nconst headlineStat = candidates.length ? candidates[0].label : 'measurable operational improvement';\n\nreturn { json: {\n  ...d,\n  response_time_improvement_pct: responseTimeImprovementPct,\n  no_show_improvement_pct: noShowImprovementPct,\n  headline_stat: headlineStat,\n} };",
+        "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-000000001c",
       "name": "Compute Case Study Headline Stat",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1792,
+        1568,
         0
       ],
       "notes": "Whichever metric improved the most becomes the headline. Any metric that's null (not entered) is simply left out of consideration rather than showing as a false '0% improvement.'"
     },
     {
       "parameters": {
-        "jsCode": "// Assembles the draft one-pager copy -- headline plus a plain bullet list of every metric that was\n// actually entered. This is Protomated's own marketing copy about its own operational results, not\n// legal work of any kind -- but it's still a DRAFT: nothing here gets published without both Dele's\n// review and the client's own sign-off and quote.\nconst d = $json;\nconst bullets = [];\nif (d.response_time_improvement_pct !== null) bullets.push(`Response time improved ${d.response_time_improvement_pct}% (${d.response_time_before_hours}h → ${d.response_time_after_hours}h)`);\nif (d.no_show_improvement_pct !== null) bullets.push(`No-show rate improved ${d.no_show_improvement_pct}% (${d.no_show_rate_before_pct}% → ${d.no_show_rate_after_pct}%)`);\nif (d.hours_saved_per_week !== null) bullets.push(`${d.hours_saved_per_week} hours saved per week`);\n\nconst draftSummary = `${d.client_name} — ${d.headline_stat}\\n\\n` + bullets.map(b => `• ${b}`).join('\\n');\n\nreturn { json: { ...d, draft_summary: draftSummary } };"
+        "jsCode": "// Assembles the draft one-pager copy -- headline plus a plain bullet list of every metric that was\n// actually entered. This is Protomated's own marketing copy about its own operational results, not\n// legal work of any kind -- but it's still a DRAFT: nothing here gets published without both Dele's\n// review and the client's own sign-off and quote.\nconst d = $json;\nconst bullets = [];\nif (d.response_time_improvement_pct !== null) bullets.push(`Response time improved ${d.response_time_improvement_pct}% (${d.response_time_before_hours}h → ${d.response_time_after_hours}h)`);\nif (d.no_show_improvement_pct !== null) bullets.push(`No-show rate improved ${d.no_show_improvement_pct}% (${d.no_show_rate_before_pct}% → ${d.no_show_rate_after_pct}%)`);\nif (d.hours_saved_per_week !== null) bullets.push(`${d.hours_saved_per_week} hours saved per week`);\n\nconst draftSummary = `${d.client_name} — ${d.headline_stat}\\n\\n` + bullets.map(b => `• ${b}`).join('\\n');\n\nreturn { json: { ...d, draft_summary: draftSummary } };",
+        "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-000000001d",
       "name": "Draft Case Study One-Pager",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2016,
+        1792,
         0
       ],
       "notes": "The actual draft content. This is a starting point for Dele to polish, not finished copy — no case study goes out without a human rewrite pass and the client's own quote."
@@ -392,21 +310,22 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        2240,
+        2016,
         0
       ],
       "notes": "Every draft gets one row here — status starts 'pending_review' and only ever changes by someone editing the sheet directly once Dele and the client have both weighed in; this template has no separate approval webhook. Column headers must match exactly, same silent-drop risk as every other Sheets ledger in this catalog."
     },
     {
       "parameters": {
-        "jsCode": "const d = $json;\nreturn { json: {\n  ...d,\n  recipient: $vars.DELE_EMAIL,\n  subject: `Case study draft ready for review — ${d.client_name}`,\n  message: `Draft case study for ${d.client_name} is ready in the Case Studies sheet (row logged just now). Headline: ${d.headline_stat}.\\n\\n${d.draft_summary}\\n\\nPolish the copy, then reach out to the client for their sign-off and a quote — a request has also been sent to them separately.`,\n} };"
+        "jsCode": "const d = $json;\nreturn { json: {\n  ...d,\n  recipient: $vars.DELE_EMAIL,\n  subject: `Case study draft ready for review — ${d.client_name}`,\n  message: `Draft case study for ${d.client_name} is ready in the Case Studies sheet (row logged just now). Headline: ${d.headline_stat}.\\n\\n${d.draft_summary}\\n\\nPolish the copy, then reach out to the client for their sign-off and a quote — a request has also been sent to them separately.`,\n} };",
+        "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-000000001f",
       "name": "Build Internal Review Request Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2464,
+        2240,
         0
       ],
       "notes": "This is Dele's 'review task' — an email with the full draft, since this catalog has no established task-management integration to open a real task in."
@@ -439,7 +358,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        2688,
+        2464,
         0
       ],
       "notes": "Fire-and-forget audit logging only — Dele is internal, not on any opt-out list, so the guardrail's approval result is deliberately ignored here, same internal-notification pattern used throughout this catalog."
@@ -458,21 +377,22 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2912,
+        2688,
         0
       ],
       "notes": "The actual email to Dele with the full draft and a pointer to the sheet row — configure the SMTP credential on this node."
     },
     {
       "parameters": {
-        "jsCode": "const d = $json;\nreturn { json: {\n  ...d,\n  channel: 'email',\n  recipient: d.contact_email,\n  subject: `Quick favor — a case study about your results with us`,\n  message: `Hi ${d.contact_name}, we'd love to share a short results summary about working together (${d.headline_stat}) as a case study. Nothing gets published without your sign-off — we'll follow up with a draft and would appreciate a quote if you're open to it.`,\n} };"
+        "jsCode": "const d = $json;\nreturn { json: {\n  ...d,\n  channel: 'email',\n  recipient: d.contact_email,\n  subject: `Quick favor — a case study about your results with us`,\n  message: `Hi ${d.contact_name}, we'd love to share a short results summary about working together (${d.headline_stat}) as a case study. Nothing gets published without your sign-off — we'll follow up with a draft and would appreciate a quote if you're open to it.`,\n} };",
+        "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-0000000022",
       "name": "Build Client Sign-Off Request Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3136,
+        2912,
         0
       ],
       "notes": "This goes to an actual outside person — the client's own contact — so unlike the internal email to Dele, it goes through the full guardrail check (opt-out respected, disclaimer applied) rather than being fire-and-forget."
@@ -505,7 +425,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        3360,
+        3136,
         0
       ],
       "notes": "Runs the client contact through the Bar-Compliance Guardrail (NTC-33) before anything sends — opt-out respected, required disclaimer appended, send logged, same as every other client-facing send in this catalog."
@@ -540,7 +460,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        3584,
+        3360,
         0
       ],
       "notes": "Mirrors the guardrail's approved/opted-out result for the client contact — true sends the sign-off request, false means they've opted out of firm emails and it's suppressed."
@@ -559,26 +479,10 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        3808,
+        3584,
         -80
       ],
       "notes": "The actual email to the client's contact asking for review, approval, and a quote — configure the SMTP credential on this node."
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { status: 'drafted', deal_id: $json.deal_id } }}",
-        "options": {}
-      },
-      "id": "7600aa00-0076-4000-a000-0000000026",
-      "name": "Respond Case Study Drafted",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        4032,
-        -80
-      ],
-      "notes": "Final success acknowledgment for the webhook — the draft is logged, Dele's been notified, and the client sign-off request went out."
     },
     {
       "parameters": {},
@@ -587,26 +491,10 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        3808,
+        3584,
         80
       ],
       "notes": "The draft is still logged and Dele still gets the review request — only the client-facing sign-off request is suppressed, exactly like an opt-out anywhere else in this catalog."
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { status: 'drafted_signoff_skipped', deal_id: $json.deal_id } }}",
-        "options": {}
-      },
-      "id": "7600aa00-0076-4000-a000-0000000028",
-      "name": "Respond Sign-Off Skipped",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        4032,
-        80
-      ],
-      "notes": "Final acknowledgment for the case where the client has opted out — the draft still exists and Dele still knows, but no sign-off request was sent to the client."
     },
     {
       "parameters": {
@@ -775,50 +663,35 @@
   ],
   "active": false,
   "pinData": {
-    "When Deal Moves To Closed Won": [
+    "Read Deals Tracker": [
       {
         "json": {
-          "headers": {
-            "user-agent": "Salesmate-Automation/1.0"
-          },
-          "params": {},
-          "query": {},
-          "body": {
-            "dealId": "9001",
-            "id": "9001",
-            "stage": "Closed Won",
-            "pipeline": "Build",
-            "title": "Smith & Associates — Build"
-          },
-          "webhookUrl": "https://your-n8n.example.com/webhook/case-study-deal-closed",
-          "executionMode": "production"
+          "deal_id": "9001",
+          "client_name": "Smith & Associates",
+          "pipeline": "Build",
+          "stage": "Closed Won",
+          "contact_name": "Karen Smith",
+          "contact_email": "karen@smithlaw.com"
         }
-      }
-    ],
-    "Fetch Full Deal Details From Salesmate": [
+      },
       {
         "json": {
-          "data": {
-            "id": 9001,
-            "title": "Smith & Associates",
-            "pipeline": "Build",
-            "stage": "Closed Won",
-            "primaryContact": 501,
-            "owner": 1,
-            "value": 8500
-          }
+          "deal_id": "8850",
+          "client_name": "Roe Family Law",
+          "pipeline": "Deep Assessment",
+          "stage": "Closed Won",
+          "contact_name": "Michael Roe",
+          "contact_email": "michael@roefamilylaw.com"
         }
-      }
-    ],
-    "Fetch Primary Contact From Salesmate": [
+      },
       {
         "json": {
-          "data": {
-            "id": 501,
-            "firstName": "Karen",
-            "lastName": "Smith",
-            "email": "karen@smithlaw.com"
-          }
+          "deal_id": "8700",
+          "client_name": "Major Estate Planning",
+          "pipeline": "Build",
+          "stage": "Discovery",
+          "contact_name": "Priya Major",
+          "contact_email": "priya@majorestates.com"
         }
       }
     ],
@@ -877,58 +750,40 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "When Deal Moves To Closed Won": {
+    "Check For Newly Closed Deals Daily": {
       "main": [
         [
           {
-            "node": "Parse Closed Won Deal Webhook",
+            "node": "Read Deals Tracker",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Closed Won Deal Webhook": {
+    "Read Deals Tracker": {
       "main": [
         [
           {
-            "node": "Is Valid Case Study Deal",
+            "node": "Compute Which Deals Just Closed Won",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Is Valid Case Study Deal": {
+    "Compute Which Deals Just Closed Won": {
       "main": [
         [
           {
-            "node": "Fetch Full Deal Details From Salesmate",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond Not A Case Study Deal",
+            "node": "Filter Newly Closed Deals",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Full Deal Details From Salesmate": {
-      "main": [
-        [
-          {
-            "node": "Fetch Primary Contact From Salesmate",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Primary Contact From Salesmate": {
+    "Filter Newly Closed Deals": {
       "main": [
         [
           {
@@ -984,17 +839,6 @@
         [
           {
             "node": "Notify Dele Metrics Not Yet Logged",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notify Dele Metrics Not Yet Logged": {
-      "main": [
-        [
-          {
-            "node": "Respond Metrics Not Yet Logged",
             "type": "main",
             "index": 0
           }
@@ -1107,28 +951,6 @@
         ]
       ]
     },
-    "Send Client Sign-Off Request Email": {
-      "main": [
-        [
-          {
-            "node": "Respond Case Study Drafted",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Skip — Client Opted Out Of Firm Emails": {
-      "main": [
-        [
-          {
-            "node": "Respond Sign-Off Skipped",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Check For Stale Case Study Reviews Daily": {
       "main": [
         [
@@ -1196,5 +1018,5 @@
       ]
     }
   },
-  "description": "Internal Protomated tool, not a law-firm-facing template. Fires when a Build or Deep Assessment deal moves to Closed Won in Protomated's own Salesmate CRM: pulls the client's before/after metrics (response time, no-show rate, hours saved) from a manually-maintained results tracker, drafts a case-study one-pager, logs it to a review ledger, and emails Dele plus the client contact for review and sign-off. Never publishes anything itself -- always requires both a human review and the client's own sign-off and quote. A second, independent daily branch nudges Dele about any draft that's sat in review too long. Replaces a freelance case-study copywriter and weeks of manual data-pulling."
+  "description": "Internal Protomated tool, not a law-firm-facing template. Runs daily against a manually-maintained Deals Tracker sheet: whenever the team flips a Build or Deep Assessment deal to Closed Won, pulls the client's before/after metrics (response time, no-show rate, hours saved) from a results tracker, drafts a case-study one-pager, logs it to a review ledger, and emails Dele plus the client contact for review and sign-off. Never publishes anything itself -- always requires both a human review and the client's own sign-off and quote. A second, independent daily branch nudges Dele about any draft that's sat in review too long. Replaces a freelance case-study copywriter and weeks of manual data-pulling."
 }
