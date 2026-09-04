@@ -4,50 +4,130 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Bulk-Download & Anomalous-Access Alert\n\n### How it works\n\nThis workflow has TWO independent parts on one canvas:\n\n**A. Real-time anomaly alert (top row)**\nRuns hourly. Pulls Google Drive access activity from Google Workspace's own admin audit log, counts how many files each user viewed/downloaded/printed in that hour, and immediately emails the firm admin if anyone crosses a bulk-download or access-burst threshold — with the user, the matters touched, and the volume. A per-user cooldown stops the same person from re-triggering an alert every single hour while still elevated.\n\n**B. Weekly visibility digest (bottom row)**\nRuns weekly, independently. Re-pulls the last 7 days of the same audit log and emails a plain summary of who accessed the most files firm-wide — sent every week regardless of whether anything crossed a threshold, so the firm always has visibility into normal access patterns, not just alarms.\n\n**This only ever reads metadata — who accessed which file name and when — never document contents.** It cannot tell you what's inside a file, only that it was opened, downloaded, or printed. That's a deliberate boundary: this is security monitoring, not legal review (ABA Op. 512).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every alert's audit logging goes through it.\n- [ ] In Google Workspace Admin Console, enable API access and grant a service account domain-wide delegation with the `https://www.googleapis.com/auth/admin.reports.audit.readonly` scope (Super Admin required — this is the one non-trivial setup step here).\n- [ ] Add that as a Google API (OAuth2) credential in n8n.\n- [ ] Configure an SMTP credential for sending alert/digest emails.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_FROM_EMAIL, SECURITY_ALERT_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally tune BULK_DOWNLOAD_THRESHOLD (default 15/hour), ACCESS_BURST_THRESHOLD (default 40/hour), ALERT_COOLDOWN_HOURS (default 6), LOOKBACK_HOURS (default 1).\n- [ ] Activate the workflow.\n\n### Customization\n\nThe matter reference shown in alerts is extracted from the file name itself (matching a `YYYY-XX-###` pattern) — rename files without that pattern and they'll just show as 'Unmatched / General Files', which is still useful, just less specific. Adjust the MATTER_REF_PATTERN regex in 'Normalize Drive Access Event' if your firm uses a different matter numbering convention. Coverage today is Google Workspace only — Microsoft 365 / SharePoint audit log support is a natural extension (coming soon).",
+        "content": "## Bulk-Download & Anomalous-Access Alert\n\n### How it works\n\n1. The workflow triggers hourly and weekly schedules to fetch Google Drive activity logs from Google Workspace.\n2. It processes and normalizes these activity records, filtering for relevant access events.\n3. The hourly flow aggregates user access counts, checks for anomalous access locations, and compares activity against set thresholds to detect suspicious behavior.\n4. Alerts are generated, logged for compliance, and emailed to admins for any anomalous access detected hourly.\n5. The weekly flow aggregates total access summaries firm-wide, builds a summary report, logs it for compliance, and emails the digest weekly.\n6. Both hourly and weekly branches utilize sub-workflows for logging compliance audit data.\n\n### Setup steps\n\n- [ ] Configure Google Workspace Admin API credentials for the HTTP Request nodes fetching activity logs.\n- [ ] Set up email service credentials for sending alert and summary emails.\n- [ ] Define anomaly thresholds and user access tracking parameters in the code nodes for hourly anomaly detection.\n- [ ] Schedule the triggers according to desired intervals (hourly for anomalies, weekly for summaries).\n",
         "width": 480,
-        "height": 1600
+        "height": 896
       },
-      "id": "7500aa00-0075-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -700,
-        -460
-      ]
+        -608,
+        -160
+      ],
+      "id": "70422172-6983-48d3-b7d4-6d29056aa8a3",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Watch for bulk downloads and access bursts\n\nEvery hour, pulls Google Drive access activity, counts downloads/views per user, and checks two independent signals: volume over threshold, and access from an IP never seen from that user before. Either one emails the firm admin — with the matter, user, and volume. A per-user cooldown keeps it from re-alerting every hour while still elevated.",
-        "width": 640,
-        "height": 560,
+        "content": "## Hourly activity fetch and normalize\n\nThis cluster includes the hourly trigger, Google Workspace activity fetch, record splitting, and normalization of individual Drive access events.",
+        "width": 864,
+        "height": 304,
         "color": 7
       },
-      "id": "7500aa00-0075-4000-a000-0000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -128
+      ],
+      "id": "cc6040b1-46f6-4848-9199-7121510b97ba",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Weekly access visibility digest — a second, independent branch\n\nRe-reads the last 7 days of the same audit log and always sends a plain summary of firm-wide access activity, even when nothing crossed an alert threshold — visibility, not just alarms.",
-        "width": 640,
-        "height": 460,
+        "content": "## Hourly access filtering and aggregation\n\nFilters access-relevant events and aggregates counts by user for anomaly detection preparation.",
+        "width": 416,
+        "height": 320,
         "color": 7
       },
-      "id": "7500aa00-0075-4000-a000-0000000003",
-      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        848,
+        -160
+      ],
+      "id": "9f6a6b40-4c69-4b0b-902c-4a60a83be6e6",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Hourly anomaly detection logic\n\nChecks for new access locations, compares user activity against anomaly thresholds, and filters users requiring alerts.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        -128
+      ],
+      "id": "74e885e5-2250-4342-b57a-c5fe65352182",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Hourly alert construction and sending\n\nBuilds the anomalous access alert email, logs it for compliance audit, and sends the alert email to admin.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        -128
+      ],
+      "id": "4ae023b3-03f4-408f-a479-7fbf432b04e0",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Weekly activity fetch and normalize\n\nIncludes the weekly trigger, Google Workspace weekly activity fetch, record splitting, and normalization for the weekly summary branch.",
+        "width": 864,
+        "height": 304,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
+        512
+      ],
+      "id": "9c553c5c-cfd3-48eb-8a80-0dc7daa99be5",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Weekly access filtering and aggregation\n\nFilters access-relevant events for the weekly summary and aggregates the week's access counts and totals by user.",
+        "width": 416,
+        "height": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        848,
         480
-      ]
+      ],
+      "id": "3fa5900e-a85c-4bf4-8a10-69951c191638",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Weekly summary construction and sending\n\nBuilds the weekly access pattern summary email, logs it for compliance audit, and sends the summary email.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        512
+      ],
+      "id": "175def1b-0a45-4dc0-bb62-509f1065b61c",
+      "name": "Sticky Note7"
     },
     {
       "parameters": {
@@ -61,7 +141,7 @@
         }
       },
       "id": "7500aa00-0075-4000-a000-0000000010",
-      "name": "Check Google Drive Access Logs Hourly",
+      "name": "Hourly Google Drive Access Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -99,7 +179,7 @@
         }
       },
       "id": "7500aa00-0075-4000-a000-0000000011",
-      "name": "Fetch Recent Drive Activity From Google Workspace",
+      "name": "Fetch Recent Google Drive Activity",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -114,7 +194,7 @@
         "options": {}
       },
       "id": "7500aa00-0075-4000-a000-0000000012",
-      "name": "Split Out Drive Activity Records",
+      "name": "Split Drive Activity Records",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
       "position": [
@@ -129,7 +209,7 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7500aa00-0075-4000-a000-0000000013",
-      "name": "Normalize Drive Access Event",
+      "name": "Normalize Drive Access Event Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -164,7 +244,7 @@
         }
       },
       "id": "7500aa00-0075-4000-a000-0000000014",
-      "name": "Filter Access-Relevant Events",
+      "name": "Filter Relevant Drive Access Events",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
@@ -178,7 +258,7 @@
         "jsCode": "// Groups this hour's access events by user, so each user's total volume can be checked against\n// the firm's thresholds in one place, with the matters, file names, and distinct IPs they touched\n// attached -- the IP list feeds the separate new-location anomaly check downstream.\nconst items = $input.all().map(i => i.json);\nconst byUser = {};\nfor (const it of items) {\n  if (!byUser[it.actor_email]) {\n    byUser[it.actor_email] = { actor_email: it.actor_email, access_count: 0, download_count: 0, matterCounts: {}, sampleTitles: [], ips: new Set() };\n  }\n  const u = byUser[it.actor_email];\n  u.access_count += 1;\n  if (it.is_download_event) u.download_count += 1;\n  u.matterCounts[it.matter_ref] = (u.matterCounts[it.matter_ref] || 0) + 1;\n  if (u.sampleTitles.length < 5 && !u.sampleTitles.includes(it.doc_title)) u.sampleTitles.push(it.doc_title);\n  if (it.ip_address) u.ips.add(it.ip_address);\n}\nreturn Object.values(byUser).map(u => {\n  const topMatters = Object.entries(u.matterCounts)\n    .sort((a, b) => b[1] - a[1])\n    .slice(0, 5)\n    .map(([ref, count]) => `${ref} (${count})`);\n  return { json: {\n    actor_email: u.actor_email,\n    access_count: u.access_count,\n    download_count: u.download_count,\n    top_matters: topMatters,\n    sample_titles: u.sampleTitles,\n    ip_addresses: Array.from(u.ips),\n  } };\n});"
       },
       "id": "7500aa00-0075-4000-a000-0000000015",
-      "name": "Aggregate Access Counts By User",
+      "name": "Aggregate Hourly Access By User",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -193,7 +273,7 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7500aa00-0075-4000-a000-000000000029",
-      "name": "Check For New Access Location",
+      "name": "Check User New Access Location",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -208,7 +288,7 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7500aa00-0075-4000-a000-0000000016",
-      "name": "Check Against Anomaly Thresholds",
+      "name": "Compare Access Against Anomalies",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -243,7 +323,7 @@
         }
       },
       "id": "7500aa00-0075-4000-a000-0000000017",
-      "name": "Filter Users Needing An Alert",
+      "name": "Filter Users Requiring Alert",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
@@ -258,7 +338,7 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7500aa00-0075-4000-a000-0000000018",
-      "name": "Build Anomalous Access Alert Email",
+      "name": "Build Access Anomaly Alert Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -291,7 +371,7 @@
         }
       },
       "id": "7500aa00-0075-4000-a000-0000000019",
-      "name": "Log Anomalous Access Alert For Compliance Audit",
+      "name": "Log Access Alert For Compliance",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -303,15 +383,15 @@
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $('Build Anomalous Access Alert Email').item.json.recipient }}",
-        "subject": "={{ $('Build Anomalous Access Alert Email').item.json.subject }}",
-        "text": "={{ $('Build Anomalous Access Alert Email').item.json.message }}",
+        "toEmail": "={{ $('Build Access Anomaly Alert Email').item.json.recipient }}",
+        "subject": "={{ $('Build Access Anomaly Alert Email').item.json.subject }}",
+        "text": "={{ $('Build Access Anomaly Alert Email').item.json.message }}",
         "options": {},
         "emailFormat": "html",
-        "html": "={{ $('Build Anomalous Access Alert Email').item.json.email_html }}"
+        "html": "={{ $('Build Access Anomaly Alert Email').item.json.email_html }}"
       },
       "id": "7500aa00-0075-4000-a000-000000001a",
-      "name": "Send Anomalous Access Alert Email",
+      "name": "Send Access Anomaly Alert Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -332,7 +412,7 @@
         }
       },
       "id": "7500aa00-0075-4000-a000-0000000020",
-      "name": "Send Weekly Access Pattern Summary",
+      "name": "Weekly Access Pattern Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -370,7 +450,7 @@
         }
       },
       "id": "7500aa00-0075-4000-a000-0000000021",
-      "name": "Fetch Weekly Drive Activity From Google Workspace",
+      "name": "Fetch Weekly Google Drive Data",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -385,7 +465,7 @@
         "options": {}
       },
       "id": "7500aa00-0075-4000-a000-0000000022",
-      "name": "Split Out Weekly Activity Records",
+      "name": "Split Weekly Drive Activity Records",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
       "position": [
@@ -400,7 +480,7 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7500aa00-0075-4000-a000-0000000023",
-      "name": "Normalize Weekly Access Event",
+      "name": "Normalize Weekly Drive Access Event",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -435,7 +515,7 @@
         }
       },
       "id": "7500aa00-0075-4000-a000-0000000024",
-      "name": "Filter Access-Relevant Events For Weekly Summary",
+      "name": "Filter Weekly Relevant Access Events",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
@@ -463,7 +543,7 @@
         "jsCode": "// Builds the styled weekly digest email. Explicitly handles the zero-activity week rather than\n// sending a blank or malformed table -- same 'never go silent' philosophy used for other periodic\n// digests in this catalog.\nfunction escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst data = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\n\nlet rowsHtml;\nif (!data.top_users || data.top_users.length === 0) {\n  rowsHtml = '<tr><td colspan=\\\"4\\\" style=\\\"padding:12px;color:#64748b;\\\">No Google Drive activity logged this week.</td></tr>';\n} else {\n  rowsHtml = data.top_users.map((u, i) => `\n    <tr style=\\\"background:${i % 2 === 0 ? '#ffffff' : '#f8fafc'};\\\">\n      <td style=\\\"padding:10px 12px;font-size:13px;color:#0f172a;\\\">${escapeHtml(u.actor_email)}</td>\n      <td style=\\\"padding:10px 12px;font-size:13px;color:#334155;text-align:center;\\\">${u.access_count}</td>\n      <td style=\\\"padding:10px 12px;font-size:13px;color:#334155;text-align:center;\\\">${u.download_count}</td>\n      <td style=\\\"padding:10px 12px;font-size:13px;color:#334155;text-align:center;\\\">${u.matters_touched}</td>\n    </tr>`).join('');\n}\n\nconst subject = `Weekly Drive access pattern summary — ${data.total_events} events`;\nconst message = `${data.total_events} Drive access events across ${data.total_users} user(s) this week.`;\n\nconst bodyHtml = `\n  <div style=\\\"color:#334155;font-size:14px;margin-bottom:18px;\\\">Here's ${escapeHtml(FIRM_NAME)}'s weekly Google Drive access summary — for visibility, not necessarily anything alarming.</div>\n  <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\">\n    <thead>\n      <tr style=\\\"background:#f1f5f9;\\\">\n        <th style=\\\"padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:left;\\\">User</th>\n        <th style=\\\"padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:center;\\\">Total accesses</th>\n        <th style=\\\"padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:center;\\\">Downloads/prints</th>\n        <th style=\\\"padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:center;\\\">Matters touched</th>\n      </tr>\n    </thead>\n    <tbody>${rowsHtml}</tbody>\n  </table>\n  <div style=\\\"color:#64748b;font-size:13px;margin-top:16px;\\\">Total events this week: ${data.total_events} across ${data.total_users} user(s). This is metadata only — no document contents were reviewed.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:28px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Weekly visibility digest</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;\\\">Drive access pattern summary</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n    <div style=\\\"padding:16px 32px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;\\\">${escapeHtml(FIRM_NAME)} security watchdog — internal digest, not a client communication.</div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: {\n  ...data,\n  recipient: $vars.SECURITY_ALERT_EMAIL || $vars.FIRM_EMAIL,\n  subject,\n  message,\n  email_html: emailHtml,\n} }];"
       },
       "id": "7500aa00-0075-4000-a000-0000000026",
-      "name": "Build Weekly Access Pattern Summary Email",
+      "name": "Build Weekly Access Summary Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -496,7 +576,7 @@
         }
       },
       "id": "7500aa00-0075-4000-a000-0000000027",
-      "name": "Log Weekly Access Summary For Compliance Audit",
+      "name": "Log Weekly Summary For Compliance",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -508,15 +588,15 @@
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $('Build Weekly Access Pattern Summary Email').item.json.recipient }}",
-        "subject": "={{ $('Build Weekly Access Pattern Summary Email').item.json.subject }}",
-        "text": "={{ $('Build Weekly Access Pattern Summary Email').item.json.message }}",
+        "toEmail": "={{ $('Build Weekly Access Summary Email').item.json.recipient }}",
+        "subject": "={{ $('Build Weekly Access Summary Email').item.json.subject }}",
+        "text": "={{ $('Build Weekly Access Summary Email').item.json.message }}",
         "options": {},
         "emailFormat": "html",
-        "html": "={{ $('Build Weekly Access Pattern Summary Email').item.json.email_html }}"
+        "html": "={{ $('Build Weekly Access Summary Email').item.json.email_html }}"
       },
       "id": "7500aa00-0075-4000-a000-0000000028",
-      "name": "Send Weekly Access Pattern Summary Email",
+      "name": "Send Weekly Access Summary Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -528,7 +608,7 @@
   ],
   "active": false,
   "pinData": {
-    "Fetch Recent Drive Activity From Google Workspace": [
+    "Fetch Recent Google Drive Activity": [
       {
         "json": {
           "kind": "admin#reports#activities",
@@ -699,7 +779,7 @@
         }
       }
     ],
-    "Fetch Weekly Drive Activity From Google Workspace": [
+    "Fetch Weekly Google Drive Data": [
       {
         "json": {
           "kind": "admin#reports#activities",
@@ -875,161 +955,161 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Check Google Drive Access Logs Hourly": {
+    "Hourly Google Drive Access Trigger": {
       "main": [
         [
           {
-            "node": "Fetch Recent Drive Activity From Google Workspace",
+            "node": "Fetch Recent Google Drive Activity",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Recent Drive Activity From Google Workspace": {
+    "Fetch Recent Google Drive Activity": {
       "main": [
         [
           {
-            "node": "Split Out Drive Activity Records",
+            "node": "Split Drive Activity Records",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Split Out Drive Activity Records": {
+    "Split Drive Activity Records": {
       "main": [
         [
           {
-            "node": "Normalize Drive Access Event",
+            "node": "Normalize Drive Access Event Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalize Drive Access Event": {
+    "Normalize Drive Access Event Data": {
       "main": [
         [
           {
-            "node": "Filter Access-Relevant Events",
+            "node": "Filter Relevant Drive Access Events",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Access-Relevant Events": {
+    "Filter Relevant Drive Access Events": {
       "main": [
         [
           {
-            "node": "Aggregate Access Counts By User",
+            "node": "Aggregate Hourly Access By User",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Aggregate Access Counts By User": {
+    "Aggregate Hourly Access By User": {
       "main": [
         [
           {
-            "node": "Check For New Access Location",
+            "node": "Check User New Access Location",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Against Anomaly Thresholds": {
+    "Compare Access Against Anomalies": {
       "main": [
         [
           {
-            "node": "Filter Users Needing An Alert",
+            "node": "Filter Users Requiring Alert",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Users Needing An Alert": {
+    "Filter Users Requiring Alert": {
       "main": [
         [
           {
-            "node": "Build Anomalous Access Alert Email",
+            "node": "Build Access Anomaly Alert Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Anomalous Access Alert Email": {
+    "Build Access Anomaly Alert Email": {
       "main": [
         [
           {
-            "node": "Log Anomalous Access Alert For Compliance Audit",
+            "node": "Log Access Alert For Compliance",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Anomalous Access Alert For Compliance Audit": {
+    "Log Access Alert For Compliance": {
       "main": [
         [
           {
-            "node": "Send Anomalous Access Alert Email",
+            "node": "Send Access Anomaly Alert Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Weekly Access Pattern Summary": {
+    "Weekly Access Pattern Trigger": {
       "main": [
         [
           {
-            "node": "Fetch Weekly Drive Activity From Google Workspace",
+            "node": "Fetch Weekly Google Drive Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Weekly Drive Activity From Google Workspace": {
+    "Fetch Weekly Google Drive Data": {
       "main": [
         [
           {
-            "node": "Split Out Weekly Activity Records",
+            "node": "Split Weekly Drive Activity Records",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Split Out Weekly Activity Records": {
+    "Split Weekly Drive Activity Records": {
       "main": [
         [
           {
-            "node": "Normalize Weekly Access Event",
+            "node": "Normalize Weekly Drive Access Event",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalize Weekly Access Event": {
+    "Normalize Weekly Drive Access Event": {
       "main": [
         [
           {
-            "node": "Filter Access-Relevant Events For Weekly Summary",
+            "node": "Filter Weekly Relevant Access Events",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Access-Relevant Events For Weekly Summary": {
+    "Filter Weekly Relevant Access Events": {
       "main": [
         [
           {
@@ -1044,40 +1124,40 @@
       "main": [
         [
           {
-            "node": "Build Weekly Access Pattern Summary Email",
+            "node": "Build Weekly Access Summary Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Weekly Access Pattern Summary Email": {
+    "Build Weekly Access Summary Email": {
       "main": [
         [
           {
-            "node": "Log Weekly Access Summary For Compliance Audit",
+            "node": "Log Weekly Summary For Compliance",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Weekly Access Summary For Compliance Audit": {
+    "Log Weekly Summary For Compliance": {
       "main": [
         [
           {
-            "node": "Send Weekly Access Pattern Summary Email",
+            "node": "Send Weekly Access Summary Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check For New Access Location": {
+    "Check User New Access Location": {
       "main": [
         [
           {
-            "node": "Check Against Anomaly Thresholds",
+            "node": "Compare Access Against Anomalies",
             "type": "main",
             "index": 0
           }
