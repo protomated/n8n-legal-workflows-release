@@ -74,7 +74,7 @@ Copy each Sheet's ID from its URL — the long string between `/d/` and `/edit`.
 
 | Variable | What to enter |
 |---|---|
-| `INTERNAL_REVIEWER_EMAIL` | Where review requests and stale-review reminders go — set this to your own inbox if you're testing, or a real reviewer's if deployed for real |
+| `FIRM_ATTORNEY_EMAIL` | Where review requests and stale-review reminders go — reused from your existing variable set rather than adding a new one; set to whoever internally reviews drafts |
 | `FIRM_FROM_EMAIL` | Sender address for all emails this template sends |
 | `GUARDRAIL_WORKFLOW_ID` | The numeric ID of the Bar-Compliance Guardrail workflow |
 | `DEALS_TRACKER_SHEET_ID` | The Deals Tracker Sheet's ID from Step 1 |
