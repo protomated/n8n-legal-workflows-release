@@ -4,23 +4,13 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Case-Study Proof Auto-Assembler\n\n### Internal Protomated tool — not a law firm template\n\nUnlike everything else in this catalog, this workflow tracks Protomated's own client deals, not a client's system. It exists because publishing a case study today means a partner blocking time for interviews, data-pulling, and copywriting weeks after a Build closes — so it never gets prioritized. This automates the assembly, but never the publish decision.\n\n### How it works\n\n**A. Draft assembly (top row)** — Runs daily. Scans a manually-maintained Deals Tracker sheet for any Build/Deep Assessment deal the team has just marked Closed Won, looks up that client's before/after metrics (response time, no-show rate, hours saved) from a second results tracker, drafts a one-pager, logs it to a review ledger, and emails Dele plus the client contact for review and sign-off. If metrics haven't been entered yet, it tells Dele that instead of drafting anything.\n\n**B. Stale review reminder (bottom row)** — Runs daily, independently. Nudges Dele about any draft that's sat in 'pending review' past a configurable number of days, so a drafted case study doesn't quietly die in an inbox.\n\n**This never publishes anything on its own.** It only ever produces a DRAFT and routes it for two human approvals — Dele's, and the client's own sign-off plus quote. Nothing goes out the door without both. It only aggregates operational metrics the client has already agreed can be shared (ABA Op. 512 doesn't even apply here — this is Protomated's own marketing operations, not legal work — but the human sign-off gate exists regardless because it's still someone else's business results).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the client-facing sign-off request goes through it.\n- [ ] Create a Google Sheet with a 'Deals Tracker' tab (manually updated whenever a deal closes) and a 'Results Tracker' tab (metrics entered during the engagement) and a 'Case Studies' tab (this workflow's own review ledger) — see the deploy guide for exact columns.\n- [ ] Add a Google Sheets OAuth2 credential.\n- [ ] Set the required n8n Variables: DELE_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, DEALS_TRACKER_SHEET_ID, RESULTS_TRACKER_SHEET_ID, CASE_STUDY_LEDGER_SHEET_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe whole trigger surface is one manually-updated 'stage' column in the Deals Tracker sheet — whoever closes a deal flips it to 'Closed Won' and this picks it up on the next daily run. There's deliberately no CRM API dependency here, since Protomated's CRM tooling has changed before and will likely change again; a spreadsheet the team already opens every day is the most durable trigger for an internal tool like this one."
+        "content": "## Find newly closed deals\n\nScans the Deals Tracker for any Build/Deep Assessment deal the team just flipped to Closed Won, skipping anything already processed.",
+        "width": 750,
+        "height": 280,
+        "color": 7
       },
-      "id": "7600aa00-0076-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -700,
-        -460
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## Draft the case study and route it for approval\n\nRuns daily. Scans the Deals Tracker for newly Closed Won deals, pulls the client's before/after metrics, drafts a one-pager, logs it for review, and emails Dele and the client for sign-off — never publishes anything itself."
-      },
-      "id": "7600aa00-0076-4000-a000-0000000002",
-      "name": "Sticky Note1",
+      "id": "7600aa00-0076-4000-a000-00000000f1",
+      "name": "Sticky Note 10",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -30,15 +20,95 @@
     },
     {
       "parameters": {
-        "content": "## Stale review reminder — a second, independent daily branch\n\nNudges Dele about any draft that's sat in 'pending review' too long, so a drafted case study doesn't quietly die in an inbox."
+        "content": "## Match against logged results\n\nLooks up each newly-closed deal's before/after metrics in the Results Tracker. If none exist yet, routes to a heads-up email instead of drafting.",
+        "width": 520,
+        "height": 280,
+        "color": 7
       },
-      "id": "7600aa00-0076-4000-a000-0000000003",
-      "name": "Sticky Note2",
+      "id": "7600aa00-0076-4000-a000-00000000f2",
+      "name": "Sticky Note 11",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        850,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Draft and log the case study\n\nPicks the biggest improvement as the headline, drafts the one-pager copy, and logs it to the Case Studies review ledger as pending_review.",
+        "width": 520,
+        "height": 280,
+        "color": 7
+      },
+      "id": "7600aa00-0076-4000-a000-00000000f3",
+      "name": "Sticky Note 12",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1550,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Route for review and sign-off\n\nEmails Dele the full draft, then requests the client's own sign-off and quote through the compliance guardrail — opted-out clients still get the draft logged, just not the request.",
+        "width": 1420,
+        "height": 280,
+        "color": 7
+      },
+      "id": "7600aa00-0076-4000-a000-00000000f4",
+      "name": "Sticky Note 13",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Find drafts still pending review\n\nRe-reads the Case Studies ledger daily and computes how many days each pending_review row has been sitting untouched.",
+        "width": 750,
+        "height": 260,
+        "color": 7
+      },
+      "id": "7600aa00-0076-4000-a000-00000000f5",
+      "name": "Sticky Note 14",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        1040
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Alert Dele about stale drafts\n\nOnly entries past STALE_REVIEW_DAYS get an actual reminder — most days this finds nothing to send.",
+        "width": 520,
+        "height": 260,
+        "color": 7
+      },
+      "id": "7600aa00-0076-4000-a000-00000000f6",
+      "name": "Sticky Note 15",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        850,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Case-Study Proof Auto-Assembler\n\n### Internal Protomated tool — not a law firm template\n\nUnlike everything else in this catalog, this workflow tracks Protomated's own client deals, not a client's system. It exists because publishing a case study today means a partner blocking time for interviews, data-pulling, and copywriting weeks after a Build closes — so it never gets prioritized. This automates the assembly, but never the publish decision.\n\n### How it works\n\n**A. Draft assembly (top row)** — Runs daily. Scans a manually-maintained Deals Tracker sheet for any Build/Deep Assessment deal the team has just marked Closed Won, looks up that client's before/after metrics (response time, no-show rate, hours saved) from a second results tracker, drafts a one-pager, logs it to a review ledger, and emails Dele plus the client contact for review and sign-off. If metrics haven't been entered yet, it tells Dele that instead of drafting anything.\n\n**B. Stale review reminder (bottom row)** — Runs daily, independently. Nudges Dele about any draft that's sat in 'pending review' past a configurable number of days, so a drafted case study doesn't quietly die in an inbox.\n\n**This never publishes anything on its own.** It only ever produces a DRAFT and routes it for two human approvals — Dele's, and the client's own sign-off plus quote. Nothing goes out the door without both. It only aggregates operational metrics the client has already agreed can be shared (ABA Op. 512 doesn't even apply here — this is Protomated's own marketing operations, not legal work — but the human sign-off gate exists regardless because it's still someone else's business results).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the client-facing sign-off request goes through it.\n- [ ] Create a Google Sheet with a 'Deals Tracker' tab (manually updated whenever a deal closes) and a 'Results Tracker' tab (metrics entered during the engagement) and a 'Case Studies' tab (this workflow's own review ledger) — see the deploy guide for exact columns.\n- [ ] Add a Google Sheets OAuth2 credential.\n- [ ] Set the required n8n Variables: DELE_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, DEALS_TRACKER_SHEET_ID, RESULTS_TRACKER_SHEET_ID, CASE_STUDY_LEDGER_SHEET_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe whole trigger surface is one manually-updated 'stage' column in the Deals Tracker sheet — whoever closes a deal flips it to 'Closed Won' and this picks it up on the next daily run. There's deliberately no CRM API dependency here, since Protomated's CRM tooling has changed before and will likely change again; a spreadsheet the team already opens every day is the most durable trigger for an internal tool like this one."
+      },
+      "id": "7600aa00-0076-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
       ]
     },
     {
