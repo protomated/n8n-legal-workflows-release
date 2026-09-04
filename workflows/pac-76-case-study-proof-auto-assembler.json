@@ -454,7 +454,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const d = $json;\nreturn { json: {\n  ...d,\n  channel: 'email',\n  recipient: d.contact_email,\n  subject: `Quick favor — a case study about your results with us`,\n  message: `Hi ${d.contact_name}, we'd love to share a short results summary about working together (${d.headline_stat}) as a case study. Nothing gets published without your sign-off — we'll follow up with a draft and would appreciate a quote if you're open to it.`,\n} };",
+        "jsCode": "// The guardrail call two steps upstream (Log Review Request For Compliance Audit) REPLACES $json\n// with its own response -- it only ever received {channel, recipient, message, template_id, matter_id},\n// so contact_name/contact_email/headline_stat are gone from $json by the time execution reaches here.\n// Reach back to 'Draft Case Study One-Pager' by name for those, same fix as every other guardrail-call\n// gotcha in this catalog.\nconst d = $('Draft Case Study One-Pager').item.json;\nreturn { json: {\n  ...d,\n  channel: 'email',\n  recipient: d.contact_email,\n  subject: `Quick favor — a case study about your results with us`,\n  message: `Hi ${d.contact_name}, we'd love to share a short results summary about working together (${d.headline_stat}) as a case study. Nothing gets published without your sign-off — we'll follow up with a draft and would appreciate a quote if you're open to it.`,\n} };",
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-0000000022",
@@ -465,7 +465,7 @@
         2912,
         0
       ],
-      "notes": "This goes to an actual outside person — the client's own contact — so unlike the internal email to the reviewer, it goes through the full guardrail check (opt-out respected, disclaimer applied) rather than being fire-and-forget."
+      "notes": "This goes to an actual outside person — the client's own contact — so unlike the internal email to the reviewer, it goes through the full guardrail check (opt-out respected, disclaimer applied) rather than being fire-and-forget. Reads deal fields back from 'Draft Case Study One-Pager' by name, not $json, because the guardrail call in between replaced $json with its own response."
     },
     {
       "parameters": {
