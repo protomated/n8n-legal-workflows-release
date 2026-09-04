@@ -8,7 +8,7 @@
 
 ## This one is different from everything else in this catalog
 
-Every other workflow in this repo is a lead-magnet template a law firm deploys on their own n8n instance. This one isn't — it tracks Protomated's own client deals and references an internal reviewer (Dele) by name. It exists to solve a purely internal problem: the single highest-leverage conversion unlock in the GTM Roadmap (a published case study) has no path to production today, because assembling one means a partner blocking time for interviews, data-pulling, and copywriting weeks after a Build closes — so it never gets prioritized.
+Every other workflow in this repo is a lead-magnet template a law firm deploys on their own n8n instance. This one isn't — it tracks Protomated's own client deals. Rather than baking in a specific team member's inbox, the internal reviewer's email is a variable anyone importing this template sets to their own address. It exists to solve a purely internal problem: the single highest-leverage conversion unlock in the GTM Roadmap (a published case study) has no path to production today, because assembling one means a partner blocking time for interviews, data-pulling, and copywriting weeks after a Build closes — so it never gets prioritized.
 
 It's still built to this catalog's usual bar (harness-tested code, pinned test data, sticky-note documentation, `active: false` until configured) because that discipline is worth keeping regardless of audience.
 
@@ -18,13 +18,13 @@ It's still built to this catalog's usual bar (harness-tested code, pinned test d
 
 ## Before you start: the most important thing to understand
 
-**This workflow never publishes anything.** It only ever produces a DRAFT and routes it for two separate human approvals — Dele's internal review, and the client's own sign-off plus a quote. Nothing goes out the door without both. There's no code path here that posts, emails externally as final copy, or marks anything "published" — that last step is always a manual edit to the ledger sheet once both approvals are in hand.
+**This workflow never publishes anything.** It only ever produces a DRAFT and routes it for two separate human approvals — the internal reviewer's own review, and the client's own sign-off plus a quote. Nothing goes out the door without both. There's no code path here that posts, emails externally as final copy, or marks anything "published" — that last step is always a manual edit to the ledger sheet once both approvals are in hand.
 
 **This has two independent parts on one canvas:**
-1. **Draft assembly** — runs daily against a Deals Tracker sheet; whenever the team marks a Build/Deep Assessment deal Closed Won, pulls before/after metrics from a second results tracker, drafts a one-pager, logs it, and emails Dele plus the client contact.
-2. **Stale review reminder** — runs daily, independently, and nudges Dele about any draft that's sat in "pending review" too long.
+1. **Draft assembly** — runs daily against a Deals Tracker sheet; whenever the team marks a Build/Deep Assessment deal Closed Won, pulls before/after metrics from a second results tracker, drafts a one-pager, logs it, and emails the internal reviewer plus the client contact.
+2. **Stale review reminder** — runs daily, independently, and nudges the internal reviewer about any draft that's sat in "pending review" too long.
 
-**The before/after metrics are never pulled automatically from a client's own systems.** Protomated doesn't have blanket API access into every client's Clio instance, so someone on the team enters response-time, no-show-rate, and hours-saved numbers into a Google Sheet during the engagement. If that row doesn't exist yet when a deal closes, this workflow tells Dele instead of drafting anything — it never guesses or fabricates a number.
+**The before/after metrics are never pulled automatically from a client's own systems.** Protomated doesn't have blanket API access into every client's Clio instance, so someone on the team enters response-time, no-show-rate, and hours-saved numbers into a Google Sheet during the engagement. If that row doesn't exist yet when a deal closes, this workflow tells the internal reviewer instead of drafting anything — it never guesses or fabricates a number.
 
 **It correctly handles more than one deal closing on the same day.** The matching step deliberately processes the whole day's newly-closed deals as a batch rather than assuming there's only ever one — each deal gets matched to its own results-tracker row independently, not silently defaulted to whichever deal happened to be first.
 
@@ -74,13 +74,13 @@ Copy each Sheet's ID from its URL — the long string between `/d/` and `/edit`.
 
 | Variable | What to enter |
 |---|---|
-| `DELE_EMAIL` | Where review requests and stale-review reminders go |
+| `INTERNAL_REVIEWER_EMAIL` | Where review requests and stale-review reminders go — set this to your own inbox if you're testing, or a real reviewer's if deployed for real |
 | `FIRM_FROM_EMAIL` | Sender address for all emails this template sends |
 | `GUARDRAIL_WORKFLOW_ID` | The numeric ID of the Bar-Compliance Guardrail workflow |
 | `DEALS_TRACKER_SHEET_ID` | The Deals Tracker Sheet's ID from Step 1 |
 | `RESULTS_TRACKER_SHEET_ID` | The Results Tracker Sheet's ID from Step 1 |
 | `CASE_STUDY_LEDGER_SHEET_ID` | The Case Studies Sheet's ID from Step 1 |
-| `STALE_REVIEW_DAYS` *(optional)* | How many days a draft can sit before Dele gets nudged — defaults to 5 |
+| `STALE_REVIEW_DAYS` *(optional)* | How many days a draft can sit before the internal reviewer gets nudged — defaults to 5 |
 
 ---
 
@@ -100,9 +100,9 @@ The workflow ships with pinned sample data: a Deals Tracker with two deals alrea
 2. Continue through **"Filter Newly Closed Deals"** — confirm exactly 2 items survive.
 3. Continue through **"Read Client Results Tracker"** → **"Find Matching Results Entry"** and confirm **both** deals resolve `is_found: true` with their **own** metrics — deal `9001` shows `response_time_before_hours: 18`, deal `8850` shows `24`. This is the key thing to verify: each deal must keep its own numbers, not both showing the first deal's data.
 4. Continue through **"Compute Case Study Headline Stat"** and confirm deal `9001`'s headline is `"88.9% faster response time"`.
-5. Continue through to **"Log Draft Case Study For Review"**, **"Send Review Request To Dele"**, and **"Build Client Sign-Off Request Email"** — confirm both deals produce independent, correctly-addressed emails.
+5. Continue through to **"Log Draft Case Study For Review"**, **"Send Review Request To Internal Reviewer"**, and **"Build Client Sign-Off Request Email"** — confirm both deals produce independent, correctly-addressed emails.
 6. Re-run from **"Read Deals Tracker"** a second time and confirm both deals now show `is_new_closed_won_deal: false` — the dedupe is working.
-7. Temporarily clear the pinned data on **"Read Client Results Tracker"** to an empty array, re-run from **"Find Matching Results Entry"**, and confirm both deals route to **"Notify Dele Metrics Not Yet Logged"** instead of drafting anything.
+7. Temporarily clear the pinned data on **"Read Client Results Tracker"** to an empty array, re-run from **"Find Matching Results Entry"**, and confirm both deals route to **"Notify Internal Reviewer Metrics Not Yet Logged"** instead of drafting anything.
 
 **Stale review reminder branch:**
 8. Run **"Read Case Study Review Ledger"** → **"Filter Entries Still Pending Review"** — confirm only Roe Family Law survives (Major Estate Planning is already `published`).
@@ -118,17 +118,17 @@ The workflow ships with pinned sample data: a Deals Tracker with two deals alrea
 |---|---|
 | A Deals Tracker row is flipped to `Closed Won` in a case-study pipeline | Checked for a Results Tracker entry and drafted if one exists |
 | Multiple deals close the same day | Each is matched to its own metrics and processed independently |
-| No Results Tracker entry exists yet for that deal | Dele is emailed that metrics are missing; nothing is drafted |
-| A draft is assembled | Logged to the Case Studies sheet as `pending_review`; Dele and the client contact are both emailed |
-| The client contact has opted out of firm emails | The draft and Dele's review request still happen; only the client-facing sign-off request is suppressed |
-| A draft sits in `pending_review` past `STALE_REVIEW_DAYS` | Dele gets a daily reminder until the sheet row is updated |
+| No Results Tracker entry exists yet for that deal | The internal reviewer is emailed that metrics are missing; nothing is drafted |
+| A draft is assembled | Logged to the Case Studies sheet as `pending_review`; the internal reviewer and the client contact are both emailed |
+| The client contact has opted out of firm emails | The draft and the internal reviewer's review request still happen; only the client-facing sign-off request is suppressed |
+| A draft sits in `pending_review` past `STALE_REVIEW_DAYS` | The internal reviewer gets a daily reminder until the sheet row is updated |
 | A case study is approved and published | That's always a manual edit to the sheet — this workflow has no "publish" action |
 
 ---
 
 ## Compliance note
 
-This is Protomated's own internal marketing operations tool — it never touches legal work, client matters, or any law firm's systems, so ABA Op. 512 doesn't apply to it directly. It only aggregates operational metrics (response time, no-show rate, hours saved) that a client has already agreed can be shared, and nothing publishes without that client's own explicit sign-off and quote. The Bar-Compliance Guardrail is used for the client-facing sign-off request (opt-out respected, disclaimer applied, send logged) and for internal audit logging on Dele's review request.
+This is Protomated's own internal marketing operations tool — it never touches legal work, client matters, or any law firm's systems, so ABA Op. 512 doesn't apply to it directly. It only aggregates operational metrics (response time, no-show rate, hours saved) that a client has already agreed can be shared, and nothing publishes without that client's own explicit sign-off and quote. The Bar-Compliance Guardrail is used for the client-facing sign-off request (opt-out respected, disclaimer applied, send logged) and for internal audit logging on the internal reviewer's review request.
 
 ---
 

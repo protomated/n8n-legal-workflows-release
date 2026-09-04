@@ -52,7 +52,7 @@
     },
     {
       "parameters": {
-        "content": "## Route for review and sign-off\n\nEmails Dele the full draft, then requests the client's own sign-off and quote through the compliance guardrail — opted-out clients still get the draft logged, just not the request.",
+        "content": "## Route for review and sign-off\n\nEmails the internal reviewer the full draft, then requests the client's own sign-off and quote through the compliance guardrail — opted-out clients still get the draft logged, just not the request.",
         "width": 1420,
         "height": 280,
         "color": 7
@@ -84,7 +84,7 @@
     },
     {
       "parameters": {
-        "content": "## Alert Dele about stale drafts\n\nOnly entries past STALE_REVIEW_DAYS get an actual reminder — most days this finds nothing to send.",
+        "content": "## Alert the internal reviewer about stale drafts\n\nOnly entries past STALE_REVIEW_DAYS get an actual reminder — most days this finds nothing to send.",
         "width": 520,
         "height": 260,
         "color": 7
@@ -100,7 +100,7 @@
     },
     {
       "parameters": {
-        "content": "## Case-Study Proof Auto-Assembler\n\n### Internal Protomated tool — not a law firm template\n\nUnlike everything else in this catalog, this workflow tracks Protomated's own client deals, not a client's system. It exists because publishing a case study today means a partner blocking time for interviews, data-pulling, and copywriting weeks after a Build closes — so it never gets prioritized. This automates the assembly, but never the publish decision.\n\n### How it works\n\n**A. Draft assembly (top row)** — Runs daily. Scans a manually-maintained Deals Tracker sheet for any Build/Deep Assessment deal the team has just marked Closed Won, looks up that client's before/after metrics (response time, no-show rate, hours saved) from a second results tracker, drafts a one-pager, logs it to a review ledger, and emails Dele plus the client contact for review and sign-off. If metrics haven't been entered yet, it tells Dele that instead of drafting anything.\n\n**B. Stale review reminder (bottom row)** — Runs daily, independently. Nudges Dele about any draft that's sat in 'pending review' past a configurable number of days, so a drafted case study doesn't quietly die in an inbox.\n\n**This never publishes anything on its own.** It only ever produces a DRAFT and routes it for two human approvals — Dele's, and the client's own sign-off plus quote. Nothing goes out the door without both. It only aggregates operational metrics the client has already agreed can be shared (ABA Op. 512 doesn't even apply here — this is Protomated's own marketing operations, not legal work — but the human sign-off gate exists regardless because it's still someone else's business results).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the client-facing sign-off request goes through it.\n- [ ] Create a Google Sheet with a 'Deals Tracker' tab (manually updated whenever a deal closes) and a 'Results Tracker' tab (metrics entered during the engagement) and a 'Case Studies' tab (this workflow's own review ledger) — see the deploy guide for exact columns.\n- [ ] Add a Google Sheets OAuth2 credential.\n- [ ] Set the required n8n Variables: DELE_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, DEALS_TRACKER_SHEET_ID, RESULTS_TRACKER_SHEET_ID, CASE_STUDY_LEDGER_SHEET_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe whole trigger surface is one manually-updated 'stage' column in the Deals Tracker sheet — whoever closes a deal flips it to 'Closed Won' and this picks it up on the next daily run. There's deliberately no CRM API dependency here, since Protomated's CRM tooling has changed before and will likely change again; a spreadsheet the team already opens every day is the most durable trigger for an internal tool like this one."
+        "content": "## Case-Study Proof Auto-Assembler\n\n### Internal Protomated tool — not a law firm template\n\nUnlike everything else in this catalog, this workflow tracks Protomated's own client deals, not a client's system. It exists because publishing a case study today means a partner blocking time for interviews, data-pulling, and copywriting weeks after a Build closes — so it never gets prioritized. This automates the assembly, but never the publish decision.\n\n### How it works\n\n**A. Draft assembly (top row)** — Runs daily. Scans a manually-maintained Deals Tracker sheet for any Build/Deep Assessment deal the team has just marked Closed Won, looks up that client's before/after metrics (response time, no-show rate, hours saved) from a second results tracker, drafts a one-pager, logs it to a review ledger, and emails the internal reviewer plus the client contact for review and sign-off. If metrics haven't been entered yet, it tells the internal reviewer that instead of drafting anything.\n\n**B. Stale review reminder (bottom row)** — Runs daily, independently. Nudges the internal reviewer about any draft that's sat in 'pending review' past a configurable number of days, so a drafted case study doesn't quietly die in an inbox.\n\n**This never publishes anything on its own.** It only ever produces a DRAFT and routes it for two human approvals — the internal reviewer's, and the client's own sign-off plus quote. Nothing goes out the door without both. It only aggregates operational metrics the client has already agreed can be shared (ABA Op. 512 doesn't even apply here — this is Protomated's own marketing operations, not legal work — but the human sign-off gate exists regardless because it's still someone else's business results).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the client-facing sign-off request goes through it.\n- [ ] Create a Google Sheet with a 'Deals Tracker' tab (manually updated whenever a deal closes) and a 'Results Tracker' tab (metrics entered during the engagement) and a 'Case Studies' tab (this workflow's own review ledger) — see the deploy guide for exact columns.\n- [ ] Add a Google Sheets OAuth2 credential.\n- [ ] Set the required n8n Variables: INTERNAL_REVIEWER_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, DEALS_TRACKER_SHEET_ID, RESULTS_TRACKER_SHEET_ID, CASE_STUDY_LEDGER_SHEET_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe whole trigger surface is one manually-updated 'stage' column in the Deals Tracker sheet — whoever closes a deal flips it to 'Closed Won' and this picks it up on the next daily run. There's deliberately no CRM API dependency here, since Protomated's CRM tooling has changed before and will likely change again; a spreadsheet the team already opens every day is the most durable trigger for an internal tool like this one."
       },
       "id": "7600aa00-0076-4000-a000-0000000001",
       "name": "📖 Workflow doc",
@@ -279,11 +279,11 @@
         1344,
         0
       ],
-      "notes": "True means the team has already logged before/after metrics for this deal and drafting can proceed; false means Dele needs to fill in the Results Tracker first."
+      "notes": "True means the team has already logged before/after metrics for this deal and drafting can proceed; false means the internal reviewer needs to fill in the Results Tracker first."
     },
     {
       "parameters": {
-        "jsCode": "const d = $json;\nreturn { json: {\n  recipient: $vars.DELE_EMAIL,\n  subject: `Case study ready to draft, but metrics are missing — ${d.client_name}`,\n  message: `${d.client_name}'s deal (${d.deal_id}) just closed won, but there's no row yet in the Results Tracker sheet — add response time, no-show rate, and hours-saved before/after numbers, then this will draft automatically on the next run.`,\n} };",
+        "jsCode": "const d = $json;\nreturn { json: {\n  recipient: $vars.INTERNAL_REVIEWER_EMAIL,\n  subject: `Case study ready to draft, but metrics are missing — ${d.client_name}`,\n  message: `${d.client_name}'s deal (${d.deal_id}) just closed won, but there's no row yet in the Results Tracker sheet — add response time, no-show rate, and hours-saved before/after numbers, then this will draft automatically on the next run.`,\n} };",
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-0000000019",
@@ -294,7 +294,7 @@
         1568,
         160
       ],
-      "notes": "Tells Dele the metrics are missing instead of silently doing nothing -- this deal will need the sheet filled in; the dedupe means it won't be re-flagged every day, so check the Deals Tracker periodically for deals stuck in this state."
+      "notes": "Tells the internal reviewer the metrics are missing instead of silently doing nothing -- this deal will need the sheet filled in; the dedupe means it won't be re-flagged every day, so check the Deals Tracker periodically for deals stuck in this state."
     },
     {
       "parameters": {
@@ -306,7 +306,7 @@
         "emailFormat": "text"
       },
       "id": "7600aa00-0076-4000-a000-000000001a",
-      "name": "Notify Dele Metrics Not Yet Logged",
+      "name": "Notify Internal Reviewer Metrics Not Yet Logged",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -332,7 +332,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Assembles the draft one-pager copy -- headline plus a plain bullet list of every metric that was\n// actually entered. This is Protomated's own marketing copy about its own operational results, not\n// legal work of any kind -- but it's still a DRAFT: nothing here gets published without both Dele's\n// review and the client's own sign-off and quote.\nconst d = $json;\nconst bullets = [];\nif (d.response_time_improvement_pct !== null) bullets.push(`Response time improved ${d.response_time_improvement_pct}% (${d.response_time_before_hours}h → ${d.response_time_after_hours}h)`);\nif (d.no_show_improvement_pct !== null) bullets.push(`No-show rate improved ${d.no_show_improvement_pct}% (${d.no_show_rate_before_pct}% → ${d.no_show_rate_after_pct}%)`);\nif (d.hours_saved_per_week !== null) bullets.push(`${d.hours_saved_per_week} hours saved per week`);\n\nconst draftSummary = `${d.client_name} — ${d.headline_stat}\\n\\n` + bullets.map(b => `• ${b}`).join('\\n');\n\nreturn { json: { ...d, draft_summary: draftSummary } };",
+        "jsCode": "// Assembles the draft one-pager copy -- headline plus a plain bullet list of every metric that was\n// actually entered. This is Protomated's own marketing copy about its own operational results, not\n// legal work of any kind -- but it's still a DRAFT: nothing here gets published without both the internal reviewer's\n// review and the client's own sign-off and quote.\nconst d = $json;\nconst bullets = [];\nif (d.response_time_improvement_pct !== null) bullets.push(`Response time improved ${d.response_time_improvement_pct}% (${d.response_time_before_hours}h → ${d.response_time_after_hours}h)`);\nif (d.no_show_improvement_pct !== null) bullets.push(`No-show rate improved ${d.no_show_improvement_pct}% (${d.no_show_rate_before_pct}% → ${d.no_show_rate_after_pct}%)`);\nif (d.hours_saved_per_week !== null) bullets.push(`${d.hours_saved_per_week} hours saved per week`);\n\nconst draftSummary = `${d.client_name} — ${d.headline_stat}\\n\\n` + bullets.map(b => `• ${b}`).join('\\n');\n\nreturn { json: { ...d, draft_summary: draftSummary } };",
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-000000001d",
@@ -343,7 +343,7 @@
         1792,
         0
       ],
-      "notes": "The actual draft content. This is a starting point for Dele to polish, not finished copy — no case study goes out without a human rewrite pass and the client's own quote."
+      "notes": "The actual draft content. This is a starting point for the internal reviewer to polish, not finished copy — no case study goes out without a human rewrite pass and the client's own quote."
     },
     {
       "parameters": {
@@ -383,11 +383,11 @@
         2016,
         0
       ],
-      "notes": "Every draft gets one row here — status starts 'pending_review' and only ever changes by someone editing the sheet directly once Dele and the client have both weighed in; this template has no separate approval webhook. Column headers must match exactly, same silent-drop risk as every other Sheets ledger in this catalog."
+      "notes": "Every draft gets one row here — status starts 'pending_review' and only ever changes by someone editing the sheet directly once the internal reviewer and the client have both weighed in; this template has no separate approval webhook. Column headers must match exactly, same silent-drop risk as every other Sheets ledger in this catalog."
     },
     {
       "parameters": {
-        "jsCode": "const d = $json;\nreturn { json: {\n  ...d,\n  recipient: $vars.DELE_EMAIL,\n  subject: `Case study draft ready for review — ${d.client_name}`,\n  message: `Draft case study for ${d.client_name} is ready in the Case Studies sheet (row logged just now). Headline: ${d.headline_stat}.\\n\\n${d.draft_summary}\\n\\nPolish the copy, then reach out to the client for their sign-off and a quote — a request has also been sent to them separately.`,\n} };",
+        "jsCode": "const d = $json;\nreturn { json: {\n  ...d,\n  recipient: $vars.INTERNAL_REVIEWER_EMAIL,\n  subject: `Case study draft ready for review — ${d.client_name}`,\n  message: `Draft case study for ${d.client_name} is ready in the Case Studies sheet (row logged just now). Headline: ${d.headline_stat}.\\n\\n${d.draft_summary}\\n\\nPolish the copy, then reach out to the client for their sign-off and a quote — a request has also been sent to them separately.`,\n} };",
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-000000001f",
@@ -398,7 +398,7 @@
         2240,
         0
       ],
-      "notes": "This is Dele's 'review task' — an email with the full draft, since this catalog has no established task-management integration to open a real task in."
+      "notes": "This is the internal reviewer's 'review task' — an email with the full draft, since this catalog has no established task-management integration to open a real task in."
     },
     {
       "parameters": {
@@ -431,7 +431,7 @@
         2464,
         0
       ],
-      "notes": "Fire-and-forget audit logging only — Dele is internal, not on any opt-out list, so the guardrail's approval result is deliberately ignored here, same internal-notification pattern used throughout this catalog."
+      "notes": "Fire-and-forget audit logging only — the internal reviewer is internal, not on any opt-out list, so the guardrail's approval result is deliberately ignored here, same internal-notification pattern used throughout this catalog."
     },
     {
       "parameters": {
@@ -443,14 +443,14 @@
         "emailFormat": "text"
       },
       "id": "7600aa00-0076-4000-a000-0000000021",
-      "name": "Send Review Request To Dele",
+      "name": "Send Review Request To Internal Reviewer",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
         2688,
         0
       ],
-      "notes": "The actual email to Dele with the full draft and a pointer to the sheet row — configure the SMTP credential on this node."
+      "notes": "The actual email to the internal reviewer with the full draft and a pointer to the sheet row — configure the SMTP credential on this node."
     },
     {
       "parameters": {
@@ -465,7 +465,7 @@
         2912,
         0
       ],
-      "notes": "This goes to an actual outside person — the client's own contact — so unlike the internal email to Dele, it goes through the full guardrail check (opt-out respected, disclaimer applied) rather than being fire-and-forget."
+      "notes": "This goes to an actual outside person — the client's own contact — so unlike the internal email to the reviewer, it goes through the full guardrail check (opt-out respected, disclaimer applied) rather than being fire-and-forget."
     },
     {
       "parameters": {
@@ -564,7 +564,7 @@
         3584,
         80
       ],
-      "notes": "The draft is still logged and Dele still gets the review request — only the client-facing sign-off request is suppressed, exactly like an opt-out anywhere else in this catalog."
+      "notes": "The draft is still logged and the internal reviewer still gets the review request — only the client-facing sign-off request is suppressed, exactly like an opt-out anywhere else in this catalog."
     },
     {
       "parameters": {
@@ -659,7 +659,7 @@
         672,
         1120
       ],
-      "notes": "STALE_REVIEW_DAYS controls how long a draft can sit before Dele gets nudged — defaults to 5."
+      "notes": "STALE_REVIEW_DAYS controls how long a draft can sit before the internal reviewer gets nudged — defaults to 5."
     },
     {
       "parameters": {
@@ -698,7 +698,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const row = $json;\nreturn { json: {\n  recipient: $vars.DELE_EMAIL,\n  subject: `Still pending review: ${row.client_name}'s case study (${row.days_pending} days)`,\n  message: `${row.client_name}'s case study draft (headline: ${row.headline_stat}) has been sitting in 'pending review' for ${row.days_pending} days. Open the Case Studies sheet to review and move it forward.`,\n} };",
+        "jsCode": "const row = $json;\nreturn { json: {\n  recipient: $vars.INTERNAL_REVIEWER_EMAIL,\n  subject: `Still pending review: ${row.client_name}'s case study (${row.days_pending} days)`,\n  message: `${row.client_name}'s case study draft (headline: ${row.headline_stat}) has been sitting in 'pending review' for ${row.days_pending} days. Open the Case Studies sheet to review and move it forward.`,\n} };",
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-0000000035",
@@ -709,7 +709,7 @@
         1120,
         1120
       ],
-      "notes": "A plain nudge naming the client and how many days it's been sitting, so Dele can jump straight to the sheet row."
+      "notes": "A plain nudge naming the client and how many days it's been sitting, so the internal reviewer can jump straight to the sheet row."
     },
     {
       "parameters": {
@@ -728,7 +728,7 @@
         1344,
         1120
       ],
-      "notes": "Sends the nudge to Dele — same SMTP credential as the rest of this workflow."
+      "notes": "Sends the nudge to the internal reviewer — same SMTP credential as the rest of this workflow."
     }
   ],
   "active": false,
@@ -908,7 +908,7 @@
       "main": [
         [
           {
-            "node": "Notify Dele Metrics Not Yet Logged",
+            "node": "Notify Internal Reviewer Metrics Not Yet Logged",
             "type": "main",
             "index": 0
           }
@@ -963,14 +963,14 @@
       "main": [
         [
           {
-            "node": "Send Review Request To Dele",
+            "node": "Send Review Request To Internal Reviewer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Review Request To Dele": {
+    "Send Review Request To Internal Reviewer": {
       "main": [
         [
           {
@@ -1088,5 +1088,5 @@
       ]
     }
   },
-  "description": "Internal Protomated tool, not a law-firm-facing template. Runs daily against a manually-maintained Deals Tracker sheet: whenever the team flips a Build or Deep Assessment deal to Closed Won, pulls the client's before/after metrics (response time, no-show rate, hours saved) from a results tracker, drafts a case-study one-pager, logs it to a review ledger, and emails Dele plus the client contact for review and sign-off. Never publishes anything itself -- always requires both a human review and the client's own sign-off and quote. A second, independent daily branch nudges Dele about any draft that's sat in review too long. Replaces a freelance case-study copywriter and weeks of manual data-pulling."
+  "description": "Internal Protomated tool, not a law-firm-facing template. Runs daily against a manually-maintained Deals Tracker sheet: whenever the team flips a Build or Deep Assessment deal to Closed Won, pulls the client's before/after metrics (response time, no-show rate, hours saved) from a results tracker, drafts a case-study one-pager, logs it to a review ledger, and emails the internal reviewer plus the client contact for review and sign-off. Never publishes anything itself -- always requires both a human review and the client's own sign-off and quote. A second, independent daily branch nudges the internal reviewer about any draft that's sat in review too long. Replaces a freelance case-study copywriter and weeks of manual data-pulling."
 }
