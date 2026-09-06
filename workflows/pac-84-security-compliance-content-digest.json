@@ -1,0 +1,335 @@
+{
+  "name": "Security & Compliance Content Digest",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Security & Compliance Content Digest\n\n### Internal Protomated tool — Authority pillar, not deployed to clients\n\nSolo and small firms rarely see plain-English security/compliance guidance written for their scale — most of what exists is written for enterprise IT departments. This is a content gap Protomated can own to reinforce the 'we never touch your legal work, and we take your data seriously' brand promise, feeding the newsletter/Field Notes content pipeline.\n\n### How it works\n\n1. Runs weekly. Pulls from a configurable list of public RSS feeds — breach-notification filings, bar-association security guidance, data-protection-law update trackers.\n2. Filters to items published recently and matching relevance keywords (mentions of small/solo firms, breaches, compliance, data protection).\n3. Drafts a plain-English digest entry per relevant item — a templated 'why this matters for small firms' blurb based on which keyword matched, not real analysis.\n4. Logs the draft to a review ledger and emails it to the content reviewer. Nothing publishes without a human pass.\n\n**This monitors and summarizes public information only — it is explicitly informational, never advice.** It never touches legal work, gives compliance guidance to a specific firm's situation, or drafts anything that could be read as legal advice (ABA Op. 512 doesn't directly apply since this isn't a law-firm-facing template, but the same discipline is kept regardless). Every digest draft requires a human review pass before anything goes into the newsletter pipeline.\n\n### Setup steps\n\n- [ ] Create a Google Sheet with a 'Digest Drafts' tab — see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: SECURITY_DIGEST_FEED_URLS, CONTENT_REVIEWER_EMAIL, FIRM_FROM_EMAIL, DIGEST_LOG_SHEET_ID.\n- [ ] Optionally tune RELEVANCE_KEYWORDS and DIGEST_LOOKBACK_DAYS.\n- [ ] Activate the workflow.\n\n### Customization\n\nSECURITY_DIGEST_FEED_URLS and RELEVANCE_KEYWORDS are the entire content-sourcing surface — swap in real feed URLs (state AG breach notification pages, ABA/state bar publications, IAPP or similar data-protection-law trackers, if they publish RSS) rather than editing the code."
+      },
+      "id": "8400aa00-0084-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Pull, filter, and draft the weekly digest\n\nReads a configurable list of public feeds, keeps only recent and relevant items, and drafts a plain-English blurb per item for human review.",
+        "width": 1600,
+        "height": 260,
+        "color": 7
+      },
+      "id": "8400aa00-0084-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "8400aa00-0084-4000-a000-0000000010",
+      "name": "Check Security Content Sources Weekly",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Runs weekly, Monday 8am by default."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns the configured comma-separated feed list into one item per feed URL, so the RSS node\n// downstream fetches each one independently.\nconst urls = ($vars.SECURITY_DIGEST_FEED_URLS || '').split(',').map(s => s.trim()).filter(Boolean);\nreturn urls.map(url => ({ json: { feed_url: url } }));"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000011",
+      "name": "Build Feed URL List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "SECURITY_DIGEST_FEED_URLS is the entire source list — a comma-separated list of RSS feed URLs (state AG breach notification pages, bar association publications, data-protection-law trackers)."
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.feed_url }}"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000012",
+      "name": "Fetch Each Security Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Runs once per feed URL from the list above, fetching that feed's current items."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keeps only items published within the lookback window AND matching at least one relevance\n// keyword -- this is plain keyword filtering, not real analysis or judgment about what's actually\n// important.\nconst items = $input.all().map(i => i.json);\nconst RELEVANCE_KEYWORDS = ($vars.RELEVANCE_KEYWORDS || 'small firm,solo firm,law firm,breach,ransomware,data protection,compliance,privacy law').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);\nconst DIGEST_LOOKBACK_DAYS = Number($vars.DIGEST_LOOKBACK_DAYS || 7);\nconst cutoff = Date.now() - DIGEST_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;\n\nconst relevant = items.filter(item => {\n  const pubDate = item.isoDate || item.pubDate;\n  const publishedRecently = pubDate ? (new Date(pubDate).getTime() >= cutoff) : true;\n  const text = `${item.title || ''} ${item.contentSnippet || item.content || ''}`.toLowerCase();\n  const isRelevant = RELEVANCE_KEYWORDS.some(k => text.includes(k));\n  return publishedRecently && isRelevant;\n});\n\nreturn relevant.map(item => {\n  const text = `${item.title || ''} ${item.contentSnippet || item.content || ''}`.toLowerCase();\n  const matchedKeyword = RELEVANCE_KEYWORDS.find(k => text.includes(k)) || '';\n  return { json: {\n    title: item.title || '(untitled)',\n    link: item.link || '',\n    source_feed: item.meta?.title || item.link || '',\n    published_date: item.isoDate || item.pubDate || '',\n    snippet: (item.contentSnippet || '').slice(0, 300),\n    matched_keyword: matchedKeyword,\n  } };\n});"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000013",
+      "name": "Filter Relevant Recent Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "RELEVANCE_KEYWORDS and DIGEST_LOOKBACK_DAYS control what makes it into the digest — most weeks this should still find something across multiple feeds."
+    },
+    {
+      "parameters": {
+        "jsCode": "// A templated, keyword-driven blurb -- not real analysis. This is the entire 'why this matters'\n// content, deliberately kept simple and non-interpretive.\nconst items = $input.all().map(i => i.json);\n\nconst BLURB_BY_KEYWORD = {\n  'breach': 'A reminder that breach notification obligations apply to firms of every size, not just large ones.',\n  'ransomware': 'Ransomware increasingly targets smaller organizations precisely because they often have fewer defenses in place.',\n  'data protection': 'Data protection requirements keep expanding, and solo/small firms are not exempt just because of size.',\n  'compliance': 'Compliance guidance written for enterprise IT rarely translates directly to a solo or small practice — worth a plain-English read.',\n  'privacy law': 'Privacy law changes can affect client intake and data handling even for firms that never thought of themselves as a target.',\n};\nconst DEFAULT_BLURB = 'Worth a look for how it might apply at solo/small-firm scale.';\n\nconst digestItems = items.map(item => ({\n  ...item,\n  why_it_matters: BLURB_BY_KEYWORD[item.matched_keyword] || DEFAULT_BLURB,\n}));\n\nconst draftLines = digestItems.length\n  ? digestItems.map(i => `- ${i.title} (${i.source_feed})\\n  ${i.why_it_matters}\\n  ${i.link}`).join('\\n\\n')\n  : '(no relevant items found this week)';\n\nreturn [{ json: {\n  item_count: digestItems.length,\n  draft_content: draftLines,\n  items: digestItems,\n} }];"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000014",
+      "name": "Draft Plain-English Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Runs once for the whole batch, not once per item — turns the filtered items into a single digest draft, explicitly noting when nothing relevant was found rather than sending an empty draft."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nreturn { json: { ...d, digest_id: 'DIGEST-' + Date.now(), created_at: new Date().toISOString() } };"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000015",
+      "name": "Assign Digest ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "This ID ties the sheet row to this run — mostly useful if this template later grows a review/decision webhook like other ledger-based templates in this catalog."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.DIGEST_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Digest Drafts",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "digest_id": "={{ $json.digest_id }}",
+            "item_count": "={{ $json.item_count }}",
+            "draft_content": "={{ $json.draft_content }}",
+            "status": "pending_review",
+            "created_at": "={{ $json.created_at }}",
+            "reviewed_at": "",
+            "published_at": ""
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "8400aa00-0084-4000-a000-0000000016",
+      "name": "Log Digest Draft For Review",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "Every weekly run gets a row here, even a 'nothing relevant this week' one — a visible record of the digest actually running. Column headers must match exactly."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads deal-equivalent fields back from 'Assign Digest ID' by name, not $json -- the Sheets\n// append node in between echoes back its own written row, not the original structured data,\n// same gotcha already found and fixed in this catalog's other Sheets-logging templates.\nconst d = $('Assign Digest ID').item.json;\nreturn { json: {\n  ...d,\n  recipient: $vars.CONTENT_REVIEWER_EMAIL,\n  subject: `Security digest draft ready for review — ${d.item_count} item(s)`,\n  message: `This week's security/compliance digest draft (${d.digest_id}) is ready:\\n\\n${d.draft_content}\\n\\nThis is informational monitoring only, not advice or analysis -- review, polish, and approve before it goes into the newsletter/Field Notes pipeline.`,\n} };"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000017",
+      "name": "Build Digest Review Request Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "The actual review task — an email with the full draft, since this catalog has no established task-management integration to open a real task in."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "8400aa00-0084-4000-a000-0000000018",
+      "name": "Send Digest Review Request Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "This is an internal Protomated notification, not a client communication — no compliance guardrail wrap needed, same as PAC-76's internal review request.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "Fetch Each Security Feed": [
+      {
+        "json": {
+          "title": "State AG Announces New Breach Notification Guidance for Small Businesses",
+          "link": "https://example-ag.gov/breach-notice-guidance",
+          "isoDate": "2026-09-03T00:00:00.000Z",
+          "contentSnippet": "New guidance clarifies breach notification timelines for small firms and solo practitioners.",
+          "meta": {
+            "title": "Example State AG Feed"
+          }
+        }
+      },
+      {
+        "json": {
+          "title": "Ransomware Attacks Increasingly Target Small Professional Services Firms",
+          "link": "https://example-security-news.com/ransomware-small-firms",
+          "isoDate": "2026-09-02T00:00:00.000Z",
+          "contentSnippet": "A new report finds ransomware groups are shifting focus to smaller organizations with weaker defenses.",
+          "meta": {
+            "title": "Example Security News Feed"
+          }
+        }
+      },
+      {
+        "json": {
+          "title": "Local Bar Association Golf Tournament Results",
+          "link": "https://example-bar.org/golf-2026",
+          "isoDate": "2026-09-01T00:00:00.000Z",
+          "contentSnippet": "Congratulations to this year's golf tournament winners.",
+          "meta": {
+            "title": "Example Bar Association Feed"
+          }
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "Check Security Content Sources Weekly": {
+      "main": [
+        [
+          {
+            "node": "Build Feed URL List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Feed URL List": {
+      "main": [
+        [
+          {
+            "node": "Fetch Each Security Feed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Each Security Feed": {
+      "main": [
+        [
+          {
+            "node": "Filter Relevant Recent Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Relevant Recent Items": {
+      "main": [
+        [
+          {
+            "node": "Draft Plain-English Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Plain-English Digest": {
+      "main": [
+        [
+          {
+            "node": "Assign Digest ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assign Digest ID": {
+      "main": [
+        [
+          {
+            "node": "Log Digest Draft For Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Digest Draft For Review": {
+      "main": [
+        [
+          {
+            "node": "Build Digest Review Request Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Digest Review Request Email": {
+      "main": [
+        [
+          {
+            "node": "Send Digest Review Request Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Internal Protomated tool, Authority pillar, not deployed to clients. Runs weekly: pulls a configurable list of public RSS feeds (breach notifications, bar association security guidance, data-protection-law updates), filters to recent items matching relevance keywords, drafts a plain-English 'why this matters for small firms' blurb per item using a templated (not AI-generated) approach, logs the draft, and emails it to a content reviewer. Nothing publishes without a human review pass. Feeds Protomated's own newsletter/Field Notes content pipeline."
+}
