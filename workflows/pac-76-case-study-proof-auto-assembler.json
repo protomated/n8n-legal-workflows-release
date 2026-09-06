@@ -4,112 +4,162 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Find newly closed deals\n\nScans the Deals Tracker for any Build/Deep Assessment deal the team just flipped to Closed Won, skipping anything already processed.",
-        "width": 750,
-        "height": 280,
+        "content": "## Case-Study Proof Auto-Assembler\n\n### How it works\n\n1. The workflow triggers daily to check for newly closed deals and processes data from deal and client results trackers.\n2. It identifies closed deals, matches them with client results, and drafts case study one-pagers for internal review.\n3. An internal reviewer is notified, and after compliance checks, client sign-off requests are optionally sent.\n4. Separately, the workflow runs a daily check on case study reviews and sends reminders for stale or pending reviews.\n5. Email notifications are used to communicate with internal reviewers and clients based on workflow conditions.\n\n### Setup steps\n\n- [ ] Configure Google Sheets credentials with access to Deals Tracker, Client Results Tracker, and Case Study Review Ledger.\n- [ ] Set up email sending credentials for internal and client notification emails.\n- [ ] Configure sub-workflows for compliance checks invoked by executeWorkflow nodes.\n- [ ] Adjust schedule triggers timing to control daily checks according to business requirements.\n\n### Customization\n\nCustomize metric computations, email templates, and compliance logic in the code and sub-workflow nodes as needed for your specific use case.",
+        "width": 480,
+        "height": 896
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        -304
+      ],
+      "id": "d2bee6f5-82e1-40e4-af50-434188b68a76",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Trigger and deals data input\n\nStarting point that triggers workflow and reads deals tracker data for closed deals processing.",
+        "width": 864,
+        "height": 272,
         "color": 7
       },
-      "id": "7600aa00-0076-4000-a000-00000000f1",
-      "name": "Sticky Note 10",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -112
+      ],
+      "id": "e18890f8-85f2-4731-b726-9bfe87fbc8b8",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Match against logged results\n\nLooks up each newly-closed deal's before/after metrics in the Results Tracker. If none exist yet, routes to a heads-up email instead of drafting.",
-        "width": 520,
-        "height": 280,
+        "content": "## Client results matching\n\nReads client results data and identifies matches with newly closed deals.",
+        "width": 640,
+        "height": 304,
         "color": 7
       },
-      "id": "7600aa00-0076-4000-a000-00000000f2",
-      "name": "Sticky Note 11",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        850,
-        -200
-      ]
+        848,
+        -128
+      ],
+      "id": "88d4c19a-f868-4966-a999-9a5d0ddf9eac",
+      "name": "Sticky Note2"
     },
     {
       "parameters": {
-        "content": "## Draft and log the case study\n\nPicks the biggest improvement as the headline, drafts the one-pager copy, and logs it to the Case Studies review ledger as pending_review.",
-        "width": 520,
-        "height": 280,
+        "content": "## Missing metrics notification\n\nBuilds and sends email to notify internal reviewers of missing client metrics.",
+        "width": 416,
+        "height": 304,
         "color": 7
       },
-      "id": "7600aa00-0076-4000-a000-00000000f3",
-      "name": "Sticky Note 12",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1550,
-        -200
-      ]
+        1520,
+        32
+      ],
+      "id": "be5c38c2-722a-4e07-9cdd-ee2d35574026",
+      "name": "Sticky Note3"
     },
     {
       "parameters": {
-        "content": "## Route for review and sign-off\n\nEmails the internal reviewer the full draft, then requests the client's own sign-off and quote through the compliance guardrail — opted-out clients still get the draft logged, just not the request.",
-        "width": 1420,
-        "height": 280,
+        "content": "## Case study draft creation\n\nComputes key metrics for case study headline and drafts one-pager content for review.",
+        "width": 416,
+        "height": 304,
         "color": 7
       },
-      "id": "7600aa00-0076-4000-a000-00000000f4",
-      "name": "Sticky Note 13",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2200,
-        -200
-      ]
+        1520,
+        -304
+      ],
+      "id": "65e60b13-9579-4724-9c29-7c931b10e25d",
+      "name": "Sticky Note4"
     },
     {
       "parameters": {
-        "content": "## Find drafts still pending review\n\nRe-reads the Case Studies ledger daily and computes how many days each pending_review row has been sitting untouched.",
-        "width": 750,
-        "height": 260,
+        "content": "## Case study review logging\n\nLogs the drafted case study to Google Sheets for review tracking.",
+        "width": 240,
+        "height": 352,
         "color": 7
       },
-      "id": "7600aa00-0076-4000-a000-00000000f5",
-      "name": "Sticky Note 14",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        -192
+      ],
+      "id": "d26f3b31-238c-4baf-9725-ebb00170fa60",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Internal review request process\n\nBuilds internal review request email, logs audit request via sub-workflow, and sends review email to internal reviewer.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        -128
+      ],
+      "id": "a68e3d23-fb7b-435f-a53b-b8a6cf04554a",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Client sign-off request workflow\n\nBuilds client sign-off request, checks compliance, then conditionally sends sign-off email or skips based on client preference.",
+        "width": 864,
+        "height": 464,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2912,
+        -208
+      ],
+      "id": "06ba43fb-fe1d-4be5-b277-4c68a44ffa7e",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## Trigger and review ledger input\n\nDaily trigger to check for stale case study reviews and read review ledger data.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        960
-      ]
+        992
+      ],
+      "id": "738a0b5c-7b3a-4c8a-a264-7dc36869b129",
+      "name": "Sticky Note8"
     },
     {
       "parameters": {
-        "content": "## Alert the internal reviewer about stale drafts\n\nOnly entries past STALE_REVIEW_DAYS get an actual reminder — most days this finds nothing to send.",
-        "width": 520,
-        "height": 260,
+        "content": "## Review reminders processing\n\nComputes pending days, filters for reminders needed, builds and sends reminder emails for stale reviews.",
+        "width": 864,
+        "height": 304,
         "color": 7
       },
-      "id": "7600aa00-0076-4000-a000-00000000f6",
-      "name": "Sticky Note 15",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        850,
-        960
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## Case-Study Proof Auto-Assembler\n\n### Internal Protomated tool — not a law firm template\n\nUnlike everything else in this catalog, this workflow tracks Protomated's own client deals, not a client's system. It exists because publishing a case study today means a partner blocking time for interviews, data-pulling, and copywriting weeks after a Build closes — so it never gets prioritized. This automates the assembly, but never the publish decision.\n\n### How it works\n\n**A. Draft assembly (top row)** — Runs daily. Scans a manually-maintained Deals Tracker sheet for any Build/Deep Assessment deal the team has just marked Closed Won, looks up that client's before/after metrics (response time, no-show rate, hours saved) from a second results tracker, drafts a one-pager, logs it to a review ledger, and emails the internal reviewer plus the client contact for review and sign-off. If metrics haven't been entered yet, it tells the internal reviewer that instead of drafting anything.\n\n**B. Stale review reminder (bottom row)** — Runs daily, independently. Nudges the internal reviewer about any draft that's sat in 'pending review' past a configurable number of days, so a drafted case study doesn't quietly die in an inbox.\n\n**This never publishes anything on its own.** It only ever produces a DRAFT and routes it for two human approvals — the internal reviewer's, and the client's own sign-off plus quote. Nothing goes out the door without both. It only aggregates operational metrics the client has already agreed can be shared (ABA Op. 512 doesn't even apply here — this is Protomated's own marketing operations, not legal work — but the human sign-off gate exists regardless because it's still someone else's business results).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the client-facing sign-off request goes through it.\n- [ ] Create a Google Sheet with a 'Deals Tracker' tab (manually updated whenever a deal closes) and a 'Results Tracker' tab (metrics entered during the engagement) and a 'Case Studies' tab (this workflow's own review ledger) — see the deploy guide for exact columns.\n- [ ] Add a Google Sheets OAuth2 credential.\n- [ ] Set the required n8n Variables: FIRM_ATTORNEY_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, DEALS_TRACKER_SHEET_ID, RESULTS_TRACKER_SHEET_ID, CASE_STUDY_LEDGER_SHEET_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe whole trigger surface is one manually-updated 'stage' column in the Deals Tracker sheet — whoever closes a deal flips it to 'Closed Won' and this picks it up on the next daily run. There's deliberately no CRM API dependency here, since Protomated's CRM tooling has changed before and will likely change again; a spreadsheet the team already opens every day is the most durable trigger for an internal tool like this one."
-      },
-      "id": "7600aa00-0076-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -700,
-        -460
-      ]
+        624,
+        992
+      ],
+      "id": "c4958a9a-67ac-4509-937c-9e811e0b2a78",
+      "name": "Sticky Note9"
     },
     {
       "parameters": {
@@ -123,7 +173,7 @@
         }
       },
       "id": "7600aa00-0076-4000-a000-0000000010",
-      "name": "Check For Newly Closed Deals Daily",
+      "name": "Daily Check For Closed Deals",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -148,7 +198,7 @@
         "options": {}
       },
       "id": "7600aa00-0076-4000-a000-0000000011",
-      "name": "Read Deals Tracker",
+      "name": "Read Deals Tracker Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -163,7 +213,7 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-0000000012",
-      "name": "Compute Which Deals Just Closed Won",
+      "name": "Compute Newly Closed Won Deals",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -198,7 +248,7 @@
         }
       },
       "id": "7600aa00-0076-4000-a000-0000000013",
-      "name": "Filter Newly Closed Deals",
+      "name": "Filter Only Newly Closed Deals",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
@@ -223,7 +273,7 @@
         "options": {}
       },
       "id": "7600aa00-0076-4000-a000-0000000016",
-      "name": "Read Client Results Tracker",
+      "name": "Read Client Results Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -234,10 +284,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Matches every newly-closed deal against the results tracker by deal_id. Runs once for the whole\n// batch (not once per item) because it needs both lists -- the deals that just closed AND every\n// tracker row -- at the same time, and produces one output item per deal so this handles any number\n// of deals closing on the same day correctly, not just one at a time. If nobody's entered the\n// before/after numbers yet for a deal, that's a normal state, not an error -- handled explicitly\n// rather than crashing on missing data.\nconst deals = $('Filter Newly Closed Deals').all().map(i => i.json);\nconst rows = $input.all().map(i => i.json);\n\nfunction parseMetric(v) {\n  // A blank/missing cell means 'not entered yet' -- but a literal 0 is a real, meaningful value\n  // (e.g. 'saved 0 hours'), so it must NOT collapse to null too.\n  return (v === undefined || v === null || v === '') ? null : Number(v);\n}\n\nreturn deals.map(deal => {\n  const match = rows.find(r => String(r.deal_id) === deal.deal_id);\n  if (!match) {\n    return { json: { deal_id: deal.deal_id, client_name: deal.client_name, contact_name: deal.contact_name, contact_email: deal.contact_email, is_found: false } };\n  }\n  return { json: {\n    deal_id: deal.deal_id,\n    client_name: match.client_name || deal.client_name,\n    contact_name: deal.contact_name,\n    contact_email: deal.contact_email,\n    response_time_before_hours: parseMetric(match.response_time_before_hours),\n    response_time_after_hours: parseMetric(match.response_time_after_hours),\n    no_show_rate_before_pct: parseMetric(match.no_show_rate_before_pct),\n    no_show_rate_after_pct: parseMetric(match.no_show_rate_after_pct),\n    hours_saved_per_week: parseMetric(match.hours_saved_per_week),\n    is_found: true,\n  } };\n});"
+        "jsCode": "// Matches every newly-closed deal against the results tracker by deal_id. Runs once for the whole\n// batch (not once per item) because it needs both lists -- the deals that just closed AND every\n// tracker row -- at the same time, and produces one output item per deal so this handles any number\n// of deals closing on the same day correctly, not just one at a time. If nobody's entered the\n// before/after numbers yet for a deal, that's a normal state, not an error -- handled explicitly\n// rather than crashing on missing data.\nconst deals = $('Filter Only Newly Closed Deals').all().map(i => i.json);\nconst rows = $input.all().map(i => i.json);\n\nfunction parseMetric(v) {\n  // A blank/missing cell means 'not entered yet' -- but a literal 0 is a real, meaningful value\n  // (e.g. 'saved 0 hours'), so it must NOT collapse to null too.\n  return (v === undefined || v === null || v === '') ? null : Number(v);\n}\n\nreturn deals.map(deal => {\n  const match = rows.find(r => String(r.deal_id) === deal.deal_id);\n  if (!match) {\n    return { json: { deal_id: deal.deal_id, client_name: deal.client_name, contact_name: deal.contact_name, contact_email: deal.contact_email, is_found: false } };\n  }\n  return { json: {\n    deal_id: deal.deal_id,\n    client_name: match.client_name || deal.client_name,\n    contact_name: deal.contact_name,\n    contact_email: deal.contact_email,\n    response_time_before_hours: parseMetric(match.response_time_before_hours),\n    response_time_after_hours: parseMetric(match.response_time_after_hours),\n    no_show_rate_before_pct: parseMetric(match.no_show_rate_before_pct),\n    no_show_rate_after_pct: parseMetric(match.no_show_rate_after_pct),\n    hours_saved_per_week: parseMetric(match.hours_saved_per_week),\n    is_found: true,\n  } };\n});"
       },
       "id": "7600aa00-0076-4000-a000-0000000017",
-      "name": "Find Matching Results Entry",
+      "name": "Match Deals To Results Entries",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -272,7 +322,7 @@
         }
       },
       "id": "7600aa00-0076-4000-a000-0000000018",
-      "name": "If Results Entry Found",
+      "name": "If Results Entry Exists",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -287,7 +337,7 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-0000000019",
-      "name": "Build Missing Metrics Notice Email",
+      "name": "Build Metrics Missing Notice Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -306,7 +356,7 @@
         "emailFormat": "text"
       },
       "id": "7600aa00-0076-4000-a000-000000001a",
-      "name": "Notify Internal Reviewer Metrics Not Yet Logged",
+      "name": "Send Metrics Missing Notification",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -321,12 +371,12 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-000000001c",
-      "name": "Compute Case Study Headline Stat",
+      "name": "Compute Case Study Headline",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1568,
-        0
+        -176
       ],
       "notes": "Whichever metric improved the most becomes the headline. Any metric that's null (not entered) is simply left out of consideration rather than showing as a false '0% improvement.'"
     },
@@ -336,12 +386,12 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-000000001d",
-      "name": "Draft Case Study One-Pager",
+      "name": "Draft Case Study One-Pager Copy",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1792,
-        0
+        -176
       ],
       "notes": "The actual draft content. This is a starting point for the internal reviewer to polish, not finished copy — no case study goes out without a human rewrite pass and the client's own quote."
     },
@@ -376,7 +426,7 @@
         "options": {}
       },
       "id": "7600aa00-0076-4000-a000-000000001e",
-      "name": "Log Draft Case Study For Review",
+      "name": "Append Draft Case Study To Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -395,7 +445,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2240,
+        2288,
         0
       ],
       "notes": "This is the internal reviewer's 'review task' — an email with the full draft, since this catalog has no established task-management integration to open a real task in."
@@ -424,11 +474,11 @@
         }
       },
       "id": "7600aa00-0076-4000-a000-0000000020",
-      "name": "Log Review Request For Compliance Audit",
+      "name": "Trigger Compliance Audit Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        2464,
+        2512,
         0
       ],
       "notes": "Fire-and-forget audit logging only — the internal reviewer is internal, not on any opt-out list, so the guardrail's approval result is deliberately ignored here, same internal-notification pattern used throughout this catalog."
@@ -443,18 +493,18 @@
         "emailFormat": "text"
       },
       "id": "7600aa00-0076-4000-a000-0000000021",
-      "name": "Send Review Request To Internal Reviewer",
+      "name": "Send Internal Review Request Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2688,
+        2736,
         0
       ],
       "notes": "The actual email to the internal reviewer with the full draft and a pointer to the sheet row — configure the SMTP credential on this node."
     },
     {
       "parameters": {
-        "jsCode": "// The guardrail call two steps upstream (Log Review Request For Compliance Audit) REPLACES $json\n// with its own response -- it only ever received {channel, recipient, message, template_id, matter_id},\n// so contact_name/contact_email/headline_stat are gone from $json by the time execution reaches here.\n// Reach back to 'Draft Case Study One-Pager' by name for those, same fix as every other guardrail-call\n// gotcha in this catalog.\nconst d = $('Draft Case Study One-Pager').item.json;\nreturn { json: {\n  ...d,\n  channel: 'email',\n  recipient: d.contact_email,\n  subject: `Quick favor — a case study about your results with us`,\n  message: `Hi ${d.contact_name}, we'd love to share a short results summary about working together (${d.headline_stat}) as a case study. Nothing gets published without your sign-off — we'll follow up with a draft and would appreciate a quote if you're open to it.`,\n} };",
+        "jsCode": "// The guardrail call two steps upstream (Log Review Request For Compliance Audit) REPLACES $json\n// with its own response -- it only ever received {channel, recipient, message, template_id, matter_id},\n// so contact_name/contact_email/headline_stat are gone from $json by the time execution reaches here.\n// Reach back to 'Draft Case Study One-Pager' by name for those, same fix as every other guardrail-call\n// gotcha in this catalog.\nconst d = $('Draft Case Study One-Pager Copy').item.json;\nreturn { json: {\n  ...d,\n  channel: 'email',\n  recipient: d.contact_email,\n  subject: `Quick favor — a case study about your results with us`,\n  message: `Hi ${d.contact_name}, we'd love to share a short results summary about working together (${d.headline_stat}) as a case study. Nothing gets published without your sign-off — we'll follow up with a draft and would appreciate a quote if you're open to it.`,\n} };",
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-0000000022",
@@ -462,7 +512,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2912,
+        2960,
         0
       ],
       "notes": "This goes to an actual outside person — the client's own contact — so unlike the internal email to the reviewer, it goes through the full guardrail check (opt-out respected, disclaimer applied) rather than being fire-and-forget. Reads deal fields back from 'Draft Case Study One-Pager' by name, not $json, because the guardrail call in between replaced $json with its own response."
@@ -491,11 +541,11 @@
         }
       },
       "id": "7600aa00-0076-4000-a000-0000000023",
-      "name": "Check Compliance Before Requesting Sign-Off",
+      "name": "Trigger Sign-Off Compliance Check",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        3136,
+        3184,
         0
       ],
       "notes": "Runs the client contact through the Bar-Compliance Guardrail (NTC-33) before anything sends — opt-out respected, required disclaimer appended, send logged, same as every other client-facing send in this catalog."
@@ -526,11 +576,11 @@
         }
       },
       "id": "7600aa00-0076-4000-a000-0000000024",
-      "name": "If Sign-Off Request Approved",
+      "name": "If Client Sign-Off Approved",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        3360,
+        3408,
         0
       ],
       "notes": "Mirrors the guardrail's approved/opted-out result for the client contact — true sends the sign-off request, false means they've opted out of firm emails and it's suppressed."
@@ -545,11 +595,11 @@
         "emailFormat": "text"
       },
       "id": "7600aa00-0076-4000-a000-0000000025",
-      "name": "Send Client Sign-Off Request Email",
+      "name": "Send Client Sign-Off Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        3584,
+        3632,
         -80
       ],
       "notes": "The actual email to the client's contact asking for review, approval, and a quote — configure the SMTP credential on this node."
@@ -557,11 +607,11 @@
     {
       "parameters": {},
       "id": "7600aa00-0076-4000-a000-0000000027",
-      "name": "Skip — Client Opted Out Of Firm Emails",
+      "name": "Skip Opt-Out Clients",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        3584,
+        3632,
         80
       ],
       "notes": "The draft is still logged and the internal reviewer still gets the review request — only the client-facing sign-off request is suppressed, exactly like an opt-out anywhere else in this catalog."
@@ -578,7 +628,7 @@
         }
       },
       "id": "7600aa00-0076-4000-a000-0000000030",
-      "name": "Check For Stale Case Study Reviews Daily",
+      "name": "Daily Check For Stale Reviews",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -603,7 +653,7 @@
         "options": {}
       },
       "id": "7600aa00-0076-4000-a000-0000000031",
-      "name": "Read Case Study Review Ledger",
+      "name": "Read Review Ledger Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -637,7 +687,7 @@
         }
       },
       "id": "7600aa00-0076-4000-a000-0000000032",
-      "name": "Filter Entries Still Pending Review",
+      "name": "Filter Pending Review Entries",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
@@ -652,7 +702,7 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7600aa00-0076-4000-a000-0000000033",
-      "name": "Compute Days Pending And Check If Reminder Needed",
+      "name": "Compute Days Pending & Reminder",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -687,7 +737,7 @@
         }
       },
       "id": "7600aa00-0076-4000-a000-0000000034",
-      "name": "Filter Entries Needing A Reminder",
+      "name": "Filter Entries Needing Reminder",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
@@ -733,7 +783,7 @@
   ],
   "active": false,
   "pinData": {
-    "Read Deals Tracker": [
+    "Read Deals Tracker Sheet": [
       {
         "json": {
           "deal_id": "9001",
@@ -765,7 +815,7 @@
         }
       }
     ],
-    "Read Client Results Tracker": [
+    "Read Client Results Sheet": [
       {
         "json": {
           "deal_id": "9001",
@@ -789,7 +839,7 @@
         }
       }
     ],
-    "Read Case Study Review Ledger": [
+    "Read Review Ledger Sheet": [
       {
         "json": {
           "deal_id": "8850",
@@ -820,124 +870,124 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Check For Newly Closed Deals Daily": {
+    "Daily Check For Closed Deals": {
       "main": [
         [
           {
-            "node": "Read Deals Tracker",
+            "node": "Read Deals Tracker Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Deals Tracker": {
+    "Read Deals Tracker Sheet": {
       "main": [
         [
           {
-            "node": "Compute Which Deals Just Closed Won",
+            "node": "Compute Newly Closed Won Deals",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Which Deals Just Closed Won": {
+    "Compute Newly Closed Won Deals": {
       "main": [
         [
           {
-            "node": "Filter Newly Closed Deals",
+            "node": "Filter Only Newly Closed Deals",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Newly Closed Deals": {
+    "Filter Only Newly Closed Deals": {
       "main": [
         [
           {
-            "node": "Read Client Results Tracker",
+            "node": "Read Client Results Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Client Results Tracker": {
+    "Read Client Results Sheet": {
       "main": [
         [
           {
-            "node": "Find Matching Results Entry",
+            "node": "Match Deals To Results Entries",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Find Matching Results Entry": {
+    "Match Deals To Results Entries": {
       "main": [
         [
           {
-            "node": "If Results Entry Found",
+            "node": "If Results Entry Exists",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Results Entry Found": {
+    "If Results Entry Exists": {
       "main": [
         [
           {
-            "node": "Compute Case Study Headline Stat",
+            "node": "Compute Case Study Headline",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Build Missing Metrics Notice Email",
+            "node": "Build Metrics Missing Notice Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Missing Metrics Notice Email": {
+    "Build Metrics Missing Notice Email": {
       "main": [
         [
           {
-            "node": "Notify Internal Reviewer Metrics Not Yet Logged",
+            "node": "Send Metrics Missing Notification",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Case Study Headline Stat": {
+    "Compute Case Study Headline": {
       "main": [
         [
           {
-            "node": "Draft Case Study One-Pager",
+            "node": "Draft Case Study One-Pager Copy",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Draft Case Study One-Pager": {
+    "Draft Case Study One-Pager Copy": {
       "main": [
         [
           {
-            "node": "Log Draft Case Study For Review",
+            "node": "Append Draft Case Study To Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Draft Case Study For Review": {
+    "Append Draft Case Study To Sheet": {
       "main": [
         [
           {
@@ -952,25 +1002,25 @@
       "main": [
         [
           {
-            "node": "Log Review Request For Compliance Audit",
+            "node": "Trigger Compliance Audit Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Review Request For Compliance Audit": {
+    "Trigger Compliance Audit Workflow": {
       "main": [
         [
           {
-            "node": "Send Review Request To Internal Reviewer",
+            "node": "Send Internal Review Request Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Review Request To Internal Reviewer": {
+    "Send Internal Review Request Email": {
       "main": [
         [
           {
@@ -985,87 +1035,87 @@
       "main": [
         [
           {
-            "node": "Check Compliance Before Requesting Sign-Off",
+            "node": "Trigger Sign-Off Compliance Check",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Compliance Before Requesting Sign-Off": {
+    "Trigger Sign-Off Compliance Check": {
       "main": [
         [
           {
-            "node": "If Sign-Off Request Approved",
+            "node": "If Client Sign-Off Approved",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Sign-Off Request Approved": {
+    "If Client Sign-Off Approved": {
       "main": [
         [
           {
-            "node": "Send Client Sign-Off Request Email",
+            "node": "Send Client Sign-Off Email",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — Client Opted Out Of Firm Emails",
+            "node": "Skip Opt-Out Clients",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check For Stale Case Study Reviews Daily": {
+    "Daily Check For Stale Reviews": {
       "main": [
         [
           {
-            "node": "Read Case Study Review Ledger",
+            "node": "Read Review Ledger Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Case Study Review Ledger": {
+    "Read Review Ledger Sheet": {
       "main": [
         [
           {
-            "node": "Filter Entries Still Pending Review",
+            "node": "Filter Pending Review Entries",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Entries Still Pending Review": {
+    "Filter Pending Review Entries": {
       "main": [
         [
           {
-            "node": "Compute Days Pending And Check If Reminder Needed",
+            "node": "Compute Days Pending & Reminder",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Days Pending And Check If Reminder Needed": {
+    "Compute Days Pending & Reminder": {
       "main": [
         [
           {
-            "node": "Filter Entries Needing A Reminder",
+            "node": "Filter Entries Needing Reminder",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Entries Needing A Reminder": {
+    "Filter Entries Needing Reminder": {
       "main": [
         [
           {
