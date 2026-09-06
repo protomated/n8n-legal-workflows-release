@@ -1,0 +1,925 @@
+{
+  "name": "Unbilled-Time Catcher",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Unbilled-Time Catcher\n\n### How it works\n\nThis workflow has TWO independent parts on one canvas:\n\n**A. Daily unbilled activity check (top row)**\nRuns every morning, checking the previous day. Pulls every Clio calendar entry from that day and cross-references it against logged time entries, at the matter level — any matter with a calendar entry but zero time entries that day gets flagged. Groups the results by responsible attorney and emails each one a nudge to review and log their time.\n\n**B. Weekly revenue-impact summary (bottom row)**\nRuns weekly, independently. Re-runs the same detection over the trailing 7 days and emails the firm a rough estimate of how much unbilled activity is worth, using a configurable hourly rate — the 'firms only bill 2.4 of 8 hours' leak made visible in dollar terms.\n\n**This never creates a time entry or decides what to bill.** It only ever flags that SOMETHING happened on a matter with no matching time entry — the attorney reviews and logs the actual entry themselves, with their own narrative and judgment about what's billable. There is no code path here that writes to Clio's time-entry data (ABA Op. 512 — surfacing a gap, never drafting or deciding billing content).\n\n**Coverage today is calendar entries only.** Logged calls and emails (Clio's Communications) are a natural extension — not built here yet (coming soon) — since their exact API shape hasn't been confirmed against a live account the way calendar entries have in this catalog.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — both branches' audit logging goes through it.\n- [ ] Configure Clio OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally tune DEFAULT_CALENDAR_DURATION_HOURS and DEFAULT_HOURLY_RATE — see the deploy guide.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe estimated dollar figures in the weekly summary are exactly that — estimates, using a single firm-wide DEFAULT_HOURLY_RATE and a default duration for calendar entries with no clear start/end time. They're meant to communicate the scale of the leak, not to be billed directly."
+      },
+      "id": "7800aa00-0078-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Flag matter activity with no matching time entry\n\nChecks yesterday's calendar entries against logged time entries and nudges each attorney about matters with activity but nothing billed.",
+        "width": 1100,
+        "height": 260,
+        "color": 7
+      },
+      "id": "7800aa00-0078-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Weekly revenue-impact summary — a second, independent branch\n\nRe-runs the same check over the trailing week and puts a rough dollar figure on the firm's unbilled-time leak.",
+        "width": 1100,
+        "height": 260,
+        "color": 7
+      },
+      "id": "7800aa00-0078-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000010",
+      "name": "Check For Unbilled Activity Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Runs every morning at 7am by default, checking the previous day's activity."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/calendar_entries.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "from",
+              "value": "={{ $now.minus({ days: 1 }).startOf('day').toISO() }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ $now.startOf('day').toISO() }}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,summary,start_at,end_at,matter{id,display_number,description}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000011",
+      "name": "Fetch Prior Day Calendar Entries From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Every calendar entry tied to a matter from the previous day."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/activities.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "TimeEntry"
+            },
+            {
+              "name": "from_date",
+              "value": "={{ $now.minus({ days: 1 }).toFormat('yyyy-LL-dd') }}"
+            },
+            {
+              "name": "to_date",
+              "value": "={{ $now.minus({ days: 1 }).toFormat('yyyy-LL-dd') }}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,date,matter{id}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000012",
+      "name": "Fetch Prior Day Time Entries From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Every time entry actually logged for the previous day — used to check which matters already have billed activity. Confirm the from_date/to_date parameter names against a real response on first live test; Clio's exact activities.json filtering has not been independently confirmed live in this catalog yet."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "Open"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description,responsible_attorney{id,name,email}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000013",
+      "name": "Fetch Open Matters For Unbilled Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Used to resolve which attorney is responsible for each matter with unbilled activity, for grouping the digest emails."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cross-references calendar entries against logged time entries at the MATTER level, not exact\n// time-of-day -- matching a specific meeting to a specific time entry down to the minute isn't\n// reliable from the Clio API alone, so 'this matter had a calendar entry but zero time entries in\n// the window' is the signal used here. Any matter meeting that bar is flagged as unbilled activity.\nconst calendarEntries = $('Fetch Prior Day Calendar Entries From Clio').first().json.data || [];\nconst timeEntries = $('Fetch Prior Day Time Entries From Clio').first().json.data || [];\nconst matters = $input.first().json.data || [];\n\nconst billedMatterIds = new Set(timeEntries.map(t => t.matter && t.matter.id).filter(Boolean));\nconst matterById = {};\nfor (const m of matters) matterById[m.id] = m;\n\nconst DEFAULT_CALENDAR_DURATION_HOURS = Number($vars.DEFAULT_CALENDAR_DURATION_HOURS || 0.5);\n\nreturn calendarEntries\n  .filter(entry => entry.matter && entry.matter.id && !billedMatterIds.has(entry.matter.id))\n  .map(entry => {\n    const matter = matterById[entry.matter.id] || {};\n    let durationHours = DEFAULT_CALENDAR_DURATION_HOURS;\n    if (entry.start_at && entry.end_at) {\n      const ms = new Date(entry.end_at) - new Date(entry.start_at);\n      if (ms > 0) durationHours = Math.round((ms / (1000 * 60 * 60)) * 100) / 100;\n    }\n    return { json: {\n      matter_id: entry.matter.id,\n      matter_ref: entry.matter.display_number || matter.display_number || '',\n      matter_description: entry.matter.description || matter.description || '',\n      summary: entry.summary || '(untitled calendar entry)',\n      estimated_hours: durationHours,\n      attorney_name: (matter.responsible_attorney && matter.responsible_attorney.name) || '',\n      attorney_email: (matter.responsible_attorney && matter.responsible_attorney.email) || $vars.FIRM_EMAIL,\n    } };\n  });"
+      },
+      "id": "7800aa00-0078-4000-a000-0000000014",
+      "name": "Find Unbilled Calendar Activity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "The core detection logic. DEFAULT_CALENDAR_DURATION_HOURS is used only when a calendar entry has no clear start/end time — defaults to 0.5."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Groups today's unbilled items by attorney so each one gets a single digest, not one email per\n// matter.\nconst items = $input.all().map(i => i.json);\nconst byAttorney = {};\nfor (const it of items) {\n  const key = it.attorney_email;\n  if (!byAttorney[key]) byAttorney[key] = { attorney_name: it.attorney_name, attorney_email: key, items: [] };\n  byAttorney[key].items.push(it);\n}\nreturn Object.values(byAttorney).map(a => ({ json: a }));"
+      },
+      "id": "7800aa00-0078-4000-a000-0000000015",
+      "name": "Group Unbilled Activity By Attorney",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "Runs once for the whole batch, not once per item — turns the flat list of unbilled matters into one summary item per attorney."
+    },
+    {
+      "parameters": {
+        "jsCode": "const a = $json;\nconst lines = a.items.map(it => `- ${it.matter_ref} (${it.matter_description || 'no description'}): \"${it.summary}\" — est. ${it.estimated_hours}h`).join('\\n');\nconst totalHours = a.items.reduce((sum, it) => sum + it.estimated_hours, 0);\nconst subject = `${a.items.length} matter${a.items.length === 1 ? '' : 's'} with unbilled activity yesterday`;\nconst message = `Hi ${a.attorney_name || 'there'}, yesterday's calendar shows activity on these matters with no time entry logged (est. ${Math.round(totalHours * 10) / 10}h total):\\n\\n${lines}\\n\\nReview and log the actual time in Clio if it's billable.`;\nreturn { json: { ...a, recipient: a.attorney_email, subject, message } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "7800aa00-0078-4000-a000-0000000016",
+      "name": "Build Unbilled Time Digest Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "One email per attorney listing every unbilled matter from yesterday, with a rough hours estimate per item."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "unbilled-time-daily-digest",
+            "matter_id": ""
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000017",
+      "name": "Log Digest For Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Fire-and-forget audit logging only — this goes to the firm's own attorney, not a client, so the guardrail's approval result is deliberately ignored, same internal-notification pattern used throughout this catalog."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Unbilled Time Digest Email').item.json.recipient }}",
+        "subject": "={{ $('Build Unbilled Time Digest Email').item.json.subject }}",
+        "text": "={{ $('Build Unbilled Time Digest Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "text"
+      },
+      "id": "7800aa00-0078-4000-a000-0000000018",
+      "name": "Send Unbilled Time Digest Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "Reaches back to 'Build Unbilled Time Digest Email' by name, not $json, since the guardrail call in between replaces $json with its own response."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000020",
+      "name": "Check Weekly Unbilled Revenue Impact",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        700
+      ],
+      "notes": "Runs weekly, Monday 8am by default."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/calendar_entries.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "from",
+              "value": "={{ $now.minus({ days: 7 }).startOf('day').toISO() }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ $now.startOf('day').toISO() }}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,summary,start_at,end_at,matter{id,display_number,description}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000021",
+      "name": "Fetch Weekly Calendar Entries From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        700
+      ],
+      "notes": "Same calendar data as the daily branch, just over the trailing 7 days instead of 1."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/activities.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "TimeEntry"
+            },
+            {
+              "name": "from_date",
+              "value": "={{ $now.minus({ days: 7 }).toFormat('yyyy-LL-dd') }}"
+            },
+            {
+              "name": "to_date",
+              "value": "={{ $now.toFormat('yyyy-LL-dd') }}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,date,matter{id}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000022",
+      "name": "Fetch Weekly Time Entries From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        700
+      ],
+      "notes": "Same as the daily branch's time-entry fetch, just over the trailing 7 days."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "Open"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description,responsible_attorney{id,name,email}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000023",
+      "name": "Fetch Open Matters For Weekly Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        700
+      ],
+      "notes": "Same as the daily branch's matter fetch, used here for the weekly detection pass."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cross-references calendar entries against logged time entries at the MATTER level, not exact\n// time-of-day -- matching a specific meeting to a specific time entry down to the minute isn't\n// reliable from the Clio API alone, so 'this matter had a calendar entry but zero time entries in\n// the window' is the signal used here. Any matter meeting that bar is flagged as unbilled activity.\nconst calendarEntries = $('Fetch Weekly Calendar Entries From Clio').first().json.data || [];\nconst timeEntries = $('Fetch Weekly Time Entries From Clio').first().json.data || [];\nconst matters = $input.first().json.data || [];\n\nconst billedMatterIds = new Set(timeEntries.map(t => t.matter && t.matter.id).filter(Boolean));\nconst matterById = {};\nfor (const m of matters) matterById[m.id] = m;\n\nconst DEFAULT_CALENDAR_DURATION_HOURS = Number($vars.DEFAULT_CALENDAR_DURATION_HOURS || 0.5);\n\nreturn calendarEntries\n  .filter(entry => entry.matter && entry.matter.id && !billedMatterIds.has(entry.matter.id))\n  .map(entry => {\n    const matter = matterById[entry.matter.id] || {};\n    let durationHours = DEFAULT_CALENDAR_DURATION_HOURS;\n    if (entry.start_at && entry.end_at) {\n      const ms = new Date(entry.end_at) - new Date(entry.start_at);\n      if (ms > 0) durationHours = Math.round((ms / (1000 * 60 * 60)) * 100) / 100;\n    }\n    return { json: {\n      matter_id: entry.matter.id,\n      matter_ref: entry.matter.display_number || matter.display_number || '',\n      matter_description: entry.matter.description || matter.description || '',\n      summary: entry.summary || '(untitled calendar entry)',\n      estimated_hours: durationHours,\n      attorney_name: (matter.responsible_attorney && matter.responsible_attorney.name) || '',\n      attorney_email: (matter.responsible_attorney && matter.responsible_attorney.email) || $vars.FIRM_EMAIL,\n    } };\n  });"
+      },
+      "id": "7800aa00-0078-4000-a000-0000000024",
+      "name": "Find Unbilled Calendar Activity For Week",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        700
+      ],
+      "notes": "Same detection logic as the daily branch, applied to the week's data."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rolls the week's unbilled items into one firm-wide dollar estimate. DEFAULT_HOURLY_RATE is a\n// single firm-wide figure -- a rough estimate to communicate the scale of the leak, not something\n// to bill directly.\nconst items = $input.all().map(i => i.json);\nconst DEFAULT_HOURLY_RATE = Number($vars.DEFAULT_HOURLY_RATE || 250);\nconst totalHours = items.reduce((sum, it) => sum + it.estimated_hours, 0);\nconst estimatedValue = Math.round(totalHours * DEFAULT_HOURLY_RATE);\nconst uniqueMatters = new Set(items.map(it => it.matter_id)).size;\n\nreturn [{ json: {\n  total_unbilled_items: items.length,\n  unique_matters: uniqueMatters,\n  total_estimated_hours: Math.round(totalHours * 10) / 10,\n  estimated_value: estimatedValue,\n} }];"
+      },
+      "id": "7800aa00-0078-4000-a000-0000000025",
+      "name": "Compute Weekly Unbilled Revenue Impact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        700
+      ],
+      "notes": "DEFAULT_HOURLY_RATE controls the dollar estimate — set it to your firm's typical blended rate."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\nconst subject = `Weekly unbilled-time impact — est. $${d.estimated_value}`;\nlet message;\nif (d.total_unbilled_items === 0) {\n  message = `${FIRM_NAME} had no detected unbilled calendar activity this week — nothing to flag.`;\n} else {\n  message = `${FIRM_NAME} had ${d.total_unbilled_items} calendar item(s) across ${d.unique_matters} matter(s) this week with no matching time entry — an estimated ${d.total_estimated_hours} hours, roughly $${d.estimated_value} at your configured rate.\\n\\nThis is an estimate to show scale, not a bill — review the daily digests for the actual matters.`;\n}\nreturn { json: { ...d, recipient: $vars.FIRM_EMAIL, subject, message } };"
+      },
+      "id": "7800aa00-0078-4000-a000-0000000026",
+      "name": "Build Weekly Unbilled Revenue Summary Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        700
+      ],
+      "notes": "Explicitly sends a 'nothing to flag' message rather than a zero-filled or empty digest when the week was clean."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "unbilled-time-weekly-summary",
+            "matter_id": ""
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "7800aa00-0078-4000-a000-0000000027",
+      "name": "Log Weekly Summary For Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        700
+      ],
+      "notes": "Fire-and-forget audit logging only — internal firm summary, not a client communication."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Weekly Unbilled Revenue Summary Email').item.json.recipient }}",
+        "subject": "={{ $('Build Weekly Unbilled Revenue Summary Email').item.json.subject }}",
+        "text": "={{ $('Build Weekly Unbilled Revenue Summary Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "text"
+      },
+      "id": "7800aa00-0078-4000-a000-0000000028",
+      "name": "Send Weekly Unbilled Revenue Summary Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        700
+      ],
+      "notes": "Reaches back to 'Build Weekly Unbilled Revenue Summary Email' by name, not $json, since the guardrail call in between replaces $json with its own response."
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "Fetch Prior Day Calendar Entries From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 91001,
+              "summary": "Client meeting — discuss settlement options",
+              "start_at": "2026-09-02T14:00:00Z",
+              "end_at": "2026-09-02T15:00:00Z",
+              "matter": {
+                "id": 41001,
+                "display_number": "2026-CH-050",
+                "description": "Personal Injury — Auto Accident"
+              }
+            },
+            {
+              "id": 91002,
+              "summary": "Call with opposing counsel",
+              "start_at": "2026-09-02T10:00:00Z",
+              "end_at": "2026-09-02T10:15:00Z",
+              "matter": {
+                "id": 41002,
+                "display_number": "2026-CH-051",
+                "description": "Estate Planning — Will and Trust"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ],
+    "Fetch Prior Day Time Entries From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 92001,
+              "date": "2026-09-02",
+              "matter": {
+                "id": 41002
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 1
+          }
+        }
+      }
+    ],
+    "Fetch Open Matters For Unbilled Check": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 41001,
+              "display_number": "2026-CH-050",
+              "description": "Personal Injury — Auto Accident",
+              "responsible_attorney": {
+                "id": 21,
+                "name": "A. Attorney",
+                "email": "attorney@smithlaw.com"
+              }
+            },
+            {
+              "id": 41002,
+              "display_number": "2026-CH-051",
+              "description": "Estate Planning — Will and Trust",
+              "responsible_attorney": {
+                "id": 22,
+                "name": "B. Barrister",
+                "email": "b.barrister@smithlaw.com"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ],
+    "Fetch Weekly Calendar Entries From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 91001,
+              "summary": "Client meeting — discuss settlement options",
+              "start_at": "2026-09-02T14:00:00Z",
+              "end_at": "2026-09-02T15:00:00Z",
+              "matter": {
+                "id": 41001,
+                "display_number": "2026-CH-050",
+                "description": "Personal Injury — Auto Accident"
+              }
+            },
+            {
+              "id": 91002,
+              "summary": "Call with opposing counsel",
+              "start_at": "2026-09-02T10:00:00Z",
+              "end_at": "2026-09-02T10:15:00Z",
+              "matter": {
+                "id": 41002,
+                "display_number": "2026-CH-051",
+                "description": "Estate Planning — Will and Trust"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ],
+    "Fetch Weekly Time Entries From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 92001,
+              "date": "2026-09-02",
+              "matter": {
+                "id": 41002
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 1
+          }
+        }
+      }
+    ],
+    "Fetch Open Matters For Weekly Summary": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 41001,
+              "display_number": "2026-CH-050",
+              "description": "Personal Injury — Auto Accident",
+              "responsible_attorney": {
+                "id": 21,
+                "name": "A. Attorney",
+                "email": "attorney@smithlaw.com"
+              }
+            },
+            {
+              "id": 41002,
+              "display_number": "2026-CH-051",
+              "description": "Estate Planning — Will and Trust",
+              "responsible_attorney": {
+                "id": 22,
+                "name": "B. Barrister",
+                "email": "b.barrister@smithlaw.com"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "Check For Unbilled Activity Daily": {
+      "main": [
+        [
+          {
+            "node": "Fetch Prior Day Calendar Entries From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Prior Day Calendar Entries From Clio": {
+      "main": [
+        [
+          {
+            "node": "Fetch Prior Day Time Entries From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Prior Day Time Entries From Clio": {
+      "main": [
+        [
+          {
+            "node": "Fetch Open Matters For Unbilled Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Open Matters For Unbilled Check": {
+      "main": [
+        [
+          {
+            "node": "Find Unbilled Calendar Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Unbilled Calendar Activity": {
+      "main": [
+        [
+          {
+            "node": "Group Unbilled Activity By Attorney",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group Unbilled Activity By Attorney": {
+      "main": [
+        [
+          {
+            "node": "Build Unbilled Time Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Unbilled Time Digest Email": {
+      "main": [
+        [
+          {
+            "node": "Log Digest For Compliance Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Digest For Compliance Audit": {
+      "main": [
+        [
+          {
+            "node": "Send Unbilled Time Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Weekly Unbilled Revenue Impact": {
+      "main": [
+        [
+          {
+            "node": "Fetch Weekly Calendar Entries From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Weekly Calendar Entries From Clio": {
+      "main": [
+        [
+          {
+            "node": "Fetch Weekly Time Entries From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Weekly Time Entries From Clio": {
+      "main": [
+        [
+          {
+            "node": "Fetch Open Matters For Weekly Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Open Matters For Weekly Summary": {
+      "main": [
+        [
+          {
+            "node": "Find Unbilled Calendar Activity For Week",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Unbilled Calendar Activity For Week": {
+      "main": [
+        [
+          {
+            "node": "Compute Weekly Unbilled Revenue Impact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Weekly Unbilled Revenue Impact": {
+      "main": [
+        [
+          {
+            "node": "Build Weekly Unbilled Revenue Summary Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Weekly Unbilled Revenue Summary Email": {
+      "main": [
+        [
+          {
+            "node": "Log Weekly Summary For Compliance Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Weekly Summary For Compliance Audit": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Unbilled Revenue Summary Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Runs on two independent daily/weekly schedules. Daily: cross-references the previous day's Clio calendar entries against logged time entries at the matter level, flags matters with activity but no time entry, and emails each responsible attorney a digest grouped by matter. Weekly (separate): re-runs the same check over the trailing 7 days and emails the firm a rough dollar estimate of the unbilled-time leak using a configurable hourly rate. Never creates a time entry or drafts billing content -- only ever flags a gap for the attorney to review and log themselves (ABA Op. 512). Replaces LeanLaw and manual review, surfacing the hours firms lose simply by not tracking activity against time entries."
+}
