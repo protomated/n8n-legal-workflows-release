@@ -1,0 +1,507 @@
+{
+  "name": "AI Intake Qualifier",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## AI Intake Qualifier (Routing)\n\n### How it works\n\n1. A new intake form submission arrives.\n2. It's scored against the firm's own configured rules: does the practice area match what the firm handles, are there urgent-signal keywords, are there disqualifying-signal keywords.\n3. Every submission is logged for tracking, regardless of outcome.\n4. The lead gets an auto-reply tailored to their routing tier (hot / warm / wrong practice area / decline) — always compliance-checked, always polite, never a hard automatic no.\n5. Hot leads ALSO trigger an immediate internal alert so an attorney can follow up fast.\n\n**This is eligibility routing by keyword and configuration, not an AI legal assessment.** It never evaluates the merits of a case, gives an opinion on whether someone has a claim, or makes a legally binding decision to reject anyone. 'Decline' tier still gets a reply and still gets logged for a human to review and override — the workflow just doesn't escalate it as urgently (ABA Op. 512 — operational routing only, no legal judgment).\n\n**This overlaps LegalContext's own Intake Screening feature**, which does true AI-based fit scoring beyond keyword rules — the wrong-practice-area and decline replies include a soft mention of it, since that's this template's upsell path.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the lead's auto-reply goes through it.\n- [ ] Create a Google Sheet with an 'Intake Log' tab — see the deploy guide for exact columns.\n- [ ] Wire your intake form (Fluent Forms or similar) to POST to this workflow's webhook URL.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_PRACTICE_AREAS, FIRM_FROM_EMAIL, FIRM_EMAIL, INTAKE_ATTORNEY_EMAIL, GUARDRAIL_WORKFLOW_ID, INTAKE_LOG_SHEET_ID.\n- [ ] Optionally tune URGENT_KEYWORDS and DISQUALIFYING_KEYWORDS.\n- [ ] Activate the workflow.\n\n### Customization\n\nFIRM_PRACTICE_AREAS, URGENT_KEYWORDS, and DISQUALIFYING_KEYWORDS are the entire rule surface — edit these n8n Variables to match your firm's actual intake criteria rather than editing the code."
+      },
+      "id": "8100aa00-0081-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Score, log, and route every new intake\n\nMatches practice area and scans for urgency/disqualifying keywords against firm-configured lists, logs every submission, and sends a tier-appropriate auto-reply.",
+        "width": 1500,
+        "height": 260,
+        "color": 7
+      },
+      "id": "8100aa00-0081-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Alert the intake attorney immediately for hot leads\n\nA parallel branch off the same submission — only fires for the highest-fit tier, so attorney time is spent on what matters most.",
+        "width": 900,
+        "height": 220,
+        "color": 7
+      },
+      "id": "8100aa00-0081-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "intake-qualifier",
+        "options": {}
+      },
+      "id": "8100aa00-0081-4000-a000-0000000010",
+      "name": "When Intake Form Submitted",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Wire your intake form's webhook/notification settings to POST here (e.g. Fluent Forms → Form Settings → Notifications → Webhooks)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nreturn { json: {\n  name: (body.name || body.full_name || '').trim(),\n  email: (body.email || '').trim(),\n  phone: (body.phone || '').trim(),\n  practice_area: (body.practice_area || body.matter_type || '').trim(),\n  case_description: (body.case_description || body.message || body.details || '').trim(),\n  submitted_at: new Date().toISOString(),\n} };"
+      },
+      "id": "8100aa00-0081-4000-a000-0000000011",
+      "name": "Parse Intake Submission",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Field names here match common Fluent Forms defaults — adjust to your actual form's field names if they differ."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rule-based eligibility routing -- no AI judgment of case merits, just matching against the\n// firm's own configured practice areas and keyword lists. Every submission gets a tier; nothing\n// is silently dropped.\nconst lead = $json;\nconst firmPracticeAreas = ($vars.FIRM_PRACTICE_AREAS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);\nconst urgentKeywords = ($vars.URGENT_KEYWORDS || 'arrested,court date,eviction notice,restraining order,emergency').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);\nconst disqualifyingKeywords = ($vars.DISQUALIFYING_KEYWORDS || 'already have a lawyer,already retained,just researching,student project').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);\n\nconst descLower = lead.case_description.toLowerCase();\nconst practiceAreaLower = lead.practice_area.toLowerCase();\n\nconst practiceAreaMatch = firmPracticeAreas.length === 0 || firmPracticeAreas.some(pa => practiceAreaLower.includes(pa) || pa.includes(practiceAreaLower));\nconst hasUrgentSignal = urgentKeywords.some(k => descLower.includes(k));\nconst hasDisqualifyingSignal = disqualifyingKeywords.some(k => descLower.includes(k));\n\nlet fitScore = 50;\nif (practiceAreaMatch) fitScore += 30;\nif (hasUrgentSignal) fitScore += 20;\nif (hasDisqualifyingSignal) fitScore -= 50;\nfitScore = Math.max(0, Math.min(100, fitScore));\n\nlet routingTier;\nif (hasDisqualifyingSignal) routingTier = 'decline';\nelse if (!practiceAreaMatch) routingTier = 'referral';\nelse if (fitScore >= 90) routingTier = 'hot';\nelse routingTier = 'warm';\n\nreturn { json: {\n  ...lead,\n  practice_area_match: practiceAreaMatch,\n  has_urgent_signal: hasUrgentSignal,\n  has_disqualifying_signal: hasDisqualifyingSignal,\n  fit_score: fitScore,\n  routing_tier: routingTier,\n} };"
+      },
+      "id": "8100aa00-0081-4000-a000-0000000012",
+      "name": "Score Lead Fit And Determine Routing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "The entire rule surface lives in FIRM_PRACTICE_AREAS / URGENT_KEYWORDS / DISQUALIFYING_KEYWORDS n8n Variables — edit those, not this code, to match your firm's actual intake criteria."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.INTAKE_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Intake Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $json.name }}",
+            "email": "={{ $json.email }}",
+            "phone": "={{ $json.phone }}",
+            "practice_area": "={{ $json.practice_area }}",
+            "fit_score": "={{ $json.fit_score }}",
+            "routing_tier": "={{ $json.routing_tier }}",
+            "submitted_at": "={{ $json.submitted_at }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "8100aa00-0081-4000-a000-0000000013",
+      "name": "Log Intake For Tracking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Every submission gets logged here regardless of tier — a declined or wrong-practice-area lead is still worth tracking for pattern review. Column headers must match exactly."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Every tier gets a reply -- there's no hard automatic no. Wrong-practice-area and decline tiers\n// get a soft LegalContext Intake Screening mention, since deeper automated fit-scoring is exactly\n// what that product does beyond these keyword rules.\nconst lead = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'our firm';\nlet message;\nif (lead.routing_tier === 'decline') {\n  message = `Hi ${lead.name}, thank you for reaching out to ${FIRM_NAME}. Based on what you've shared, it doesn't look like we're the right fit to assist further at this time. We wish you the best in resolving your matter.`;\n} else if (lead.routing_tier === 'referral') {\n  message = `Hi ${lead.name}, thank you for reaching out to ${FIRM_NAME}. This doesn't appear to be a practice area we handle directly -- we'd recommend seeking a firm that specializes in this area. We wish you the best in resolving your matter.`;\n} else if (lead.routing_tier === 'hot') {\n  message = `Hi ${lead.name}, thank you for reaching out to ${FIRM_NAME}. Given what you've shared, we'd like to connect with you as soon as possible -- someone from our team will be in touch shortly.`;\n} else {\n  message = `Hi ${lead.name}, thank you for reaching out to ${FIRM_NAME}. We've received your inquiry and will be in touch soon.`;\n}\nreturn { json: { ...lead, recipient: lead.email, subject: `Thanks for contacting ${FIRM_NAME}`, message } };"
+      },
+      "id": "8100aa00-0081-4000-a000-0000000014",
+      "name": "Build Lead Auto-Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Every tier gets a reply — there's no hard automatic no. Lower-fit tiers include a soft LegalContext mention."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "intake-auto-reply",
+            "matter_id": ""
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8100aa00-0081-4000-a000-0000000015",
+      "name": "Check Compliance Before Auto-Reply",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "Runs the lead through the Bar-Compliance Guardrail before anything sends — required disclaimer applied, send logged, same as every other lead-facing send in this catalog."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8100aa00-0081-4000-a000-0000000016",
+      "name": "If Auto-Reply Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "Mirrors the guardrail's approved/opted-out result — true sends the reply, false means the lead opted out."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "8100aa00-0081-4000-a000-0000000017",
+      "name": "Send Lead Auto-Reply",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        -80
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "notes": "Sends the tier-appropriate reply to the lead."
+    },
+    {
+      "parameters": {},
+      "id": "8100aa00-0081-4000-a000-0000000018",
+      "name": "Skip — Lead Opted Out Of Emails",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        80
+      ],
+      "notes": "Rare for a first-time inquiry, but respected the same as any other opt-out check in this catalog."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_hot",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.routing_tier }}",
+              "rightValue": "hot"
+            }
+          ]
+        }
+      },
+      "id": "8100aa00-0081-4000-a000-0000000020",
+      "name": "If Hot Lead",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        640
+      ],
+      "notes": "Only the highest-fit tier triggers an immediate internal alert — warm/referral/decline leads are still logged and replied to, just without the urgency."
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $json;\nreturn { json: {\n  recipient: $vars.INTAKE_ATTORNEY_EMAIL || $vars.FIRM_EMAIL,\n  subject: `Hot lead: ${lead.name} (${lead.practice_area})`,\n  message: `${lead.name} just submitted a high-fit inquiry.\\n\\nPractice area: ${lead.practice_area}\\nPhone: ${lead.phone}\\nEmail: ${lead.email}\\nFit score: ${lead.fit_score}\\n\\n${lead.case_description}\\n\\nThis was scored hot due to a practice-area match${lead.has_urgent_signal ? ' and an urgency signal in their message' : ''}. Follow up promptly.`,\n} };"
+      },
+      "id": "8100aa00-0081-4000-a000-0000000021",
+      "name": "Build Hot Lead Alert Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        640
+      ],
+      "notes": "The immediate internal notification for high-fit leads — includes the full inquiry so the attorney can follow up without digging through the sheet first."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "hot-lead-alert",
+            "matter_id": ""
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8100aa00-0081-4000-a000-0000000022",
+      "name": "Log Hot Lead Alert For Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1344,
+        640
+      ],
+      "notes": "Fire-and-forget audit logging only — this goes to the firm's own intake attorney, not the lead, so the guardrail's approval result is deliberately ignored, same internal-notification pattern used throughout this catalog."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Hot Lead Alert Email').item.json.recipient }}",
+        "subject": "={{ $('Build Hot Lead Alert Email').item.json.subject }}",
+        "text": "={{ $('Build Hot Lead Alert Email').item.json.message }}",
+        "options": {}
+      },
+      "id": "8100aa00-0081-4000-a000-0000000023",
+      "name": "Send Hot Lead Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        640
+      ],
+      "notes": "Reaches back to 'Build Hot Lead Alert Email' by name, not $json, since the guardrail call in between replaces $json with its own response.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When Intake Form Submitted": [
+      {
+        "json": {
+          "headers": {},
+          "params": {},
+          "query": {},
+          "body": {
+            "name": "Alex Rivera",
+            "email": "alex.rivera@example.com",
+            "phone": "+15551230000",
+            "practice_area": "Personal Injury",
+            "case_description": "I was in a car accident last week and have a court date coming up, need help urgently."
+          },
+          "webhookUrl": "https://your-n8n.example.com/webhook/intake-qualifier",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When Intake Form Submitted": {
+      "main": [
+        [
+          {
+            "node": "Parse Intake Submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intake Submission": {
+      "main": [
+        [
+          {
+            "node": "Score Lead Fit And Determine Routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Lead Fit And Determine Routing": {
+      "main": [
+        [
+          {
+            "node": "Log Intake For Tracking",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Hot Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Intake For Tracking": {
+      "main": [
+        [
+          {
+            "node": "Build Lead Auto-Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Lead Auto-Reply": {
+      "main": [
+        [
+          {
+            "node": "Check Compliance Before Auto-Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Compliance Before Auto-Reply": {
+      "main": [
+        [
+          {
+            "node": "If Auto-Reply Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Auto-Reply Approved": {
+      "main": [
+        [
+          {
+            "node": "Send Lead Auto-Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Lead Opted Out Of Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Hot Lead": {
+      "main": [
+        [
+          {
+            "node": "Build Hot Lead Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build Hot Lead Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Log Hot Lead Alert For Compliance Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Hot Lead Alert For Compliance Audit": {
+      "main": [
+        [
+          {
+            "node": "Send Hot Lead Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Fires on every new intake form submission. Scores fit by matching the submitted practice area against the firm's configured list and scanning for urgent/disqualifying keywords -- pure rule-based routing, never an assessment of case merits (ABA Op. 512). Logs every submission regardless of tier, sends a tier-appropriate auto-reply through the Bar-Compliance Guardrail, and separately alerts the intake attorney immediately for the highest-fit leads. Overlaps LegalContext's own Intake Screening feature, which does true AI-based scoring beyond these keyword rules -- lower-fit replies include a soft mention of it. Replaces Smith.ai AI and Intaker."
+}
