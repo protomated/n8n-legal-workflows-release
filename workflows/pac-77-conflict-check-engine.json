@@ -468,7 +468,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const checkId = $('Parse Conflict Decision Request').first().json.check_id;\nconst rows = $input.all().map(i => i.json);\nconst match = rows.find(r => String(r.check_id) === checkId);\nreturn { json: { check_id: checkId, action: $('Parse Conflict Decision Request').first().json.action, is_found: !!match, names_checked: match ? match.names_checked : '' } };"
+        "jsCode": "// Matches by trimmed comparison since sheet-stored values can carry trailing whitespace (confirmed\n// live: a check_id written with trailing spaces broke an exact-equality match here). Once found,\n// passes the row's OWN stored check_id forward (not the clean query-param one) so the update step\n// downstream matches against the exact value actually sitting in the sheet.\nconst checkId = $('Parse Conflict Decision Request').first().json.check_id;\nconst rows = $input.all().map(i => i.json);\nconst match = rows.find(r => String(r.check_id).trim() === checkId.trim());\nreturn { json: { check_id: match ? match.check_id : checkId, action: $('Parse Conflict Decision Request').first().json.action, is_found: !!match, names_checked: match ? match.names_checked : '' } };"
       },
       "id": "7700aa00-0077-4000-a000-0000000025",
       "name": "Find Matching Conflict Check Row",
@@ -478,7 +478,7 @@
         896,
         800
       ],
-      "notes": "Matches the decision link's check_id against the audit log by exact string equality."
+      "notes": "Matches by trimmed comparison since sheet-stored values can carry trailing whitespace — confirmed live. Passes the row's own stored check_id forward so the update step downstream matches the exact value in the sheet, not a cleaned-up version of it."
     },
     {
       "parameters": {
