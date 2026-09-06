@@ -535,7 +535,7 @@
     },
     {
       "parameters": {
-        "operation": "update",
+        "operation": "appendOrUpdate",
         "documentId": {
           "__rl": true,
           "value": "={{ $vars.CONFLICT_LOG_SHEET_ID }}",
@@ -569,7 +569,7 @@
         1344,
         800
       ],
-      "notes": "Matches on check_id (confirmed clean, no whitespace, via live JSON inspection). There is no code path anywhere in this workflow that opens, blocks, or auto-approves a matter based on this."
+      "notes": "Uses Append or Update (not plain Update Row) matching on check_id -- plain Update Row was silently matching zero rows despite the check_id, header, and sheet all being confirmed correct live. If a row with this check_id exists it's updated in place; there is no code path anywhere in this workflow that opens, blocks, or auto-approves a matter based on this."
     },
     {
       "parameters": {
