@@ -1,0 +1,916 @@
+{
+  "name": "Conflict-Check Engine",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Conflict-Check Engine\n\n### How it works\n\nThis workflow has TWO independent parts on one canvas:\n\n**A. Run a conflict check (top row)**\nFires when staff submit a new client/party name (plus any known adverse parties) for a conflict check, usually before formally opening a matter. Fuzzy-matches every submitted name against every existing Clio contact and every matter's client name and description, logs the check and its results to an audit sheet, and emails the requesting attorney a report — with click-through links to record whether they're clearing it or escalating it for a closer look.\n\n**B. Record the attorney's decision (bottom row)**\nA webhook fired by clicking one of the report email's two links. Updates the audit log with the decision and shows a confirmation page.\n\n**This never clears or blocks anything on its own.** It only ever surfaces potential matches with a similarity score — the attorney reviews every result and makes the actual conflict determination. There is no code path here that auto-approves a new matter or auto-declines one; that judgment call belongs to the attorney every time (ABA Op. 512 — this surfaces information, it never makes a legal or ethical determination).\n\n**Fuzzy matching here is name-similarity only, not a legal conflicts analysis.** It catches spelling variations, maiden names, abbreviated company suffixes, and a submitted name appearing inside a matter's description — it cannot catch a conflict that requires actual legal judgment (e.g. a corporate subsidiary relationship, or a beneficial-ownership conflict) unless a name literally matches. Treat 'no matches found' as 'nothing matched by name,' not 'no conflict exists.'\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the report email's audit logging goes through it.\n- [ ] Create a Google Sheet with a 'Conflict Checks' tab — see the deploy guide for exact columns.\n- [ ] Configure Clio OAuth2, Google Sheets OAuth2, and SMTP credentials.\n- [ ] Wire your intake process (a Fluent Forms form, or any tool staff use before opening a matter) to POST to this workflow's webhook URL.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, CONFLICT_LOG_SHEET_ID, CONFLICT_DECISION_WEBHOOK_URL (copy this after activating).\n- [ ] Optionally tune CONFLICT_MATCH_THRESHOLD (default 0.6 — lower catches more, with more false positives).\n- [ ] Activate the workflow.\n\n### Customization\n\nCONFLICT_MATCH_THRESHOLD is the entire sensitivity dial — this is a 'surface everything plausible' tool, so most firms should err toward a lower threshold (more false positives) rather than risk missing a real conflict. Firms with over 200 contacts or matters will need pagination added to the two Clio fetch nodes (not built here)."
+      },
+      "id": "7700aa00-0077-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Fuzzy-match a new name against the whole firm\n\nChecks every submitted name against every Clio contact and matter, scores by similarity, and logs the check for audit before emailing the report.",
+        "width": 1500,
+        "height": 260,
+        "color": 7
+      },
+      "id": "7700aa00-0077-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Record the attorney's decision — a second, independent branch\n\nA webhook fired by clicking Clear or Escalate in the report email. Only ever updates the audit log — never blocks or approves anything itself.",
+        "width": 900,
+        "height": 260,
+        "color": 7
+      },
+      "id": "7700aa00-0077-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "conflict-check-request",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7700aa00-0077-4000-a000-0000000010",
+      "name": "When Conflict Check Requested",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Wire this to whatever staff use before opening a matter — a Fluent Forms conflict-check form is the simplest option. Expects: new_client_name, adverse_party_names (comma-separated), matter_description, requested_by_email."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Splits the submitted names into a clean list to check, and validates there's at least one\n// non-empty name -- an empty submission isn't a real conflict check request.\nconst body = $json.body || $json;\nconst newClientName = (body.new_client_name || '').trim();\nconst adverseNames = (body.adverse_party_names || '').split(',').map(s => s.trim()).filter(Boolean);\nconst namesToCheck = [newClientName, ...adverseNames].filter(Boolean);\n\nreturn { json: {\n  names_to_check: namesToCheck,\n  matter_description: body.matter_description || '',\n  requested_by_email: body.requested_by_email || '',\n  is_valid_request: namesToCheck.length > 0,\n} };"
+      },
+      "id": "7700aa00-0077-4000-a000-0000000011",
+      "name": "Parse Conflict Check Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "At least one name is required — the new client's name alone is enough to run a check, adverse parties are optional extras."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_valid",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_valid_request }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "7700aa00-0077-4000-a000-0000000012",
+      "name": "Is Valid Conflict Check Request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "True continues to run the actual match; false means the submission had no names at all and just gets acknowledged."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'invalid', reason: 'no names submitted' } }}",
+        "options": {}
+      },
+      "id": "7700aa00-0077-4000-a000-0000000013",
+      "name": "Respond Invalid Request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        160
+      ],
+      "notes": "Acknowledges an empty/malformed submission rather than silently doing nothing."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/contacts.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,type"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7700aa00-0077-4000-a000-0000000014",
+      "name": "Fetch All Firm Contacts From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Every contact in Clio — clients, related parties, everyone — is fair game for a conflict match. Firms with over 200 contacts need pagination added (not built here)."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,display_number,description,client{name}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7700aa00-0077-4000-a000-0000000015",
+      "name": "Fetch All Firm Matters From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Deliberately not filtered by status -- a closed matter's adverse party is still a real conflict risk years later. Solo/small firms won't hit the 200-matter cap; larger ones will need pagination added."
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeName(s) {\n  return String(s || '').toLowerCase()\n    .replace(/[^a-z0-9\\s]/g, '')\n    .replace(/\\b(inc|llc|corp|corporation|co|ltd|llp|lp)\\b/g, '')\n    .trim().replace(/\\s+/g, ' ');\n}\nfunction bigrams(s) {\n  const grams = [];\n  for (let i = 0; i < s.length - 1; i++) grams.push(s.substring(i, i + 2));\n  return grams;\n}\nfunction diceCoefficient(normA, normB) {\n  if (!normA || !normB) return 0;\n  if (normA === normB) return 1;\n  const bigramsA = bigrams(normA);\n  const bigramsB = bigrams(normB);\n  if (bigramsA.length === 0 || bigramsB.length === 0) return 0;\n  let matches = 0;\n  const bCopy = [...bigramsB];\n  for (const g of bigramsA) {\n    const idx = bCopy.indexOf(g);\n    if (idx !== -1) { matches++; bCopy.splice(idx, 1); }\n  }\n  return (2 * matches) / (bigramsA.length + bigramsB.length);\n}\n// A search name that appears as a whole word inside a longer target (e.g. 'Jones' inside\n// 'Smith v. Jones - Contract Dispute') is a strong match even though the two full strings look very\n// different -- Dice's coefficient alone would score that low, so containment is checked first.\nfunction matchScore(searchName, targetText) {\n  const normSearch = normalizeName(searchName);\n  const normTarget = normalizeName(targetText);\n  if (!normSearch || !normTarget) return 0;\n  if (normSearch === normTarget) return 1;\n  const escaped = normSearch.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n  const wordBoundary = new RegExp('\\\\b' + escaped + '\\\\b');\n  if (wordBoundary.test(normTarget)) return 0.95;\n  return diceCoefficient(normSearch, normTarget);\n}\n\n// Compares every submitted name against every contact and every matter's client name + description,\n// keeping anything at or above the firm's configured threshold. This is name-similarity only -- it\n// catches spelling variations and a name appearing inside a matter description, not a legal\n// conflicts analysis.\nconst request = $('Parse Conflict Check Request').first().json;\nconst contacts = ($('Fetch All Firm Contacts From Clio').first().json.data) || [];\nconst matters = $input.first().json.data || [];\nconst THRESHOLD = Number($vars.CONFLICT_MATCH_THRESHOLD || 0.6);\n\nconst matches = [];\nfor (const searchName of request.names_to_check) {\n  for (const contact of contacts) {\n    const score = matchScore(searchName, contact.name);\n    if (score >= THRESHOLD) {\n      matches.push({ searched_name: searchName, match_type: 'contact', matched_text: contact.name, source_ref: `Contact #${contact.id}`, score: Math.round(score * 100) / 100 });\n    }\n  }\n  for (const matter of matters) {\n    const clientName = (matter.client && matter.client.name) || '';\n    const clientScore = matchScore(searchName, clientName);\n    if (clientScore >= THRESHOLD) {\n      matches.push({ searched_name: searchName, match_type: 'matter_client', matched_text: clientName, source_ref: matter.display_number || `Matter #${matter.id}`, score: Math.round(clientScore * 100) / 100 });\n    }\n    const descScore = matchScore(searchName, matter.description || '');\n    if (descScore >= THRESHOLD) {\n      matches.push({ searched_name: searchName, match_type: 'matter_description', matched_text: matter.description, source_ref: matter.display_number || `Matter #${matter.id}`, score: Math.round(descScore * 100) / 100 });\n    }\n  }\n}\nmatches.sort((a, b) => b.score - a.score);\n\nreturn [{ json: {\n  names_checked: request.names_to_check,\n  matter_description: request.matter_description,\n  requested_by_email: request.requested_by_email,\n  matches,\n  has_conflicts: matches.length > 0,\n} }];"
+      },
+      "id": "7700aa00-0077-4000-a000-0000000016",
+      "name": "Run Fuzzy Conflict Match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "The whole matching engine lives here. CONFLICT_MATCH_THRESHOLD (0-1) controls sensitivity — lower catches more names at the cost of more false positives; this tool is meant to over-surface, not under-surface."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generates a stable check ID up front so the audit log row and the decision-webhook links agree\n// on the same identifier.\nconst d = $json;\nconst checkId = 'CC-' + Date.now() + '-' + Math.floor(Math.random() * 1000);\nreturn { json: { ...d, check_id: checkId, checked_at: new Date().toISOString() } };"
+      },
+      "id": "7700aa00-0077-4000-a000-0000000017",
+      "name": "Assign Conflict Check ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "This ID is what ties the audit log row to whichever decision link the attorney eventually clicks."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.CONFLICT_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Conflict Checks",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "check_id": "={{ $json.check_id }}",
+            "names_checked": "={{ $json.names_checked.join(', ') }}",
+            "matter_description": "={{ $json.matter_description }}",
+            "requested_by_email": "={{ $json.requested_by_email }}",
+            "matches_found_count": "={{ $json.matches.length }}",
+            "checked_at": "={{ $json.checked_at }}",
+            "status": "pending_review",
+            "decision": "",
+            "decided_at": ""
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "7700aa00-0077-4000-a000-0000000018",
+      "name": "Log Conflict Check For Audit",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Every conflict check gets a permanent audit row here, regardless of whether anything matched — being able to prove a check was run is as important as the result itself. Column headers must match exactly."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the conflict report email with two decision links -- Clear and Escalate -- each carrying\n// this check's ID so the decision webhook can find the right audit row.\nconst d = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\nconst baseUrl = $vars.CONFLICT_DECISION_WEBHOOK_URL || '';\nconst clearUrl = `${baseUrl}?check_id=${encodeURIComponent(d.check_id)}&action=clear`;\nconst escalateUrl = `${baseUrl}?check_id=${encodeURIComponent(d.check_id)}&action=escalate`;\n\nconst matchLines = d.matches.length\n  ? d.matches.map(m => `- \"${m.searched_name}\" ~ \"${m.matched_text}\" (${m.match_type}, ${m.source_ref}, score ${m.score})`).join('\\n')\n  : '(no matches found by name)';\n\nconst subject = `Conflict check ${d.has_conflicts ? '— possible matches found' : '— no matches'}: ${d.names_checked.join(', ')}`;\nconst message = `${FIRM_NAME} conflict check for: ${d.names_checked.join(', ')}\\nProposed matter: ${d.matter_description || '(not provided)'}\\n\\nMatches:\\n${matchLines}\\n\\nThis surfaces name-similarity matches only -- it is not a legal conflicts determination. Review and decide:\\nClear: ${clearUrl}\\nEscalate: ${escalateUrl}`;\n\nreturn { json: {\n  ...d,\n  recipient: d.requested_by_email || $vars.FIRM_EMAIL,\n  subject,\n  message,\n} };"
+      },
+      "id": "7700aa00-0077-4000-a000-0000000019",
+      "name": "Build Conflict Report Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "CONFLICT_DECISION_WEBHOOK_URL must be set to this workflow's own Production URL for 'When Conflict Decision Is Made' — copy it after activating, same two-step setup used by every decision-webhook template in this catalog."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "expression",
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}"
+        },
+        "workflowInputs": {
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "conflict-check-report",
+            "matter_id": ""
+          },
+          "schema": [],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "7700aa00-0077-4000-a000-000000001a",
+      "name": "Log Conflict Report For Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2016,
+        0
+      ],
+      "notes": "Fire-and-forget audit logging only — this goes to firm staff, not a client, so the guardrail's approval result is deliberately ignored, same internal-notification pattern used throughout this catalog."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Conflict Report Email').item.json.recipient }}",
+        "subject": "={{ $('Build Conflict Report Email').item.json.subject }}",
+        "text": "={{ $('Build Conflict Report Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "text"
+      },
+      "id": "7700aa00-0077-4000-a000-000000001b",
+      "name": "Send Conflict Report Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        0
+      ],
+      "notes": "Reaches back to 'Build Conflict Report Email' by name, not $json, since the guardrail call in between replaces $json with its own response."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'submitted', check_id: $('Assign Conflict Check ID').item.json.check_id } }}",
+        "options": {}
+      },
+      "id": "7700aa00-0077-4000-a000-000000001c",
+      "name": "Respond Conflict Check Submitted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2464,
+        0
+      ],
+      "notes": "Acknowledges the original submission — staff get the check_id back immediately, the full report follows by email."
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "conflict-check-decision",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7700aa00-0077-4000-a000-0000000020",
+      "name": "When Conflict Decision Is Made",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        800
+      ],
+      "notes": "This is the URL the two links in the report email point to — copy its Production URL into CONFLICT_DECISION_WEBHOOK_URL after activating."
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $json.query || {};\nconst checkId = (query.check_id || '').trim();\nconst action = (query.action || '').trim();\nreturn { json: { check_id: checkId, action, is_valid: !!checkId && ['clear', 'escalate'].includes(action) } };"
+      },
+      "id": "7700aa00-0077-4000-a000-0000000021",
+      "name": "Parse Conflict Decision Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        800
+      ],
+      "notes": "Pulls check_id and action (clear/escalate) out of the query string and validates both are present."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_valid",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_valid }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "7700aa00-0077-4000-a000-0000000022",
+      "name": "If Decision Request Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        800
+      ],
+      "notes": "True continues to look up the check; false means the link is malformed or missing a required parameter."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<h2>This link is invalid or expired.</h2>",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "7700aa00-0077-4000-a000-0000000023",
+      "name": "Respond Invalid Decision Link",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        960
+      ],
+      "notes": "Plain error page for a malformed or incomplete decision link."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.CONFLICT_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Conflict Checks",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "7700aa00-0077-4000-a000-0000000024",
+      "name": "Read Conflict Check Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        672,
+        800
+      ],
+      "notes": "Reads every logged conflict check so the specific one referenced by check_id can be found."
+    },
+    {
+      "parameters": {
+        "jsCode": "const checkId = $('Parse Conflict Decision Request').first().json.check_id;\nconst rows = $input.all().map(i => i.json);\nconst match = rows.find(r => String(r.check_id) === checkId);\nreturn { json: { check_id: checkId, action: $('Parse Conflict Decision Request').first().json.action, is_found: !!match, names_checked: match ? match.names_checked : '' } };"
+      },
+      "id": "7700aa00-0077-4000-a000-0000000025",
+      "name": "Find Matching Conflict Check Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        800
+      ],
+      "notes": "Matches the decision link's check_id against the audit log by exact string equality."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_found",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_found }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "7700aa00-0077-4000-a000-0000000026",
+      "name": "If Conflict Check Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        800
+      ],
+      "notes": "True continues to record the decision; false means the check_id doesn't match any logged row (already resolved, or a malformed link)."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<h2>We couldn't find that conflict check — it may have already been resolved or the link is malformed.</h2>",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "7700aa00-0077-4000-a000-0000000027",
+      "name": "Respond Check Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        960
+      ],
+      "notes": "Plain error page — nothing in the log gets changed when this fires."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.CONFLICT_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Conflict Checks",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "check_id": "={{ $json.check_id }}",
+            "status": "={{ $json.action === 'clear' ? 'cleared' : 'escalated' }}",
+            "decision": "={{ $json.action }}",
+            "decided_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "check_id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "7700aa00-0077-4000-a000-0000000028",
+      "name": "Update Conflict Check With Decision",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1344,
+        800
+      ],
+      "notes": "Only ever records the attorney's decision — there is no code path anywhere in this workflow that opens, blocks, or auto-approves a matter based on this."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ '<!DOCTYPE html><html><body style=\"font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center;\"><h2>' + ($json.action === 'clear' ? '✅ Marked cleared' : '🔺 Marked for escalation') + '</h2><p>Recorded for ' + $json.names_checked + '.</p></body></html>' }}",
+        "options": {}
+      },
+      "id": "7700aa00-0077-4000-a000-0000000029",
+      "name": "Respond Decision Confirmation Page",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        800
+      ],
+      "notes": "Plain confirmation page — no further automated action happens after this."
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When Conflict Check Requested": [
+      {
+        "json": {
+          "headers": {
+            "user-agent": "Mozilla/5.0"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "new_client_name": "Jon Smyth",
+            "adverse_party_names": "Acme Corporation, Maria Jonas",
+            "matter_description": "Contract dispute — new prospective client",
+            "requested_by_email": "attorney@smithlaw.com"
+          },
+          "webhookUrl": "https://your-n8n.example.com/webhook/conflict-check-request",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "Fetch All Firm Contacts From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 601,
+              "name": "Jane Doe",
+              "type": "Person"
+            },
+            {
+              "id": 602,
+              "name": "John Smith",
+              "type": "Person"
+            },
+            {
+              "id": 603,
+              "name": "Acme Corp",
+              "type": "Company"
+            },
+            {
+              "id": 604,
+              "name": "Maria Jones",
+              "type": "Person"
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 4
+          }
+        }
+      }
+    ],
+    "Fetch All Firm Matters From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 41001,
+              "display_number": "2026-CH-050",
+              "description": "Smith v. Rivera — Auto Accident",
+              "client": {
+                "name": "Jane Doe"
+              }
+            },
+            {
+              "id": 41002,
+              "display_number": "2019-CH-010",
+              "description": "Acme Corporation supply dispute",
+              "client": {
+                "name": "Acme Corp"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ],
+    "Read Conflict Check Log": [
+      {
+        "json": {
+          "check_id": "CC-1735678900000-42",
+          "names_checked": "Jon Smyth, Acme Corporation, Maria Jonas",
+          "matter_description": "Contract dispute",
+          "requested_by_email": "attorney@smithlaw.com",
+          "matches_found_count": 3,
+          "checked_at": "2026-09-01T00:00:00Z",
+          "status": "pending_review",
+          "decision": "",
+          "decided_at": ""
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When Conflict Check Requested": {
+      "main": [
+        [
+          {
+            "node": "Parse Conflict Check Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Conflict Check Request": {
+      "main": [
+        [
+          {
+            "node": "Is Valid Conflict Check Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid Conflict Check Request": {
+      "main": [
+        [
+          {
+            "node": "Fetch All Firm Contacts From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Firm Contacts From Clio": {
+      "main": [
+        [
+          {
+            "node": "Fetch All Firm Matters From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Firm Matters From Clio": {
+      "main": [
+        [
+          {
+            "node": "Run Fuzzy Conflict Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Fuzzy Conflict Match": {
+      "main": [
+        [
+          {
+            "node": "Assign Conflict Check ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assign Conflict Check ID": {
+      "main": [
+        [
+          {
+            "node": "Log Conflict Check For Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Conflict Check For Audit": {
+      "main": [
+        [
+          {
+            "node": "Build Conflict Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Conflict Report Email": {
+      "main": [
+        [
+          {
+            "node": "Log Conflict Report For Compliance Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Conflict Report For Compliance Audit": {
+      "main": [
+        [
+          {
+            "node": "Send Conflict Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Conflict Report Email": {
+      "main": [
+        [
+          {
+            "node": "Respond Conflict Check Submitted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Conflict Decision Is Made": {
+      "main": [
+        [
+          {
+            "node": "Parse Conflict Decision Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Conflict Decision Request": {
+      "main": [
+        [
+          {
+            "node": "If Decision Request Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Decision Request Valid": {
+      "main": [
+        [
+          {
+            "node": "Read Conflict Check Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid Decision Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Conflict Check Log": {
+      "main": [
+        [
+          {
+            "node": "Find Matching Conflict Check Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Matching Conflict Check Row": {
+      "main": [
+        [
+          {
+            "node": "If Conflict Check Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Conflict Check Found": {
+      "main": [
+        [
+          {
+            "node": "Update Conflict Check With Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Check Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Conflict Check With Decision": {
+      "main": [
+        [
+          {
+            "node": "Respond Decision Confirmation Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Runs on two independent webhooks. Conflict check: fuzzy-matches every submitted name (new client plus known adverse parties) against every Clio contact and every matter's client name and description, logs the check and its results to an audit sheet, and emails the requesting attorney a report with Clear/Escalate decision links. Decision: records whichever link was clicked in the audit log. Never clears or blocks a matter automatically -- the attorney always makes the actual conflict determination (ABA Op. 512). Replaces manual conflict checks and PM add-ons, catching matches a manual review misses."
+}
