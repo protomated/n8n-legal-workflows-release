@@ -4,48 +4,50 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Dormant-Client Follow-Up\n\n### How it works\n\nThis workflow has TWO independent parts on one canvas:\n\n**A. Dormant matter detection (top row)**\nRuns daily. Scans every Open matter in Clio and flags any that haven't been touched in a while (no update to the matter record itself in DORMANT_THRESHOLD_DAYS), emailing the responsible attorney a nudge to check in — with a soft teaser about LegalContext's own Dormant Follow-Up feature, since that's what this template exists to lead into.\n\n**B. Renewal & filing date reminders (bottom row)**\nRuns daily, independently. Re-reads a Google Sheet where the firm tracks key recurring dates — trademark renewals, corporate filings, license renewals, whatever a matter needs remembered years later — and alerts the responsible attorney a configurable number of days before each one, so a quiet client's filing deadline never just gets forgotten.\n\n**This never contacts the client directly.** Both branches alert the FIRM (the responsible attorney), never the client — reaching back out to a dormant client is a business development and relationship judgment call a human makes, not something this template decides or drafts for them (ABA Op. 512 — pure scheduling and surfacing, no legal or even outreach judgment made automatically).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — both branches' audit logging goes through it.\n- [ ] Create a Google Sheet with a 'Renewal Dates' tab — see the deploy guide for exact columns.\n- [ ] Configure Clio OAuth2 and Google Sheets OAuth2 credentials, plus SMTP for sending.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_EMAIL, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, RENEWAL_DATES_SHEET_ID.\n- [ ] Optionally tune DORMANT_THRESHOLD_DAYS (default 90) and RENEWAL_REMINDER_DAYS (default 30).\n- [ ] Activate the workflow.\n\n### Customization\n\n'Dormant' here means the Clio matter record itself hasn't been updated — not a true measure of client contact, since Clio doesn't expose a firm-wide 'last client communication' field cleanly. Treat this as a starting signal to prompt a human check-in, not a precise measurement. LegalContext's own Dormant Follow-Up feature (the upsell this template leads into) can track true last-contact dates across email and calls."
+        "content": "## Dormant-Client Follow-Up\n\n### How it works\n\n1. The workflow runs two daily scheduled checks: one for dormant client matters and one for renewal dates.\n2. It fetches open matters from Clio and identifies those that have become dormant to send alert emails.\n3. It reads renewal dates from a Google Sheets ledger and filters those needing renewal reminders.\n4. The workflow builds and logs email alerts for dormancy and renewal reminders for compliance auditing.\n5. Finally, it sends the respective emails to notify the appropriate parties.\n\n### Setup steps\n\n- [ ] Configure Clio API credentials and set the CLIO_BASE_URL environment variable.\n- [ ] Connect to Google Sheets with correct spreadsheet and sheet permissions to read renewal data.\n- [ ] Set up email sending credentials for the emailSend nodes to send alerts.\n- [ ] Ensure the sub-workflows for logging compliance audits are accessible and have correct permissions.\n\n### Customization\n\nCustomize the dormancy criteria and reminder timing in the code nodes to fit business rules and client engagement policies.",
+        "width": 480,
+        "height": 896
       },
-      "id": "7900aa00-0079-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -700,
-        -460
-      ]
+        -608,
+        -112
+      ],
+      "id": "17c0e8d6-0ed0-4c57-bbca-c0badc8461dc",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Flag matters that have gone quiet\n\nScans every Open matter daily and flags any not updated in DORMANT_THRESHOLD_DAYS, nudging the responsible attorney to check in.",
-        "width": 750,
-        "height": 260,
+        "content": "## Dormant matters detection\n\nScheduled trigger fetches open matters from Clio, splits records, checks dormancy, filters relevant matters, builds alert emails, logs audit entries, and sends dormant matter notifications.",
+        "width": 1760,
+        "height": 272,
         "color": 7
       },
-      "id": "7900aa00-0079-4000-a000-0000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -112
+      ],
+      "id": "3575c053-0ca5-419f-b5a6-bf711dceb41a",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Renewal & filing date reminders — a second, independent daily branch\n\nRe-reads a manually-maintained ledger of key dates and alerts the responsible attorney before each one.",
-        "width": 650,
-        "height": 260,
+        "content": "## Renewal date reminders\n\nScheduled trigger reads renewal dates from Google Sheets, checks which reminders are needed, filters them, builds renewal reminder emails, logs compliance audits, and sends renewal reminder emails.",
+        "width": 1536,
+        "height": 304,
         "color": 7
       },
-      "id": "7900aa00-0079-4000-a000-0000000003",
-      "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        700
-      ]
+        560
+      ],
+      "id": "7c10cf2f-d87a-4e48-be3b-1628f4eb7080",
+      "name": "Sticky Note2"
     },
     {
       "parameters": {
@@ -59,7 +61,7 @@
         }
       },
       "id": "7900aa00-0079-4000-a000-0000000010",
-      "name": "Check For Dormant Matters Daily",
+      "name": "Every Morning at 8am Check Dormant Matters",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -101,7 +103,7 @@
         }
       },
       "id": "7900aa00-0079-4000-a000-0000000011",
-      "name": "Fetch Open Matters From Clio",
+      "name": "Fetch Open Matters from Clio API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -131,7 +133,7 @@
         "mode": "runOnceForEachItem"
       },
       "id": "7900aa00-0079-4000-a000-0000000013",
-      "name": "Check If Matter Has Gone Dormant",
+      "name": "Check If Matter Is Dormant",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -166,7 +168,7 @@
         }
       },
       "id": "7900aa00-0079-4000-a000-0000000014",
-      "name": "Filter Matters Needing A Dormancy Alert",
+      "name": "Filter Matters Needing Dormancy Alert",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
@@ -214,7 +216,7 @@
         }
       },
       "id": "7900aa00-0079-4000-a000-0000000016",
-      "name": "Log Dormancy Alert For Compliance Audit",
+      "name": "Log Dormant Alert for Compliance Audit",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -254,7 +256,7 @@
         }
       },
       "id": "7900aa00-0079-4000-a000-0000000020",
-      "name": "Check Renewal Dates Daily",
+      "name": "Every Morning at 8am Check Renewal Dates",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -279,7 +281,7 @@
         "options": {}
       },
       "id": "7900aa00-0079-4000-a000-0000000021",
-      "name": "Read Renewal Dates Ledger",
+      "name": "Read Renewal Dates from Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -329,7 +331,7 @@
         }
       },
       "id": "7900aa00-0079-4000-a000-0000000023",
-      "name": "Filter Renewals Needing A Reminder",
+      "name": "Filter Renewals Needing Reminder",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
@@ -377,7 +379,7 @@
         }
       },
       "id": "7900aa00-0079-4000-a000-0000000025",
-      "name": "Log Renewal Reminder For Compliance Audit",
+      "name": "Log Renewal Reminder for Compliance Audit",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -408,7 +410,7 @@
   ],
   "active": false,
   "pinData": {
-    "Fetch Open Matters From Clio": [
+    "Fetch Open Matters from Clio API": [
       {
         "json": {
           "data": [
@@ -450,7 +452,7 @@
         }
       }
     ],
-    "Read Renewal Dates Ledger": [
+    "Read Renewal Dates from Sheet": [
       {
         "json": {
           "matter_ref": "2022-CH-010",
@@ -475,18 +477,18 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Check For Dormant Matters Daily": {
+    "Every Morning at 8am Check Dormant Matters": {
       "main": [
         [
           {
-            "node": "Fetch Open Matters From Clio",
+            "node": "Fetch Open Matters from Clio API",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Open Matters From Clio": {
+    "Fetch Open Matters from Clio API": {
       "main": [
         [
           {
@@ -501,25 +503,25 @@
       "main": [
         [
           {
-            "node": "Check If Matter Has Gone Dormant",
+            "node": "Check If Matter Is Dormant",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check If Matter Has Gone Dormant": {
+    "Check If Matter Is Dormant": {
       "main": [
         [
           {
-            "node": "Filter Matters Needing A Dormancy Alert",
+            "node": "Filter Matters Needing Dormancy Alert",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Matters Needing A Dormancy Alert": {
+    "Filter Matters Needing Dormancy Alert": {
       "main": [
         [
           {
@@ -534,14 +536,14 @@
       "main": [
         [
           {
-            "node": "Log Dormancy Alert For Compliance Audit",
+            "node": "Log Dormant Alert for Compliance Audit",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Dormancy Alert For Compliance Audit": {
+    "Log Dormant Alert for Compliance Audit": {
       "main": [
         [
           {
@@ -552,18 +554,18 @@
         ]
       ]
     },
-    "Check Renewal Dates Daily": {
+    "Every Morning at 8am Check Renewal Dates": {
       "main": [
         [
           {
-            "node": "Read Renewal Dates Ledger",
+            "node": "Read Renewal Dates from Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Renewal Dates Ledger": {
+    "Read Renewal Dates from Sheet": {
       "main": [
         [
           {
@@ -578,14 +580,14 @@
       "main": [
         [
           {
-            "node": "Filter Renewals Needing A Reminder",
+            "node": "Filter Renewals Needing Reminder",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Renewals Needing A Reminder": {
+    "Filter Renewals Needing Reminder": {
       "main": [
         [
           {
@@ -600,14 +602,14 @@
       "main": [
         [
           {
-            "node": "Log Renewal Reminder For Compliance Audit",
+            "node": "Log Renewal Reminder for Compliance Audit",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Renewal Reminder For Compliance Audit": {
+    "Log Renewal Reminder for Compliance Audit": {
       "main": [
         [
           {
