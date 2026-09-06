@@ -1,0 +1,1077 @@
+{
+  "name": "Matter Status Bot",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Matter Status Bot\n\n### How it works\n\nThis workflow has TWO independent parts on one canvas:\n\n**A. Text message status requests (top row)**\nA client texts the firm's number asking about their case. The bot matches the phone number against Clio contacts, looks up their open matter(s), and replies with the current status in plain language — no attorney interruption needed.\n\n**B. Email status requests (bottom row)**\nThe same idea over email, watching a dedicated inbox (e.g. case-status@yourfirm.com) via IMAP.\n\n**This only ever reports status — it never gives legal advice, predicts outcomes, or answers 'what happens next' questions.** The reply is limited to the matter's own status field, practice area, and reference number as recorded in Clio — nothing interpreted or added (ABA Op. 512). If a client asks anything beyond status, the reply always includes a line directing them to contact their attorney directly.\n\n**Client identification is phone/email matching against Clio contacts, not authentication.** Anyone texting from a phone number on file as a client's number gets that client's status back — there's no PIN or second factor. Firms with sensitive matters or shared phone lines should weigh this before enabling the SMS branch.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every reply goes through it.\n- [ ] Configure Clio OAuth2, Twilio, and an IMAP mailbox credential (a dedicated inbox like case-status@yourfirm.com).\n- [ ] Point your Twilio number's incoming-message webhook at this workflow's SMS webhook URL.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_TWILIO_NUMBER, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nIf a client has multiple open matters, the reply lists all of them rather than guessing which one they mean — firms with clients who routinely have many concurrent matters may want to add a matter-reference lookup step instead (not built here)."
+      },
+      "id": "8000aa00-0080-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Reply to a text asking about case status\n\nMatches the sender's phone number to a Clio contact, looks up their open matter(s), and texts back a plain status update.",
+        "width": 1300,
+        "height": 260,
+        "color": 7
+      },
+      "id": "8000aa00-0080-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Reply to an email asking about case status — a second, independent branch\n\nSame idea, watching a dedicated inbox via IMAP instead of SMS.",
+        "width": 1300,
+        "height": 260,
+        "color": 7
+      },
+      "id": "8000aa00-0080-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "matter-status-text",
+        "options": {}
+      },
+      "id": "8000aa00-0080-4000-a000-0000000010",
+      "name": "When Client Texts For Status",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Point your Twilio number's 'A message comes in' webhook at this URL. Responds immediately; the actual reply goes out separately via the Twilio send node below."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Twilio posts incoming SMS as form-encoded fields -- From is the client's number, Body is\n// their message text.\nconst body = $json.body || $json;\nconst fromNumber = (body.From || '').trim();\nconst messageText = (body.Body || '').trim();\nreturn { json: { from_number: fromNumber, message_text: messageText, is_valid: !!fromNumber } };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000011",
+      "name": "Parse Incoming Status Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Twilio's inbound-SMS webhook posts form-encoded fields — From and Body are what matter here."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/contacts.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.from_number }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,name,type,phone_numbers{number}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000012",
+      "name": "Fetch Clio Contact By Phone",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Clio's own contact search handles partial/formatted phone matching reasonably well; verify against a real number on first live test since exact matching behavior can vary by how numbers are stored."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Confirms an actual contact match (Clio's query search can return loose/fuzzy results), by\n// comparing digits-only phone numbers rather than trusting the search alone.\nfunction digitsOnly(s) { return String(s || '').replace(/\\D/g, ''); }\nconst fromDigits = digitsOnly($('Parse Incoming Status Text').first().json.from_number);\nconst contacts = $json.data || [];\nconst match = contacts.find(c => (c.phone_numbers || []).some(p => digitsOnly(p.number).endsWith(fromDigits.slice(-10))));\nreturn { json: { client_id: match ? match.id : null, client_name: match ? match.name : '', is_found: !!match } };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000013",
+      "name": "Match Client By Phone Number",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Matches on the last 10 digits so formatting differences (+1, dashes, spaces) don't cause a false miss."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_found",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_found }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000014",
+      "name": "If Client Identified By Phone",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "True continues to look up their matters; false means the number doesn't match any Clio contact."
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: {\n  recipient: $('Parse Incoming Status Text').first().json.from_number,\n  message: `We couldn't match this number to a client on file. Please call our office directly and we'll help you right away.`,\n} };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000015",
+      "name": "Build Client Not Found Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        160
+      ],
+      "notes": "A generic, non-client-specific message — deliberately doesn't reveal whether ANY client uses this number, just that this exact number isn't recognized."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $json.client_id }}"
+            },
+            {
+              "name": "status",
+              "value": "Open"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description,status,practice_area{name}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000016",
+      "name": "Fetch Client Open Matters From Clio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "Only Open matters are reported — a client asking about a closed matter gets pointed to their attorney rather than a stale status."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Composes a plain status reply -- only facts already in Clio (matter reference, practice area,\n// status), never an interpretation, prediction, or next-steps guidance. Handles zero-matter and\n// multi-matter cases explicitly rather than guessing which matter the client means.\nconst matters = $json.data || [];\nconst clientName = $('Match Client By Phone Number').first().json.client_name;\nlet message;\nif (matters.length === 0) {\n  message = `Hi ${clientName}, we don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.`;\n} else if (matters.length === 1) {\n  const m = matters[0];\n  message = `Hi ${clientName}, your matter ${m.display_number} (${(m.practice_area && m.practice_area.name) || m.description}) is currently: ${m.status}. For details or questions, please contact your attorney directly.`;\n} else {\n  const lines = matters.map(m => `${m.display_number}: ${m.status}`).join('; ');\n  message = `Hi ${clientName}, you have ${matters.length} open matters: ${lines}. For details on any of these, please contact your attorney directly.`;\n}\nreturn { json: { recipient: $('Parse Incoming Status Text').first().json.from_number, message } };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000017",
+      "name": "Build Matter Status Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "The actual status text — only facts already in Clio, never advice or predictions."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "sms",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "matter-status-sms-reply",
+            "matter_id": ""
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8000aa00-0080-4000-a000-0000000018",
+      "name": "Check Compliance Before Texting Back",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Runs the client through the Bar-Compliance Guardrail (NTC-33) before anything sends — opt-out respected, required disclaimer appended, send logged, same as every other client-facing send in this catalog."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000019",
+      "name": "If Approved To Text Back",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "Mirrors the guardrail's approved/opted-out result — true sends the reply, false means the client has opted out of texts."
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "from": "={{ $vars.FIRM_TWILIO_NUMBER }}",
+        "to": "={{ $json.recipient }}",
+        "message": "={{ $json.message }}"
+      },
+      "id": "8000aa00-0080-4000-a000-000000001a",
+      "name": "Send Matter Status Text Reply",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        -80
+      ],
+      "notes": "Sends the status reply. Credential: Credentials → New → Twilio → Account SID and Auth Token.",
+      "credentials": {
+        "twilioApi": {
+          "id": "1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "8000aa00-0080-4000-a000-000000001b",
+      "name": "Skip — Client Opted Out Of Texts",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        80
+      ],
+      "notes": "The client's opt-out is respected even for a status reply they themselves requested — texting them anyway would defeat the point of an opt-out."
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "from": "={{ $vars.FIRM_TWILIO_NUMBER }}",
+        "to": "={{ $('Build Client Not Found Reply').item.json.recipient }}",
+        "message": "={{ $('Build Client Not Found Reply').item.json.message }}"
+      },
+      "id": "8000aa00-0080-4000-a000-000000001c",
+      "name": "Send Client Not Found Text Reply",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        160
+      ],
+      "notes": "This one bypasses the guardrail deliberately — it's a generic 'we couldn't find you' message with no client-specific content, sent to whoever just texted in.",
+      "credentials": {
+        "twilioApi": {
+          "id": "1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "read",
+        "options": {
+          "forceReconnect": 60
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000020",
+      "name": "When Client Emails For Status",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        0,
+        900
+      ],
+      "notes": "Watches a dedicated inbox (e.g. case-status@yourfirm.com) via IMAP. Credential: Credentials → New → IMAP → your mailbox's server/login details.",
+      "credentials": {
+        "imap": {
+          "id": "2",
+          "name": "Case Status Mailbox (IMAP)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const from = ($json.from && $json.from.value && $json.from.value[0] && $json.from.value[0].address) || $json.from?.text || '';\nreturn { json: { from_email: String(from).toLowerCase().trim(), subject: $json.subject || '', is_valid: !!from } };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000021",
+      "name": "Parse Status Request Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        900
+      ],
+      "notes": "Pulls the sender's address and subject line out of the IMAP-read email."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/contacts.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.from_email }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,name,email_addresses{address}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000022",
+      "name": "Fetch Clio Contact By Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        900
+      ],
+      "notes": "Same contact search as the SMS branch, keyed on email instead of phone."
+    },
+    {
+      "parameters": {
+        "jsCode": "const fromEmail = $('Parse Status Request Email').first().json.from_email;\nconst contacts = $json.data || [];\nconst match = contacts.find(c => (c.email_addresses || []).some(e => String(e.address || '').toLowerCase() === fromEmail));\nreturn { json: { client_id: match ? match.id : null, client_name: match ? match.name : '', is_found: !!match } };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000023",
+      "name": "Match Client By Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        900
+      ],
+      "notes": "Exact email match, since email addresses don't have the same formatting variance phone numbers do."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_found",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_found }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000024",
+      "name": "If Client Identified By Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        900
+      ],
+      "notes": "True continues to look up their matters; false means the address doesn't match any Clio contact."
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: {\n  recipient: $('Parse Status Request Email').first().json.from_email,\n  subject: 'Re: ' + ($('Parse Status Request Email').first().json.subject || 'Case status'),\n  message: `We couldn't match this email address to a client on file. Please call our office directly and we'll help you right away.`,\n} };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000025",
+      "name": "Build Email Client Not Found Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        1060
+      ],
+      "notes": "Same generic non-client-specific message as the SMS branch's not-found reply."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $json.client_id }}"
+            },
+            {
+              "name": "status",
+              "value": "Open"
+            },
+            {
+              "name": "fields",
+              "value": "id,display_number,description,status,practice_area{name}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000026",
+      "name": "Fetch Client Open Matters For Email Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        900
+      ],
+      "notes": "Same open-matters lookup as the SMS branch."
+    },
+    {
+      "parameters": {
+        "jsCode": "const matters = $json.data || [];\nconst clientName = $('Match Client By Email').first().json.client_name;\nconst subject = 'Re: ' + ($('Parse Status Request Email').first().json.subject || 'Case status');\nlet message;\nif (matters.length === 0) {\n  message = `Hi ${clientName},\\n\\nWe don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.`;\n} else if (matters.length === 1) {\n  const m = matters[0];\n  message = `Hi ${clientName},\\n\\nYour matter ${m.display_number} (${(m.practice_area && m.practice_area.name) || m.description}) is currently: ${m.status}.\\n\\nFor details or questions, please contact your attorney directly.`;\n} else {\n  const lines = matters.map(m => `- ${m.display_number}: ${m.status}`).join('\\n');\n  message = `Hi ${clientName},\\n\\nYou have ${matters.length} open matters:\\n${lines}\\n\\nFor details on any of these, please contact your attorney directly.`;\n}\nreturn { json: { recipient: $('Parse Status Request Email').first().json.from_email, subject, message } };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000027",
+      "name": "Build Email Matter Status Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        900
+      ],
+      "notes": "Same status-only reply logic as the SMS branch, formatted for email."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "matter-status-email-reply",
+            "matter_id": ""
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8000aa00-0080-4000-a000-0000000028",
+      "name": "Check Compliance Before Emailing Back",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        900
+      ],
+      "notes": "Runs the client through the Bar-Compliance Guardrail before anything sends — opt-out respected, disclaimer applied, send logged."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000029",
+      "name": "If Approved To Email Back",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1792,
+        900
+      ],
+      "notes": "Mirrors the guardrail's approved/opted-out result for the email branch."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "8000aa00-0080-4000-a000-000000002a",
+      "name": "Send Email Matter Status Reply",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        820
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "3",
+          "name": "Email account (SMTP)"
+        }
+      },
+      "notes": "Sends the actual status reply email."
+    },
+    {
+      "parameters": {},
+      "id": "8000aa00-0080-4000-a000-000000002b",
+      "name": "Skip — Client Opted Out Of Emails",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        980
+      ],
+      "notes": "The client's opt-out is respected even for a status reply they themselves requested."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "8000aa00-0080-4000-a000-000000002c",
+      "name": "Send Email Client Not Found Reply",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        1060
+      ],
+      "notes": "Bypasses the guardrail deliberately — generic 'we couldn't find you' message with no client-specific content.",
+      "credentials": {
+        "smtp": {
+          "id": "3",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When Client Texts For Status": [
+      {
+        "json": {
+          "headers": {},
+          "params": {},
+          "query": {},
+          "body": {
+            "From": "+15551234567",
+            "To": "+15559998888",
+            "Body": "Hi, what's the status of my case?"
+          },
+          "webhookUrl": "https://your-n8n.example.com/webhook/matter-status-text",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "Fetch Clio Contact By Phone": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 601,
+              "name": "Jane Doe",
+              "type": "Person",
+              "phone_numbers": [
+                {
+                  "number": "+1 (555) 123-4567"
+                }
+              ]
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 1
+          }
+        }
+      }
+    ],
+    "Fetch Client Open Matters From Clio": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 41001,
+              "display_number": "2026-CH-050",
+              "description": "Auto Accident Claim",
+              "status": "Open",
+              "practice_area": {
+                "name": "Personal Injury"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 1
+          }
+        }
+      }
+    ],
+    "When Client Emails For Status": [
+      {
+        "json": {
+          "from": {
+            "value": [
+              {
+                "address": "jane.doe@example.com"
+              }
+            ]
+          },
+          "subject": "Case status?",
+          "text": "Hi, what's happening with my case?"
+        }
+      }
+    ],
+    "Fetch Clio Contact By Email": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 601,
+              "name": "Jane Doe",
+              "email_addresses": [
+                {
+                  "address": "jane.doe@example.com"
+                }
+              ]
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 1
+          }
+        }
+      }
+    ],
+    "Fetch Client Open Matters For Email Reply": [
+      {
+        "json": {
+          "data": [
+            {
+              "id": 41001,
+              "display_number": "2026-CH-050",
+              "description": "Auto Accident Claim",
+              "status": "Open",
+              "practice_area": {
+                "name": "Personal Injury"
+              }
+            },
+            {
+              "id": 41003,
+              "display_number": "2026-CH-052",
+              "description": "Estate Consult",
+              "status": "Pending",
+              "practice_area": {
+                "name": "Estate Planning"
+              }
+            }
+          ],
+          "meta": {
+            "paging": {
+              "next": null
+            },
+            "records": 2
+          }
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When Client Texts For Status": {
+      "main": [
+        [
+          {
+            "node": "Parse Incoming Status Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Incoming Status Text": {
+      "main": [
+        [
+          {
+            "node": "Fetch Clio Contact By Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Clio Contact By Phone": {
+      "main": [
+        [
+          {
+            "node": "Match Client By Phone Number",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Client By Phone Number": {
+      "main": [
+        [
+          {
+            "node": "If Client Identified By Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Client Identified By Phone": {
+      "main": [
+        [
+          {
+            "node": "Fetch Client Open Matters From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Client Not Found Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Client Not Found Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Client Not Found Text Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Client Open Matters From Clio": {
+      "main": [
+        [
+          {
+            "node": "Build Matter Status Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Matter Status Reply": {
+      "main": [
+        [
+          {
+            "node": "Check Compliance Before Texting Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Compliance Before Texting Back": {
+      "main": [
+        [
+          {
+            "node": "If Approved To Text Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Approved To Text Back": {
+      "main": [
+        [
+          {
+            "node": "Send Matter Status Text Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Client Opted Out Of Texts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Client Emails For Status": {
+      "main": [
+        [
+          {
+            "node": "Parse Status Request Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Status Request Email": {
+      "main": [
+        [
+          {
+            "node": "Fetch Clio Contact By Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Clio Contact By Email": {
+      "main": [
+        [
+          {
+            "node": "Match Client By Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Client By Email": {
+      "main": [
+        [
+          {
+            "node": "If Client Identified By Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Client Identified By Email": {
+      "main": [
+        [
+          {
+            "node": "Fetch Client Open Matters For Email Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Email Client Not Found Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email Client Not Found Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Email Client Not Found Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Client Open Matters For Email Reply": {
+      "main": [
+        [
+          {
+            "node": "Build Email Matter Status Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email Matter Status Reply": {
+      "main": [
+        [
+          {
+            "node": "Check Compliance Before Emailing Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Compliance Before Emailing Back": {
+      "main": [
+        [
+          {
+            "node": "If Approved To Email Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Approved To Email Back": {
+      "main": [
+        [
+          {
+            "node": "Send Email Matter Status Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Client Opted Out Of Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Runs on two independent triggers. SMS: a client texts the firm's number, the bot matches their phone number to a Clio contact, looks up their open matter(s), and texts back the current status through the Bar-Compliance Guardrail. Email (separate): same idea over a dedicated IMAP inbox. Never gives legal advice, predictions, or next-steps guidance -- only reports the matter's own status field as recorded in Clio (ABA Op. 512). Replaces standalone case-status apps, freeing attorneys from answering routine 'what's happening with my case' interruptions."
+}
