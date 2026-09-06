@@ -468,7 +468,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Matches by trimmed comparison since sheet-stored values can carry trailing whitespace (confirmed\n// live: a check_id written with trailing spaces broke an exact-equality match here). Captures the\n// matched row's row_number too -- the update step downstream matches on THAT instead of the check_id\n// text, since Google Sheets' own row-matching for updates does an exact (non-trimmed) comparison and\n// silently updates zero rows rather than erroring when whitespace doesn't line up.\nconst checkId = $('Parse Conflict Decision Request').first().json.check_id;\nconst rows = $input.all().map(i => i.json);\nconst match = rows.find(r => String(r.check_id).trim() === checkId.trim());\nreturn { json: {\n  check_id: match ? match.check_id : checkId,\n  row_number: match ? match.row_number : null,\n  action: $('Parse Conflict Decision Request').first().json.action,\n  is_found: !!match,\n  names_checked: match ? match.names_checked : '',\n} };"
+        "jsCode": "// Matches the decision link's check_id against the audit log by exact string equality -- confirmed\n// live via raw JSON output that stored check_id values carry no whitespace, so a plain comparison is\n// correct here.\nconst checkId = $('Parse Conflict Decision Request').first().json.check_id;\nconst rows = $input.all().map(i => i.json);\nconst match = rows.find(r => String(r.check_id) === checkId);\nreturn { json: {\n  check_id: checkId,\n  action: $('Parse Conflict Decision Request').first().json.action,\n  is_found: !!match,\n  names_checked: match ? match.names_checked : '',\n} };"
       },
       "id": "7700aa00-0077-4000-a000-0000000025",
       "name": "Find Matching Conflict Check Row",
@@ -478,7 +478,7 @@
         896,
         800
       ],
-      "notes": "Matches by trimmed comparison since sheet-stored values can carry trailing whitespace — confirmed live. Also captures row_number, since the update step downstream matches on that instead of the check_id text (immune to the same whitespace problem)."
+      "notes": "Matches the decision link's check_id against the audit log by exact string equality — confirmed live via raw JSON output that stored values carry no whitespace."
     },
     {
       "parameters": {
@@ -549,13 +549,13 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "row_number": "={{ $json.row_number }}",
+            "check_id": "={{ $json.check_id }}",
             "status": "={{ $json.action === 'clear' ? 'cleared' : 'escalated' }}",
             "decision": "={{ $json.action }}",
             "decided_at": "={{ $now.toISO() }}"
           },
           "matchingColumns": [
-            "row_number"
+            "check_id"
           ],
           "schema": []
         },
@@ -569,7 +569,7 @@
         1344,
         800
       ],
-      "notes": "Matches by row_number, not check_id text -- Google Sheets' own row-matching for updates does an exact comparison and silently updates zero rows if whitespace in the stored check_id doesn't line up exactly, which is exactly what happened live. row_number is immune to that. There is no code path anywhere in this workflow that opens, blocks, or auto-approves a matter based on this."
+      "notes": "Matches on check_id (confirmed clean, no whitespace, via live JSON inspection). There is no code path anywhere in this workflow that opens, blocks, or auto-approves a matter based on this."
     },
     {
       "parameters": {
