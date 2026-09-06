@@ -1,0 +1,464 @@
+{
+  "name": "Lead Enrichment Pre-Attorney",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Lead Enrichment Pre-Attorney\n\n### How it works\n\n1. A new lead comes in (from an intake form, or wherever your firm's leads land first).\n2. Their email domain is checked against a list of consumer providers (Gmail, Yahoo, etc.) — a non-consumer domain is treated as a likely company signal.\n3. If there's a company domain, it's looked up through whatever enrichment provider you've configured (Clearbit, Apollo, Hunter, or similar — bring your own API key).\n4. The case description is scanned for value-signal keywords (your firm configures these) to produce a rough Low/Medium/High matter-value tier.\n5. All of this is compiled into a short briefing and emailed to the attorney BEFORE they'd otherwise see the raw lead — so the first few minutes of research are already done.\n\n**The value tier is a rough heuristic, not a valuation.** It's a keyword scan against terms the firm configures (e.g. 'wrongful death', 'class action') — never a legal or financial assessment of what a matter is actually worth. Treat it as a sorting signal, not a number to rely on (ABA Op. 512 — operational triage only).\n\n**Enrichment quality depends entirely on which provider you connect.** This template is built against a generic enrichment API shape (company name, domain, industry, employee count) — the exact response fields WILL differ by provider (Clearbit, Apollo, Hunter, etc. all shape their responses differently). Confirm the field names against your actual provider's real response on first live test and adjust 'Parse Company Enrichment Response' accordingly.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the enrichment briefing's audit logging goes through it.\n- [ ] Create a Google Sheet with an 'Enrichment Log' tab — see the deploy guide for exact columns.\n- [ ] Sign up for an enrichment provider (Clearbit, Apollo, Hunter, or similar) and get an API key.\n- [ ] Wire your lead source's webhook/notification settings to POST to this workflow's webhook URL.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials, plus a Header Auth credential for your enrichment provider's API key.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_FROM_EMAIL, INTAKE_ATTORNEY_EMAIL, GUARDRAIL_WORKFLOW_ID, ENRICHMENT_LOG_SHEET_ID, ENRICHMENT_API_URL.\n- [ ] Optionally tune CONSUMER_EMAIL_DOMAINS and HIGH_VALUE_KEYWORDS.\n- [ ] Activate the workflow.\n\n### Customization\n\nHIGH_VALUE_KEYWORDS is the entire matter-value signal — edit this n8n Variable to match language your firm actually associates with higher-value matters, rather than editing the code."
+      },
+      "id": "8200aa00-0082-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Enrich, score, and brief the attorney before they see the raw lead\n\nChecks the email domain for a company signal, enriches it if found, scans for matter-value keywords, and emails a briefing.",
+        "width": 1600,
+        "height": 260,
+        "color": 7
+      },
+      "id": "8200aa00-0082-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-enrichment",
+        "options": {}
+      },
+      "id": "8200aa00-0082-4000-a000-0000000010",
+      "name": "When New Lead Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Wire your intake form or lead source's webhook/notification settings to POST here."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nreturn { json: {\n  name: (body.name || body.full_name || '').trim(),\n  email: (body.email || '').trim().toLowerCase(),\n  phone: (body.phone || '').trim(),\n  practice_area: (body.practice_area || '').trim(),\n  case_description: (body.case_description || body.message || body.details || '').trim(),\n  received_at: new Date().toISOString(),\n} };"
+      },
+      "id": "8200aa00-0082-4000-a000-0000000011",
+      "name": "Parse New Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Field names here match common intake form defaults — adjust to your actual lead source's field names if they differ."
+    },
+    {
+      "parameters": {
+        "jsCode": "// A non-consumer email domain is a reasonable, free signal that a lead is inquiring on behalf of\n// (or works for) a company -- not proof, just a useful heuristic to decide whether an enrichment\n// lookup is worth attempting.\nconst lead = $json;\nconst consumerDomains = ($vars.CONSUMER_EMAIL_DOMAINS || 'gmail.com,yahoo.com,hotmail.com,outlook.com,aol.com,icloud.com,live.com').split(',').map(s => s.trim().toLowerCase());\nconst domain = lead.email.includes('@') ? lead.email.split('@')[1] : '';\nconst isBusinessDomain = !!domain && !consumerDomains.includes(domain);\nreturn { json: { ...lead, email_domain: domain, is_business_domain: isBusinessDomain } };"
+      },
+      "id": "8200aa00-0082-4000-a000-0000000012",
+      "name": "Extract Company Domain From Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "CONSUMER_EMAIL_DOMAINS controls what counts as 'not a company' — add any other free providers common among your leads."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_business",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_business_domain }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8200aa00-0082-4000-a000-0000000013",
+      "name": "If Business Email Domain",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "True continues to attempt an enrichment lookup; false means it's a personal/consumer email with nothing to look up."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.ENRICHMENT_API_URL }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "domain",
+              "value": "={{ $json.email_domain }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8200aa00-0082-4000-a000-0000000014",
+      "name": "Fetch Company Enrichment Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        -80
+      ],
+      "notes": "ENRICHMENT_API_URL and this node's Header Auth credential point at whatever enrichment provider you've signed up for (Clearbit, Apollo, Hunter, etc.) — swap both for your actual provider's endpoint and key format."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Provider response shapes vary widely -- this reads a generic {name, domain, industry,\n// employeeCount} shape and falls back gracefully if the real provider's fields differ or the\n// lookup found nothing, rather than crashing the whole briefing over a missing company match.\nconst lead = $('Extract Company Domain From Email').first().json;\nconst d = $json || {};\nconst companyName = d.name || d.company || d.organization || lead.email_domain;\nconst industry = d.industry || d.category || '';\nconst employeeCount = d.employeeCount || d.employee_count || d.metrics?.employees || null;\nconst found = !!(d.name || d.company || d.organization);\nreturn { json: { ...lead, company_name: companyName, company_industry: industry, company_employee_count: employeeCount, company_data_found: found } };"
+      },
+      "id": "8200aa00-0082-4000-a000-0000000015",
+      "name": "Parse Company Enrichment Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -80
+      ],
+      "notes": "The real provider's response fields WILL differ — check this against your actual enrichment provider's live response and adjust field names accordingly."
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $json;\nreturn { json: { ...lead, company_name: '', company_industry: '', company_employee_count: null, company_data_found: false } };"
+      },
+      "id": "8200aa00-0082-4000-a000-0000000016",
+      "name": "Note No Company Signal Available",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        160
+      ],
+      "notes": "A personal/consumer email domain — nothing to enrich, so the briefing just says so rather than guessing."
+    },
+    {
+      "parameters": {
+        "jsCode": "// A rough keyword-based sorting signal, not a valuation -- never a legal or financial assessment\n// of what the matter is actually worth.\nconst lead = $json;\nconst highValueKeywords = ($vars.HIGH_VALUE_KEYWORDS || 'wrongful death,class action,commercial litigation,catastrophic injury,multi-million').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);\nconst descLower = lead.case_description.toLowerCase();\nconst hasHighValueSignal = highValueKeywords.some(k => descLower.includes(k));\nconst hasDollarAmount = /\\$[\\d,]+/.test(lead.case_description);\nlet valueTier;\nif (hasHighValueSignal || hasDollarAmount) valueTier = 'High';\nelse if (lead.company_data_found) valueTier = 'Medium';\nelse valueTier = 'Low';\nreturn { json: { ...lead, matter_value_tier: valueTier, has_high_value_signal: hasHighValueSignal } };"
+      },
+      "id": "8200aa00-0082-4000-a000-0000000017",
+      "name": "Compute Matter Value Signal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "HIGH_VALUE_KEYWORDS is the entire signal — edit this n8n Variable to match language your firm actually associates with higher-value matters."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.ENRICHMENT_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Enrichment Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $json.name }}",
+            "email": "={{ $json.email }}",
+            "company_name": "={{ $json.company_name }}",
+            "company_industry": "={{ $json.company_industry }}",
+            "matter_value_tier": "={{ $json.matter_value_tier }}",
+            "received_at": "={{ $json.received_at }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "8200aa00-0082-4000-a000-0000000018",
+      "name": "Log Enrichment For Tracking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Every lead gets logged, enriched or not — useful for reviewing how often enrichment actually finds something over time. Column headers must match exactly."
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $json;\nconst companyLine = lead.company_data_found\n  ? `${lead.company_name}${lead.company_industry ? ' (' + lead.company_industry + ')' : ''}${lead.company_employee_count ? ', ~' + lead.company_employee_count + ' employees' : ''}`\n  : (lead.is_business_domain ? `${lead.email_domain} (no enrichment match found)` : 'Personal email domain, no company signal');\nconst message = `New lead: ${lead.name}\\n\\nCompany: ${companyLine}\\nMatter value signal: ${lead.matter_value_tier}\\nPractice area: ${lead.practice_area}\\nPhone: ${lead.phone}\\nEmail: ${lead.email}\\n\\n${lead.case_description}\\n\\nThis briefing is a research head start, not a valuation -- review before treating the value signal as anything more than a sorting hint.`;\nreturn { json: { ...lead, recipient: $vars.INTAKE_ATTORNEY_EMAIL || $vars.FIRM_EMAIL, subject: `New lead briefing: ${lead.name} (${lead.matter_value_tier} signal)`, message } };"
+      },
+      "id": "8200aa00-0082-4000-a000-0000000019",
+      "name": "Build Lead Enrichment Briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "The actual research head start the attorney receives — company signal, value tier, and the raw inquiry, all in one place."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "lead-enrichment-briefing",
+            "matter_id": ""
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8200aa00-0082-4000-a000-000000001a",
+      "name": "Log Briefing For Compliance Audit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2016,
+        0
+      ],
+      "notes": "Fire-and-forget audit logging only — this goes to the firm's own attorney, not the lead, so the guardrail's approval result is deliberately ignored, same internal-notification pattern used throughout this catalog."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Lead Enrichment Briefing').item.json.recipient }}",
+        "subject": "={{ $('Build Lead Enrichment Briefing').item.json.subject }}",
+        "text": "={{ $('Build Lead Enrichment Briefing').item.json.message }}",
+        "options": {}
+      },
+      "id": "8200aa00-0082-4000-a000-000000001b",
+      "name": "Send Lead Enrichment Briefing",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        0
+      ],
+      "notes": "Reaches back to 'Build Lead Enrichment Briefing' by name, not $json, since the guardrail call in between replaces $json with its own response.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When New Lead Received": [
+      {
+        "json": {
+          "headers": {},
+          "params": {},
+          "query": {},
+          "body": {
+            "name": "Morgan Lee",
+            "email": "morgan.lee@acmecorp.com",
+            "phone": "+15559871234",
+            "practice_area": "Commercial Litigation",
+            "case_description": "We're facing a commercial litigation dispute worth roughly $2,000,000 over a breached supply contract."
+          },
+          "webhookUrl": "https://your-n8n.example.com/webhook/lead-enrichment",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "Fetch Company Enrichment Data": [
+      {
+        "json": {
+          "name": "Acme Corp",
+          "domain": "acmecorp.com",
+          "industry": "Manufacturing",
+          "employeeCount": 250
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When New Lead Received": {
+      "main": [
+        [
+          {
+            "node": "Parse New Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse New Lead": {
+      "main": [
+        [
+          {
+            "node": "Extract Company Domain From Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Company Domain From Email": {
+      "main": [
+        [
+          {
+            "node": "If Business Email Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Business Email Domain": {
+      "main": [
+        [
+          {
+            "node": "Fetch Company Enrichment Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Note No Company Signal Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Company Enrichment Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Company Enrichment Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Company Enrichment Response": {
+      "main": [
+        [
+          {
+            "node": "Compute Matter Value Signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Note No Company Signal Available": {
+      "main": [
+        [
+          {
+            "node": "Compute Matter Value Signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Matter Value Signal": {
+      "main": [
+        [
+          {
+            "node": "Log Enrichment For Tracking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Enrichment For Tracking": {
+      "main": [
+        [
+          {
+            "node": "Build Lead Enrichment Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Lead Enrichment Briefing": {
+      "main": [
+        [
+          {
+            "node": "Log Briefing For Compliance Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Briefing For Compliance Audit": {
+      "main": [
+        [
+          {
+            "node": "Send Lead Enrichment Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Fires on every new lead. Checks the email domain for a company signal, enriches it through a firm-configured provider if found, scans the case description for firm-configured value keywords, logs every lead, and emails the attorney a research briefing before they'd otherwise see the raw lead. The value tier is a keyword-based sorting heuristic, never a legal or financial valuation (ABA Op. 512). Replaces Clay and ZoomInfo subscriptions for this specific pre-attorney research step."
+}
