@@ -243,7 +243,7 @@
         },
         "sheetName": {
           "__rl": true,
-          "value": "Conflict Checks",
+          "value": "conflict check",
           "mode": "name"
         },
         "columns": {
@@ -451,7 +451,7 @@
         },
         "sheetName": {
           "__rl": true,
-          "value": "Conflict Checks",
+          "value": "conflict check",
           "mode": "name"
         },
         "options": {}
@@ -543,7 +543,7 @@
         },
         "sheetName": {
           "__rl": true,
-          "value": "Conflict Checks",
+          "value": "conflict check",
           "mode": "name"
         },
         "columns": {
@@ -574,7 +574,7 @@
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ '<!DOCTYPE html><html><body style=\"font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center;\"><h2>' + ($json.action === 'clear' ? '✅ Marked cleared' : '🔺 Marked for escalation') + '</h2><p>Recorded for ' + $json.names_checked + '.</p></body></html>' }}",
+        "responseBody": "={{ '<!DOCTYPE html><html><body style=\"font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center;\"><h2>' + ($('Find Matching Conflict Check Row').item.json.action === 'clear' ? '✅ Marked cleared' : '🔺 Marked for escalation') + '</h2><p>Recorded for ' + $('Find Matching Conflict Check Row').item.json.names_checked + '.</p></body></html>' }}",
         "options": {}
       },
       "id": "7700aa00-0077-4000-a000-0000000029",
@@ -585,7 +585,7 @@
         1568,
         800
       ],
-      "notes": "Plain confirmation page — no further automated action happens after this."
+      "notes": "Reads action/names_checked back from 'Find Matching Conflict Check Row' by name, not $json -- the Sheets update node in between echoes back its own written row (check_id/status/decision/decided_at only), which doesn't include either field. No further automated action happens after this."
     }
   ],
   "active": false,

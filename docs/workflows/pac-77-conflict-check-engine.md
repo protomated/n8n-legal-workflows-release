@@ -34,7 +34,7 @@ Get value in under 15 minutes. Manual conflict checks are slow and miss matches 
 
 ## Step 1 — Create the conflict check log (3 min)
 
-Create a new Google Sheet. Add a tab named exactly **Conflict Checks** with these column headers in row 1:
+Create a new Google Sheet. Add a tab named exactly **conflict check** (lowercase, singular) with these column headers in row 1:
 
 ```
 check_id | names_checked | matter_description | requested_by_email | matches_found_count | checked_at | status | decision | decided_at
