@@ -4,32 +4,114 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Security & Compliance Content Digest\n\n### Internal Protomated tool — Authority pillar, not deployed to clients\n\nSolo and small firms rarely see plain-English security/compliance guidance written for their scale — most of what exists is written for enterprise IT departments. This is a content gap Protomated can own to reinforce the 'we never touch your legal work, and we take your data seriously' brand promise, feeding the newsletter/Field Notes content pipeline.\n\n### How it works\n\n1. Runs weekly. Pulls from a configurable list of public RSS feeds — breach-notification filings, bar-association security guidance, data-protection-law update trackers.\n2. Filters to items published recently and matching relevance keywords (mentions of small/solo firms, breaches, compliance, data protection).\n3. Drafts a plain-English digest entry per relevant item — a templated 'why this matters for small firms' blurb based on which keyword matched, not real analysis.\n4. Logs the draft to a review ledger and emails it to the content reviewer. Nothing publishes without a human pass.\n5. Separately, a stale-draft reminder nudges the reviewer if a draft sits at pending_review too long.\n\nIf SECURITY_DIGEST_FEED_URLS isn't configured yet, the run still logs and emails an explicit 'setup needed' notice instead of silently doing nothing.\n\n**This monitors and summarizes public information only — it is explicitly informational, never advice.** It never touches legal work, gives compliance guidance to a specific firm's situation, or drafts anything that could be read as legal advice (ABA Op. 512 doesn't directly apply since this isn't a law-firm-facing template, but the same discipline is kept regardless). Every digest draft requires a human review pass before anything goes into the newsletter pipeline.\n\n### Setup steps\n\n- [ ] Create a Google Sheet with a 'Digest Drafts' tab — see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: SECURITY_DIGEST_FEED_URLS, CONTENT_REVIEWER_EMAIL, FIRM_FROM_EMAIL, DIGEST_LOG_SHEET_ID.\n- [ ] Optionally tune RELEVANCE_KEYWORDS and DIGEST_LOOKBACK_DAYS.\n- [ ] Activate the workflow.\n\n### Customization\n\nSECURITY_DIGEST_FEED_URLS and RELEVANCE_KEYWORDS are the entire content-sourcing surface — swap in real feed URLs (state AG breach notification pages, ABA/state bar publications, IAPP or similar data-protection-law trackers, if they publish RSS) rather than editing the code."
+        "content": "## Security & Compliance Content Digest\n\n### How it works\n\n1. The workflow triggers weekly to check configured security content sources via RSS feeds and pulls recent relevant items.\n2. It drafts a plain-English digest summary of the content and assigns a unique ID.\n3. The draft is logged in Google Sheets and an email is sent requesting review of the digest.\n4. Separately, another weekly trigger checks for stale digest drafts pending review in the log.\n5. If stale drafts are found, the workflow builds and sends reminder emails to reviewers.\n6. It handles the case where no feeds are configured by drafting a setup-needed notice for visibility.\n\n### Setup steps\n\n- [ ] Configure the SECURITY_DIGEST_FEED_URLS environment variable as a comma-separated list of RSS feed URLs.\n- [ ] Set up Google Sheets credentials and create a sheet for logging digest drafts.\n- [ ] Configure SMTP or email credentials for sending notification and reminder emails.\n- [ ] Adjust lookback windows and stale draft age parameters in the workflow code nodes as needed.\n\n### Customization\n\nCustomize the digest templates and email content in the respective code nodes to match organizational tone and information requirements.",
+        "width": 480,
+        "height": 896
       },
-      "id": "8400aa00-0084-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -700,
-        -460
-      ]
+        -608,
+        -176
+      ],
+      "id": "6c7e07cc-ba96-4184-87e9-e9fbdb66859b",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Pull, filter, and draft the weekly digest\n\nReads a configurable list of public feeds, keeps only recent and relevant items, and drafts a plain-English blurb per item for human review.",
-        "width": 1600,
-        "height": 260,
+        "content": "## Trigger and feed preparation\n\nThis group includes the initial weekly schedule trigger, a conditional check for configured feed URLs, and building the feed URL list for processing.",
+        "width": 416,
+        "height": 336,
         "color": 7
       },
-      "id": "8400aa00-0084-4000-a000-0000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -176
+      ],
+      "id": "92b5e976-0cfc-4fe5-8ef9-84d0128a2b9b",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Feed fetching and filtering\n\nFetches each security feed and filters for relevant recent items based on publication date and keywords.",
+        "width": 416,
+        "height": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -160
+      ],
+      "id": "d5037f40-41d6-4c64-b0fb-3a6803c435c2",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Digest drafting and ID assignment\n\nDrafts the plain-English digest summary and assigns a unique digest ID, including a fallback notice if no feeds are configured.",
+        "width": 864,
+        "height": 416,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        192
+      ],
+      "id": "3dfbe9b0-b17d-4b78-9797-82773427985d",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Digest logging and review request\n\nLogs the digest draft to Google Sheets and builds and sends the review request email.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        -128
+      ],
+      "id": "afe158a8-dccc-4e14-b20e-2fde3646edc1",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Stale digest check trigger and log read\n\nWeekly trigger for checking stale digest drafts and reading the digest drafts log from Google Sheets.",
+        "width": 416,
+        "height": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        448
+      ],
+      "id": "78e2ea32-9958-4b40-8d9a-fdab42ff1851",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Stale drafts detection and notification\n\nIdentifies stale pending drafts and conditionally builds and sends reminder emails, or skips if none found.",
+        "width": 864,
+        "height": 416,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        640
+      ],
+      "id": "9db6ecf6-8b25-4b19-918f-43c0630171cc",
+      "name": "Sticky Note6"
     },
     {
       "parameters": {
@@ -43,7 +125,7 @@
         }
       },
       "id": "8400aa00-0084-4000-a000-0000000010",
-      "name": "Check Security Content Sources Weekly",
+      "name": "When Monday 8am Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -57,7 +139,7 @@
         "jsCode": "// Turns the configured comma-separated feed list into one item per feed URL, so the RSS node\n// downstream fetches each one independently.\nconst urls = ($vars.SECURITY_DIGEST_FEED_URLS || '').split(',').map(s => s.trim()).filter(Boolean);\nreturn urls.map(url => ({ json: { feed_url: url } }));"
       },
       "id": "8400aa00-0084-4000-a000-0000000011",
-      "name": "Build Feed URL List",
+      "name": "Build Security Feed URL List",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -71,7 +153,7 @@
         "url": "={{ $json.feed_url }}"
       },
       "id": "8400aa00-0084-4000-a000-0000000012",
-      "name": "Fetch Each Security Feed",
+      "name": "Fetch Security Feeds",
       "type": "n8n-nodes-base.rssFeedRead",
       "typeVersion": 1.1,
       "position": [
@@ -85,7 +167,7 @@
         "jsCode": "// Keeps only items published within the lookback window AND matching at least one relevance\n// keyword -- this is plain keyword filtering, not real analysis or judgment about what's actually\n// important.\nconst items = $input.all().map(i => i.json);\nconst RELEVANCE_KEYWORDS = ($vars.RELEVANCE_KEYWORDS || 'small firm,solo firm,law firm,breach,ransomware,data protection,compliance,privacy law').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);\nconst DIGEST_LOOKBACK_DAYS = Number($vars.DIGEST_LOOKBACK_DAYS || 7);\nconst cutoff = Date.now() - DIGEST_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;\n\nconst relevant = items.filter(item => {\n  const pubDate = item.isoDate || item.pubDate;\n  const publishedRecently = pubDate ? (new Date(pubDate).getTime() >= cutoff) : true;\n  const text = `${item.title || ''} ${item.contentSnippet || item.content || ''}`.toLowerCase();\n  const isRelevant = RELEVANCE_KEYWORDS.some(k => text.includes(k));\n  return publishedRecently && isRelevant;\n});\n\nreturn relevant.map(item => {\n  const text = `${item.title || ''} ${item.contentSnippet || item.content || ''}`.toLowerCase();\n  const matchedKeyword = RELEVANCE_KEYWORDS.find(k => text.includes(k)) || '';\n  return { json: {\n    title: item.title || '(untitled)',\n    link: item.link || '',\n    source_feed: item.meta?.title || item.link || '',\n    published_date: item.isoDate || item.pubDate || '',\n    snippet: (item.contentSnippet || '').slice(0, 300),\n    matched_keyword: matchedKeyword,\n  } };\n});"
       },
       "id": "8400aa00-0084-4000-a000-0000000013",
-      "name": "Filter Relevant Recent Items",
+      "name": "Filter Relevant Recent Feeds",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -99,12 +181,12 @@
         "jsCode": "// A templated, keyword-driven blurb -- not real analysis. This is the entire 'why this matters'\n// content, deliberately kept simple and non-interpretive.\nconst items = $input.all().map(i => i.json);\n\nconst BLURB_BY_KEYWORD = {\n  'breach': 'A reminder that breach notification obligations apply to firms of every size, not just large ones.',\n  'ransomware': 'Ransomware increasingly targets smaller organizations precisely because they often have fewer defenses in place.',\n  'data protection': 'Data protection requirements keep expanding, and solo/small firms are not exempt just because of size.',\n  'compliance': 'Compliance guidance written for enterprise IT rarely translates directly to a solo or small practice — worth a plain-English read.',\n  'privacy law': 'Privacy law changes can affect client intake and data handling even for firms that never thought of themselves as a target.',\n};\nconst DEFAULT_BLURB = 'Worth a look for how it might apply at solo/small-firm scale.';\n\nconst digestItems = items.map(item => ({\n  ...item,\n  why_it_matters: BLURB_BY_KEYWORD[item.matched_keyword] || DEFAULT_BLURB,\n}));\n\nconst draftLines = digestItems.length\n  ? digestItems.map(i => `- ${i.title} (${i.source_feed})\\n  ${i.why_it_matters}\\n  ${i.link}`).join('\\n\\n')\n  : '(no relevant items found this week)';\n\nreturn [{ json: {\n  item_count: digestItems.length,\n  draft_content: draftLines,\n  items: digestItems,\n} }];"
       },
       "id": "8400aa00-0084-4000-a000-0000000014",
-      "name": "Draft Plain-English Digest",
+      "name": "Draft Digest Content Blurbs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         896,
-        0
+        320
       ],
       "notes": "Runs once for the whole batch, not once per item — turns the filtered items into a single digest draft, explicitly noting when nothing relevant was found rather than sending an empty draft."
     },
@@ -113,12 +195,12 @@
         "jsCode": "const d = $json;\nreturn { json: { ...d, digest_id: 'DIGEST-' + Date.now(), created_at: new Date().toISOString() } };"
       },
       "id": "8400aa00-0084-4000-a000-0000000015",
-      "name": "Assign Digest ID",
+      "name": "Assign Unique Digest IDs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1120,
-        0
+        320
       ],
       "notes": "This ID ties the sheet row to this run — mostly useful if this template later grows a review/decision webhook like other ledger-based templates in this catalog."
     },
@@ -152,7 +234,7 @@
         "options": {}
       },
       "id": "8400aa00-0084-4000-a000-0000000016",
-      "name": "Log Digest Draft For Review",
+      "name": "Append Digest Drafts To Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -163,10 +245,10 @@
     },
     {
       "parameters": {
-        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Reads deal-equivalent fields back from 'Assign Digest ID' by name, not $json -- the Sheets\n// append node in between echoes back its own written row, not the original structured data,\n// same gotcha already found and fixed in this catalog's other Sheets-logging templates.\nconst d = $('Assign Digest ID').item.json;\nconst subject = `Security digest draft ready for review — ${d.item_count} item(s)`;\nconst message = `This week's security/compliance digest draft (${d.digest_id}) is ready:\\n\\n${d.draft_content}\\n\\nThis is informational monitoring only, not advice or analysis -- review, polish, and approve before it goes into the newsletter/Field Notes pipeline.`;\n\nconst itemsHtml = (d.items && d.items.length)\n  ? d.items.map(i => `\n    <div style=\\\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px;\\\">\n      <div style=\\\"font-size:14px;font-weight:600;color:#0f172a;\\\">${escapeHtml(i.title)}</div>\n      <div style=\\\"font-size:12px;color:#64748b;margin-top:2px;\\\">${escapeHtml(i.source_feed)}</div>\n      <div style=\\\"font-size:13px;color:#334155;margin-top:8px;\\\">${escapeHtml(i.why_it_matters)}</div>\n      <div style=\\\"margin-top:8px;\\\"><a href=\\\"${escapeHtml(i.link)}\\\" style=\\\"font-size:12px;color:#2563eb;\\\">${escapeHtml(i.link)}</a></div>\n    </div>`).join('')\n  : `<div style=\\\"color:#64748b;font-size:13px;\\\">No relevant items found this week.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Pending review</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">Security digest draft — ${d.item_count} item(s)</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#64748b;font-size:12px;margin-bottom:16px;\\\">Digest ${escapeHtml(d.digest_id)} — informational monitoring only, not advice or analysis. Review, polish, and approve before it goes into the newsletter/Field Notes pipeline.</div>\n      ${itemsHtml}\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.CONTENT_REVIEWER_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Reads deal-equivalent fields back from 'Assign Digest ID' by name, not $json -- the Sheets\n// append node in between echoes back its own written row, not the original structured data,\n// same gotcha already found and fixed in this catalog's other Sheets-logging templates.\nconst d = $('Assign Unique Digest IDs').item.json;\nconst subject = `Security digest draft ready for review — ${d.item_count} item(s)`;\nconst message = `This week's security/compliance digest draft (${d.digest_id}) is ready:\\n\\n${d.draft_content}\\n\\nThis is informational monitoring only, not advice or analysis -- review, polish, and approve before it goes into the newsletter/Field Notes pipeline.`;\n\nconst itemsHtml = (d.items && d.items.length)\n  ? d.items.map(i => `\n    <div style=\\\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px;\\\">\n      <div style=\\\"font-size:14px;font-weight:600;color:#0f172a;\\\">${escapeHtml(i.title)}</div>\n      <div style=\\\"font-size:12px;color:#64748b;margin-top:2px;\\\">${escapeHtml(i.source_feed)}</div>\n      <div style=\\\"font-size:13px;color:#334155;margin-top:8px;\\\">${escapeHtml(i.why_it_matters)}</div>\n      <div style=\\\"margin-top:8px;\\\"><a href=\\\"${escapeHtml(i.link)}\\\" style=\\\"font-size:12px;color:#2563eb;\\\">${escapeHtml(i.link)}</a></div>\n    </div>`).join('')\n  : `<div style=\\\"color:#64748b;font-size:13px;\\\">No relevant items found this week.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Pending review</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">Security digest draft — ${d.item_count} item(s)</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#64748b;font-size:12px;margin-bottom:16px;\\\">Digest ${escapeHtml(d.digest_id)} — informational monitoring only, not advice or analysis. Review, polish, and approve before it goes into the newsletter/Field Notes pipeline.</div>\n      ${itemsHtml}\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.CONTENT_REVIEWER_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
       },
       "id": "8400aa00-0084-4000-a000-0000000017",
-      "name": "Build Digest Review Request Email",
+      "name": "Build Digest Review Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -178,15 +260,15 @@
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $('Build Digest Review Request Email').item.json.recipient }}",
-        "subject": "={{ $('Build Digest Review Request Email').item.json.subject }}",
-        "text": "={{ $('Build Digest Review Request Email').item.json.message }}",
+        "toEmail": "={{ $('Build Digest Review Email').item.json.recipient }}",
+        "subject": "={{ $('Build Digest Review Email').item.json.subject }}",
+        "text": "={{ $('Build Digest Review Email').item.json.message }}",
         "options": {},
         "emailFormat": "html",
-        "html": "={{ $('Build Digest Review Request Email').item.json.email_html }}"
+        "html": "={{ $('Build Digest Review Email').item.json.email_html }}"
       },
       "id": "8400aa00-0084-4000-a000-0000000018",
-      "name": "Send Digest Review Request Email",
+      "name": "Send Digest Review Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -203,22 +285,6 @@
     },
     {
       "parameters": {
-        "content": "## Stale draft reminder — a second, independent branch\n\nChecks the Digest Drafts log for anything still sitting at `pending_review` past a configurable age, and nudges the reviewer so drafts don't quietly go stale — mirrors the reviewer-nudge pattern already used elsewhere in this catalog (e.g. the conflict-check and case-study templates).",
-        "width": 1100,
-        "height": 240,
-        "color": 7
-      },
-      "id": "8400aa00-0084-4000-a000-0000000003",
-      "name": "Sticky Note2",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -48,
-        460
-      ]
-    },
-    {
-      "parameters": {
         "rule": {
           "interval": [
             {
@@ -229,7 +295,7 @@
         }
       },
       "id": "8400aa00-0084-4000-a000-0000000020",
-      "name": "Check For Stale Digest Drafts Weekly",
+      "name": "When Thursday 9am Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -254,7 +320,7 @@
         "options": {}
       },
       "id": "8400aa00-0084-4000-a000-0000000021",
-      "name": "Read Digest Drafts Log",
+      "name": "Read Digest Drafts From Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -268,12 +334,12 @@
         "jsCode": "// Flags any draft still sitting at pending_review past the configured age -- reviewers are\n// human and busy, so a draft can otherwise sit unseen indefinitely with no signal that it did.\n// Aggregates into a single item so the IF node downstream gets a real value to branch on,\n// rather than relying on n8n silently skipping both IF outputs when zero items come through.\nconst rows = $input.all().map(i => i.json);\nconst STALE_DRAFT_DAYS = Number($vars.STALE_DRAFT_REMINDER_DAYS || 5);\nconst cutoff = Date.now() - STALE_DRAFT_DAYS * 24 * 60 * 60 * 1000;\n\nconst stale = rows.filter(r => {\n  if (r.status !== 'pending_review') return false;\n  const createdAt = r.created_at ? new Date(r.created_at).getTime() : null;\n  return createdAt !== null && !Number.isNaN(createdAt) && createdAt <= cutoff;\n});\n\nreturn [{ json: { stale_count: stale.length, stale_drafts: stale } }];"
       },
       "id": "8400aa00-0084-4000-a000-0000000022",
-      "name": "Find Stale Pending Drafts",
+      "name": "Flag Stale Pending Drafts",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         448,
-        600
+        816
       ],
       "notes": "STALE_DRAFT_REMINDER_DAYS controls the age threshold — defaults to 5 days."
     },
@@ -302,12 +368,12 @@
         "options": {}
       },
       "id": "8400aa00-0084-4000-a000-0000000023",
-      "name": "If Any Stale Drafts Found",
+      "name": "If Stale Drafts Exist",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
         672,
-        600
+        816
       ],
       "notes": "Only sends a reminder when there's actually something stale — no reminder email when the queue is clean."
     },
@@ -321,7 +387,7 @@
       "typeVersion": 2,
       "position": [
         896,
-        560
+        768
       ],
       "notes": "Runs once for the whole batch of stale drafts, not once per draft — one reminder email listing all of them."
     },
@@ -341,7 +407,7 @@
       "typeVersion": 2,
       "position": [
         1120,
-        560
+        768
       ],
       "notes": "This is an internal Protomated notification, not a client communication — no compliance guardrail wrap needed, same as the main review request email.",
       "credentials": {
@@ -354,12 +420,12 @@
     {
       "parameters": {},
       "id": "8400aa00-0084-4000-a000-0000000026",
-      "name": "Skip — No Stale Drafts",
+      "name": "Skip When No Stale Drafts",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
         896,
-        680
+        896
       ],
       "notes": "Nothing to nudge about this run — every draft has either been reviewed or is still fresh."
     },
@@ -389,7 +455,7 @@
         "options": {}
       },
       "id": "8400aa00-0084-4000-a000-0000000030",
-      "name": "If Feed URLs Configured",
+      "name": "If Security Feed URLs Configured",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -403,19 +469,19 @@
         "jsCode": "// SECURITY_DIGEST_FEED_URLS isn't configured yet -- rather than letting the run silently\n// die at zero items (the previous behavior), log and email an explicit setup reminder so\n// whoever owns this sees it needs configuring, same shape as a normal digest draft.\nreturn [{ json: {\n  item_count: 0,\n  draft_content: '(no feed URLs configured yet -- set SECURITY_DIGEST_FEED_URLS in n8n Variables to start pulling content)',\n  items: [],\n} }];"
       },
       "id": "8400aa00-0084-4000-a000-0000000031",
-      "name": "Draft Setup-Needed Notice",
+      "name": "Draft Setup Needed Notice",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         448,
-        120
+        448
       ],
       "notes": "Fires only when SECURITY_DIGEST_FEED_URLS is empty — keeps the log and review email showing up on schedule even before feeds are configured, instead of the run just disappearing."
     }
   ],
   "active": false,
   "pinData": {
-    "Fetch Each Security Feed": [
+    "Fetch Security Feeds": [
       {
         "json": {
           "title": "State AG Announces New Breach Notification Guidance for Small Businesses",
@@ -450,7 +516,7 @@
         }
       }
     ],
-    "Read Digest Drafts Log": [
+    "Read Digest Drafts From Sheets": [
       {
         "json": {
           "digest_id": "DIGEST-1756000000000",
@@ -479,128 +545,128 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Check Security Content Sources Weekly": {
+    "When Monday 8am Trigger": {
       "main": [
         [
           {
-            "node": "If Feed URLs Configured",
+            "node": "If Security Feed URLs Configured",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Feed URL List": {
+    "Build Security Feed URL List": {
       "main": [
         [
           {
-            "node": "Fetch Each Security Feed",
+            "node": "Fetch Security Feeds",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Each Security Feed": {
+    "Fetch Security Feeds": {
       "main": [
         [
           {
-            "node": "Filter Relevant Recent Items",
+            "node": "Filter Relevant Recent Feeds",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Relevant Recent Items": {
+    "Filter Relevant Recent Feeds": {
       "main": [
         [
           {
-            "node": "Draft Plain-English Digest",
+            "node": "Draft Digest Content Blurbs",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Draft Plain-English Digest": {
+    "Draft Digest Content Blurbs": {
       "main": [
         [
           {
-            "node": "Assign Digest ID",
+            "node": "Assign Unique Digest IDs",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Assign Digest ID": {
+    "Assign Unique Digest IDs": {
       "main": [
         [
           {
-            "node": "Log Digest Draft For Review",
+            "node": "Append Digest Drafts To Sheets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Digest Draft For Review": {
+    "Append Digest Drafts To Sheets": {
       "main": [
         [
           {
-            "node": "Build Digest Review Request Email",
+            "node": "Build Digest Review Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Digest Review Request Email": {
+    "Build Digest Review Email": {
       "main": [
         [
           {
-            "node": "Send Digest Review Request Email",
+            "node": "Send Digest Review Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check For Stale Digest Drafts Weekly": {
+    "When Thursday 9am Trigger": {
       "main": [
         [
           {
-            "node": "Read Digest Drafts Log",
+            "node": "Read Digest Drafts From Sheets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Digest Drafts Log": {
+    "Read Digest Drafts From Sheets": {
       "main": [
         [
           {
-            "node": "Find Stale Pending Drafts",
+            "node": "Flag Stale Pending Drafts",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Find Stale Pending Drafts": {
+    "Flag Stale Pending Drafts": {
       "main": [
         [
           {
-            "node": "If Any Stale Drafts Found",
+            "node": "If Stale Drafts Exist",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Any Stale Drafts Found": {
+    "If Stale Drafts Exist": {
       "main": [
         [
           {
@@ -611,7 +677,7 @@
         ],
         [
           {
-            "node": "Skip — No Stale Drafts",
+            "node": "Skip When No Stale Drafts",
             "type": "main",
             "index": 0
           }
@@ -629,29 +695,29 @@
         ]
       ]
     },
-    "If Feed URLs Configured": {
+    "If Security Feed URLs Configured": {
       "main": [
         [
           {
-            "node": "Build Feed URL List",
+            "node": "Build Security Feed URL List",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Draft Setup-Needed Notice",
+            "node": "Draft Setup Needed Notice",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Draft Setup-Needed Notice": {
+    "Draft Setup Needed Notice": {
       "main": [
         [
           {
-            "node": "Assign Digest ID",
+            "node": "Assign Unique Digest IDs",
             "type": "main",
             "index": 0
           }

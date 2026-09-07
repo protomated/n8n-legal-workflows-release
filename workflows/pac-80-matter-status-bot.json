@@ -4,48 +4,210 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Matter Status Bot\n\n### How it works\n\nThis workflow has TWO independent parts on one canvas:\n\n**A. Text message status requests (top row)**\nA client texts the firm's number asking about their case. The bot matches the phone number against Clio contacts, looks up their open matter(s), and replies with the current status in plain language — no attorney interruption needed.\n\n**B. Email status requests (bottom row)**\nThe same idea over email, watching a dedicated inbox (e.g. case-status@yourfirm.com) via IMAP.\n\n**This only ever reports status — it never gives legal advice, predicts outcomes, or answers 'what happens next' questions.** The reply is limited to the matter's own status field, practice area, and reference number as recorded in Clio — nothing interpreted or added (ABA Op. 512). If a client asks anything beyond status, the reply always includes a line directing them to contact their attorney directly.\n\n**Client identification is phone/email matching against Clio contacts, not authentication.** Anyone texting from a phone number on file as a client's number gets that client's status back — there's no PIN or second factor. Firms with sensitive matters or shared phone lines should weigh this before enabling the SMS branch.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — every reply goes through it.\n- [ ] Configure Clio OAuth2, Twilio, and an IMAP mailbox credential (a dedicated inbox like case-status@yourfirm.com).\n- [ ] Point your Twilio number's incoming-message webhook at this workflow's SMS webhook URL.\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_TWILIO_NUMBER, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nIf a client has multiple open matters, the reply lists all of them rather than guessing which one they mean — firms with clients who routinely have many concurrent matters may want to add a matter-reference lookup step instead (not built here)."
+        "content": "## Matter Status Bot\n\n### How it works\n\n1. The workflow triggers on incoming client queries via SMS webhook or email read.\n2. It parses incoming messages and identifies clients by matching phone numbers or email addresses with Clio contacts.\n3. For identified clients, it checks cooldown periods to avoid repeated rapid replies.\n4. It retrieves open matter statuses from Clio and composes status replies.\n5. The workflow runs compliance checks before sending replies via SMS or email, respecting client opt-outs.\n6. If no client match is found, it sends a \"client not found\" reply via the relevant channel.\n\n### Setup steps\n\n- - [ ] Configure Twilio credentials for SMS send and webhook receive functionality.\n- - [ ] Set up IMAP email credentials for reading incoming client emails.\n- - [ ] Configure SMTP or email send credentials for sending email replies.\n- - [ ] Provide Clio API base URL and authentication credentials as environment variables.\n- - [ ] Import and set the compliance check sub-workflow referenced in the execution.\n- - [ ] Ensure the cooldown logic is properly implemented to avoid multiple rapid responses.\n",
+        "width": 480,
+        "height": 896
       },
-      "id": "8000aa00-0080-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -700,
-        -460
-      ]
+        -608,
+        -496
+      ],
+      "id": "3ebd0085-fc14-43b1-b945-bfd4cdeb73ff",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Reply to a text asking about case status\n\nMatches the sender's phone number to a Clio contact, looks up their open matter(s), and texts back a plain status update.",
-        "width": 1300,
-        "height": 260,
+        "content": "## SMS inbound trigger and parse\n\nWebhook trigger on incoming SMS and parsing its contents.",
+        "width": 416,
+        "height": 304,
         "color": 7
       },
-      "id": "8000aa00-0080-4000-a000-0000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -128
+      ],
+      "id": "22c4f29f-bdb5-41cd-bedc-1dc15dd8ac09",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Reply to an email asking about case status — a second, independent branch\n\nSame idea, watching a dedicated inbox via IMAP instead of SMS.",
-        "width": 1300,
-        "height": 260,
+        "content": "## SMS client lookup by phone\n\nQuery Clio contacts by phone and confirm client match.",
+        "width": 416,
+        "height": 304,
         "color": 7
       },
-      "id": "8000aa00-0080-4000-a000-0000000003",
-      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -128
+      ],
+      "id": "3a882b87-9376-4563-83f4-4dd3e4b40714",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## SMS client match decision\n\nCheck if client identified by phone and branch accordingly.",
+        "width": 640,
+        "height": 432,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        848,
+        -112
+      ],
+      "id": "b70ca136-9deb-475e-9dfc-12fd0db91a36",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## SMS cooldown check and matter fetch\n\nCheck SMS reply cooldown to prevent flooding or repeated replies.",
+        "width": 640,
+        "height": 352,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -496
+      ],
+      "id": "15c2d7b4-90c9-4c6a-944a-8a5949e4289d",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## SMS matter status retrieval and compliance\n\nFetch matter status from Clio and verify compliance before texting back client.",
+        "width": 864,
+        "height": 272,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        -112
+      ],
+      "id": "d657e770-8ff6-405f-857a-0b3366290142",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## SMS send or skip reply\n\nSend status SMS reply if allowed; otherwise skip if client opted out.",
+        "width": 240,
+        "height": 480,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        -240
+      ],
+      "id": "052b147e-a20d-441f-8bab-f23a8538b299",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Email inbound trigger and parse\n\nTrigger on incoming emails and parse status request content.",
+        "width": 416,
+        "height": 304,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        900
-      ]
+        768
+      ],
+      "id": "02af3df6-0e29-41a4-9709-69a1ba5764e9",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## Email client lookup by email\n\nQuery Clio contacts by email and confirm client match.",
+        "width": 416,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        768
+      ],
+      "id": "40cba18d-2b00-4daf-b98c-eac7070f6959",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "## Email client match decision\n\nCheck if client identified by email and branch accordingly.",
+        "width": 640,
+        "height": 432,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        848,
+        784
+      ],
+      "id": "f20933de-545c-4438-a132-cefa8a7a2232",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "content": "## Email cooldown check and matter fetch\n\nCheck email reply cooldown to avoid multiple quick responses.",
+        "width": 640,
+        "height": 352,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        400
+      ],
+      "id": "f6128f8b-aebe-40df-ac95-6403ccde8d67",
+      "name": "Sticky Note10"
+    },
+    {
+      "parameters": {
+        "content": "## Email matter status retrieval and compliance\n\nFetch matter status for email and run compliance checks before email response.",
+        "width": 864,
+        "height": 272,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        784
+      ],
+      "id": "9c2347e9-07ae-4fec-a8d2-582c74b90656",
+      "name": "Sticky Note11"
+    },
+    {
+      "parameters": {
+        "content": "## Email send or skip reply\n\nSend status email reply if allowed; otherwise skip if client opted out.",
+        "width": 240,
+        "height": 512,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        624
+      ],
+      "id": "2af1ca77-fb4c-468d-a689-46f82deb9e31",
+      "name": "Sticky Note12"
     },
     {
       "parameters": {
@@ -54,7 +216,7 @@
         "options": {}
       },
       "id": "8000aa00-0080-4000-a000-0000000010",
-      "name": "When Client Texts For Status",
+      "name": "When Client Sends Status Text",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
@@ -68,7 +230,7 @@
         "jsCode": "// Twilio posts incoming SMS as form-encoded fields -- From is the client's number, Body is\n// their message text.\nconst body = $json.body || $json;\nconst fromNumber = (body.From || '').trim();\nconst messageText = (body.Body || '').trim();\nreturn { json: { from_number: fromNumber, message_text: messageText, is_valid: !!fromNumber } };"
       },
       "id": "8000aa00-0080-4000-a000-0000000011",
-      "name": "Parse Incoming Status Text",
+      "name": "Parse Incoming Status SMS",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -117,10 +279,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Confirms an actual contact match (Clio's query search can return loose/fuzzy results), by\n// comparing digits-only phone numbers rather than trusting the search alone.\nfunction digitsOnly(s) { return String(s || '').replace(/\\D/g, ''); }\nconst fromDigits = digitsOnly($('Parse Incoming Status Text').first().json.from_number);\nconst contacts = $json.data || [];\nconst match = contacts.find(c => (c.phone_numbers || []).some(p => digitsOnly(p.number).endsWith(fromDigits.slice(-10))));\nreturn { json: { client_id: match ? match.id : null, client_name: match ? match.name : '', is_found: !!match } };"
+        "jsCode": "// Confirms an actual contact match (Clio's query search can return loose/fuzzy results), by\n// comparing digits-only phone numbers rather than trusting the search alone.\nfunction digitsOnly(s) { return String(s || '').replace(/\\D/g, ''); }\nconst fromDigits = digitsOnly($('Parse Incoming Status SMS').first().json.from_number);\nconst contacts = $json.data || [];\nconst match = contacts.find(c => (c.phone_numbers || []).some(p => digitsOnly(p.number).endsWith(fromDigits.slice(-10))));\nreturn { json: { client_id: match ? match.id : null, client_name: match ? match.name : '', is_found: !!match } };"
       },
       "id": "8000aa00-0080-4000-a000-0000000013",
-      "name": "Match Client By Phone Number",
+      "name": "Match Client Using Phone Number",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -155,7 +317,7 @@
         }
       },
       "id": "8000aa00-0080-4000-a000-0000000014",
-      "name": "If Client Identified By Phone",
+      "name": "If Client Found By Phone",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -166,10 +328,10 @@
     },
     {
       "parameters": {
-        "jsCode": "return { json: {\n  recipient: $('Parse Incoming Status Text').first().json.from_number,\n  message: `We couldn't match this number to a client on file. Please call our office directly and we'll help you right away.`,\n} };"
+        "jsCode": "return { json: {\n  recipient: $('Parse Incoming Status SMS').first().json.from_number,\n  message: `We couldn't match this number to a client on file. Please call our office directly and we'll help you right away.`,\n} };"
       },
       "id": "8000aa00-0080-4000-a000-0000000015",
-      "name": "Build Client Not Found Reply",
+      "name": "Build Phone Client Not Found Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -211,7 +373,7 @@
         }
       },
       "id": "8000aa00-0080-4000-a000-0000000016",
-      "name": "Fetch Client Open Matters From Clio",
+      "name": "Fetch Open Matters By Phone",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -222,10 +384,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Composes a plain status reply -- only facts already in Clio (matter reference, practice area,\n// status), never an interpretation, prediction, or next-steps guidance. Handles zero-matter and\n// multi-matter cases explicitly rather than guessing which matter the client means.\nconst matters = $json.data || [];\nconst clientName = $('Match Client By Phone Number').first().json.client_name;\nlet message;\nif (matters.length === 0) {\n  message = `Hi ${clientName}, we don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.`;\n} else if (matters.length === 1) {\n  const m = matters[0];\n  message = `Hi ${clientName}, your matter ${m.display_number} (${(m.practice_area && m.practice_area.name) || m.description}) is currently: ${m.status}. For details or questions, please contact your attorney directly.`;\n} else {\n  const lines = matters.map(m => `${m.display_number}: ${m.status}`).join('; ');\n  message = `Hi ${clientName}, you have ${matters.length} open matters: ${lines}. For details on any of these, please contact your attorney directly.`;\n}\nreturn { json: { recipient: $('Parse Incoming Status Text').first().json.from_number, message } };"
+        "jsCode": "// Composes a plain status reply -- only facts already in Clio (matter reference, practice area,\n// status), never an interpretation, prediction, or next-steps guidance. Handles zero-matter and\n// multi-matter cases explicitly rather than guessing which matter the client means.\nconst matters = $json.data || [];\nconst clientName = $('Match Client Using Phone Number').first().json.client_name;\nlet message;\nif (matters.length === 0) {\n  message = `Hi ${clientName}, we don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.`;\n} else if (matters.length === 1) {\n  const m = matters[0];\n  message = `Hi ${clientName}, your matter ${m.display_number} (${(m.practice_area && m.practice_area.name) || m.description}) is currently: ${m.status}. For details or questions, please contact your attorney directly.`;\n} else {\n  const lines = matters.map(m => `${m.display_number}: ${m.status}`).join('; ');\n  message = `Hi ${clientName}, you have ${matters.length} open matters: ${lines}. For details on any of these, please contact your attorney directly.`;\n}\nreturn { json: { recipient: $('Parse Incoming Status SMS').first().json.from_number, message } };"
       },
       "id": "8000aa00-0080-4000-a000-0000000017",
-      "name": "Build Matter Status Reply",
+      "name": "Build Matter Status SMS Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -258,7 +420,7 @@
         "options": {}
       },
       "id": "8000aa00-0080-4000-a000-0000000018",
-      "name": "Check Compliance Before Texting Back",
+      "name": "Check SMS Compliance Before Reply",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -293,7 +455,7 @@
         }
       },
       "id": "8000aa00-0080-4000-a000-0000000019",
-      "name": "If Approved To Text Back",
+      "name": "If Approved To Send SMS Reply",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -306,11 +468,11 @@
       "parameters": {
         "operation": "send",
         "from": "={{ $vars.FIRM_TWILIO_NUMBER }}",
-        "to": "={{ $('Build Matter Status Reply').item.json.recipient }}",
-        "message": "={{ $('Build Matter Status Reply').item.json.message }}"
+        "to": "={{ $('Build Matter Status SMS Reply').item.json.recipient }}",
+        "message": "={{ $('Build Matter Status SMS Reply').item.json.message }}"
       },
       "id": "8000aa00-0080-4000-a000-000000001a",
-      "name": "Send Matter Status Text Reply",
+      "name": "Send Matter Status SMS Reply",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
       "position": [
@@ -328,7 +490,7 @@
     {
       "parameters": {},
       "id": "8000aa00-0080-4000-a000-000000001b",
-      "name": "Skip — Client Opted Out Of Texts",
+      "name": "Skip SMS - Client Opted Out",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -341,11 +503,11 @@
       "parameters": {
         "operation": "send",
         "from": "={{ $vars.FIRM_TWILIO_NUMBER }}",
-        "to": "={{ $('Build Client Not Found Reply').item.json.recipient }}",
-        "message": "={{ $('Build Client Not Found Reply').item.json.message }}"
+        "to": "={{ $('Build Phone Client Not Found Reply').item.json.recipient }}",
+        "message": "={{ $('Build Phone Client Not Found Reply').item.json.message }}"
       },
       "id": "8000aa00-0080-4000-a000-000000001c",
-      "name": "Send Client Not Found Text Reply",
+      "name": "Send Phone Client Not Found SMS",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
       "position": [
@@ -369,7 +531,7 @@
         }
       },
       "id": "8000aa00-0080-4000-a000-0000000020",
-      "name": "When Client Emails For Status",
+      "name": "When Client Emails Status Request",
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2,
       "position": [
@@ -389,7 +551,7 @@
         "jsCode": "const from = ($json.from && $json.from.value && $json.from.value[0] && $json.from.value[0].address) || $json.from?.text || '';\nreturn { json: { from_email: String(from).toLowerCase().trim(), subject: $json.subject || '', is_valid: !!from } };"
       },
       "id": "8000aa00-0080-4000-a000-0000000021",
-      "name": "Parse Status Request Email",
+      "name": "Parse Incoming Status Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -438,10 +600,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const fromEmail = $('Parse Status Request Email').first().json.from_email;\nconst contacts = $json.data || [];\nconst match = contacts.find(c => (c.email_addresses || []).some(e => String(e.address || '').toLowerCase() === fromEmail));\nreturn { json: { client_id: match ? match.id : null, client_name: match ? match.name : '', is_found: !!match } };"
+        "jsCode": "const fromEmail = $('Parse Incoming Status Email').first().json.from_email;\nconst contacts = $json.data || [];\nconst match = contacts.find(c => (c.email_addresses || []).some(e => String(e.address || '').toLowerCase() === fromEmail));\nreturn { json: { client_id: match ? match.id : null, client_name: match ? match.name : '', is_found: !!match } };"
       },
       "id": "8000aa00-0080-4000-a000-0000000023",
-      "name": "Match Client By Email",
+      "name": "Match Client Using Email Address",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -476,7 +638,7 @@
         }
       },
       "id": "8000aa00-0080-4000-a000-0000000024",
-      "name": "If Client Identified By Email",
+      "name": "If Client Found By Email",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -487,7 +649,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return { json: {\n  recipient: $('Parse Status Request Email').first().json.from_email,\n  subject: 'Re: ' + ($('Parse Status Request Email').first().json.subject || 'Case status'),\n  message: `We couldn't match this email address to a client on file. Please call our office directly and we'll help you right away.`,\n} };"
+        "jsCode": "return { json: {\n  recipient: $('Parse Incoming Status Email').first().json.from_email,\n  subject: 'Re: ' + ($('Parse Incoming Status Email').first().json.subject || 'Case status'),\n  message: `We couldn't match this email address to a client on file. Please call our office directly and we'll help you right away.`,\n} };"
       },
       "id": "8000aa00-0080-4000-a000-0000000025",
       "name": "Build Email Client Not Found Reply",
@@ -532,7 +694,7 @@
         }
       },
       "id": "8000aa00-0080-4000-a000-0000000026",
-      "name": "Fetch Client Open Matters For Email Reply",
+      "name": "Fetch Open Matters By Email",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -543,10 +705,10 @@
     },
     {
       "parameters": {
-        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst matters = $json.data || [];\nconst clientName = $('Match Client By Email').first().json.client_name;\nconst subject = 'Re: ' + ($('Parse Status Request Email').first().json.subject || 'Case status');\nlet message;\nlet rowsHtml;\nif (matters.length === 0) {\n  message = `Hi ${clientName},\\n\\nWe don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.`;\n  rowsHtml = '';\n} else {\n  message = matters.length === 1\n    ? `Hi ${clientName},\\n\\nYour matter ${matters[0].display_number} (${(matters[0].practice_area && matters[0].practice_area.name) || matters[0].description}) is currently: ${matters[0].status}.\\n\\nFor details or questions, please contact your attorney directly.`\n    : `Hi ${clientName},\\n\\nYou have ${matters.length} open matters:\\n${matters.map(m => `- ${m.display_number}: ${m.status}`).join('\\n')}\\n\\nFor details on any of these, please contact your attorney directly.`;\n  rowsHtml = matters.map(m => `\n    <tr>\n      <td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(m.display_number)}</td>\n      <td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml((m.practice_area && m.practice_area.name) || m.description)}</td>\n      <td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;text-align:right;\\\">${escapeHtml(m.status)}</td>\n    </tr>`).join('');\n}\n\nconst bodyHtml = matters.length === 0\n  ? `<div style=\\\"color:#334155;font-size:14px;\\\">We don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.</div>`\n  : `\n    <div style=\\\"color:#334155;font-size:14px;margin-bottom:16px;\\\">Hi ${escapeHtml(clientName)}, here's the current status of your open matter${matters.length === 1 ? '' : 's'}:</div>\n    <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;\\\">\n      <thead><tr style=\\\"background:#f1f5f9;\\\">\n        <th style=\\\"padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:left;\\\">Matter</th>\n        <th style=\\\"padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:left;\\\">Description</th>\n        <th style=\\\"padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:right;\\\">Status</th>\n      </tr></thead>\n      <tbody>${rowsHtml}</tbody>\n    </table>\n    <div style=\\\"color:#64748b;font-size:13px;\\\">For details or questions, please contact your attorney directly.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:18px;font-weight:700;\\\">${escapeHtml($vars.FIRM_NAME || 'Case status')}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { recipient: $('Parse Status Request Email').first().json.from_email, subject, message, email_html: emailHtml } };"
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst matters = $json.data || [];\nconst clientName = $('Match Client Using Email Address').first().json.client_name;\nconst subject = 'Re: ' + ($('Parse Incoming Status Email').first().json.subject || 'Case status');\nlet message;\nlet rowsHtml;\nif (matters.length === 0) {\n  message = `Hi ${clientName},\\n\\nWe don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.`;\n  rowsHtml = '';\n} else {\n  message = matters.length === 1\n    ? `Hi ${clientName},\\n\\nYour matter ${matters[0].display_number} (${(matters[0].practice_area && matters[0].practice_area.name) || matters[0].description}) is currently: ${matters[0].status}.\\n\\nFor details or questions, please contact your attorney directly.`\n    : `Hi ${clientName},\\n\\nYou have ${matters.length} open matters:\\n${matters.map(m => `- ${m.display_number}: ${m.status}`).join('\\n')}\\n\\nFor details on any of these, please contact your attorney directly.`;\n  rowsHtml = matters.map(m => `\n    <tr>\n      <td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(m.display_number)}</td>\n      <td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml((m.practice_area && m.practice_area.name) || m.description)}</td>\n      <td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;text-align:right;\\\">${escapeHtml(m.status)}</td>\n    </tr>`).join('');\n}\n\nconst bodyHtml = matters.length === 0\n  ? `<div style=\\\"color:#334155;font-size:14px;\\\">We don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.</div>`\n  : `\n    <div style=\\\"color:#334155;font-size:14px;margin-bottom:16px;\\\">Hi ${escapeHtml(clientName)}, here's the current status of your open matter${matters.length === 1 ? '' : 's'}:</div>\n    <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;\\\">\n      <thead><tr style=\\\"background:#f1f5f9;\\\">\n        <th style=\\\"padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:left;\\\">Matter</th>\n        <th style=\\\"padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:left;\\\">Description</th>\n        <th style=\\\"padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:right;\\\">Status</th>\n      </tr></thead>\n      <tbody>${rowsHtml}</tbody>\n    </table>\n    <div style=\\\"color:#64748b;font-size:13px;\\\">For details or questions, please contact your attorney directly.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:18px;font-weight:700;\\\">${escapeHtml($vars.FIRM_NAME || 'Case status')}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { recipient: $('Parse Incoming Status Email').first().json.from_email, subject, message, email_html: emailHtml } };"
       },
       "id": "8000aa00-0080-4000-a000-0000000027",
-      "name": "Build Email Matter Status Reply",
+      "name": "Build Matter Status Email Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -579,7 +741,7 @@
         "options": {}
       },
       "id": "8000aa00-0080-4000-a000-0000000028",
-      "name": "Check Compliance Before Emailing Back",
+      "name": "Check Email Compliance Before Reply",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -614,7 +776,7 @@
         }
       },
       "id": "8000aa00-0080-4000-a000-0000000029",
-      "name": "If Approved To Email Back",
+      "name": "If Approved To Send Email Reply",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -626,15 +788,15 @@
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $('Build Email Matter Status Reply').item.json.recipient }}",
-        "subject": "={{ $('Build Email Matter Status Reply').item.json.subject }}",
-        "text": "={{ $('Build Email Matter Status Reply').item.json.message }}",
+        "toEmail": "={{ $('Build Matter Status Email Reply').item.json.recipient }}",
+        "subject": "={{ $('Build Matter Status Email Reply').item.json.subject }}",
+        "text": "={{ $('Build Matter Status Email Reply').item.json.message }}",
         "options": {},
         "emailFormat": "html",
-        "html": "={{ $('Build Email Matter Status Reply').item.json.email_html }}"
+        "html": "={{ $('Build Matter Status Email Reply').item.json.email_html }}"
       },
       "id": "8000aa00-0080-4000-a000-000000002a",
-      "name": "Send Email Matter Status Reply",
+      "name": "Send Matter Status Email Reply",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -652,7 +814,7 @@
     {
       "parameters": {},
       "id": "8000aa00-0080-4000-a000-000000002b",
-      "name": "Skip — Client Opted Out Of Emails",
+      "name": "Skip Email - Client Opted Out",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -687,29 +849,29 @@
     },
     {
       "parameters": {
-        "jsCode": "// Avoids texting/emailing the same client multiple times in quick succession if they send\n// several messages close together (common when someone double-texts waiting for a reply).\n// Tracked via n8n's own workflow static data, keyed by phone/email.\nconst identifier = $('Parse Incoming Status Text').first().json.from_number;\nconst COOLDOWN_MINUTES = Number($vars.STATUS_REPLY_COOLDOWN_MINUTES || 5);\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastRepliedAt) staticData.lastRepliedAt = {};\nconst lastRepliedAt = staticData.lastRepliedAt[identifier];\nconst cooldownMs = COOLDOWN_MINUTES * 60 * 1000;\nconst withinCooldown = !!lastRepliedAt && (Date.now() - new Date(lastRepliedAt).getTime()) < cooldownMs;\n\nif (!withinCooldown) {\n  staticData.lastRepliedAt[identifier] = new Date().toISOString();\n}\n\nreturn { json: { ...$json, within_reply_cooldown: withinCooldown } };"
+        "jsCode": "// Avoids texting/emailing the same client multiple times in quick succession if they send\n// several messages close together (common when someone double-texts waiting for a reply).\n// Tracked via n8n's own workflow static data, keyed by phone/email.\nconst identifier = $('Parse Incoming Status SMS').first().json.from_number;\nconst COOLDOWN_MINUTES = Number($vars.STATUS_REPLY_COOLDOWN_MINUTES || 5);\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastRepliedAt) staticData.lastRepliedAt = {};\nconst lastRepliedAt = staticData.lastRepliedAt[identifier];\nconst cooldownMs = COOLDOWN_MINUTES * 60 * 1000;\nconst withinCooldown = !!lastRepliedAt && (Date.now() - new Date(lastRepliedAt).getTime()) < cooldownMs;\n\nif (!withinCooldown) {\n  staticData.lastRepliedAt[identifier] = new Date().toISOString();\n}\n\nreturn { json: { ...$json, within_reply_cooldown: withinCooldown } };"
       },
       "id": "8000aa00-0080-4000-a000-0000000030",
-      "name": "Check Reply Cooldown For Phone",
+      "name": "Check SMS Reply Cooldown",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1120,
-        -160
+        -304
       ],
       "notes": "STATUS_REPLY_COOLDOWN_MINUTES controls how long to wait before replying to the same client again — defaults to 5 minutes, so rapid double-texts only get one reply."
     },
     {
       "parameters": {
-        "jsCode": "// Avoids texting/emailing the same client multiple times in quick succession if they send\n// several messages close together (common when someone double-texts waiting for a reply).\n// Tracked via n8n's own workflow static data, keyed by phone/email.\nconst identifier = $('Parse Status Request Email').first().json.from_email;\nconst COOLDOWN_MINUTES = Number($vars.STATUS_REPLY_COOLDOWN_MINUTES || 5);\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastRepliedAt) staticData.lastRepliedAt = {};\nconst lastRepliedAt = staticData.lastRepliedAt[identifier];\nconst cooldownMs = COOLDOWN_MINUTES * 60 * 1000;\nconst withinCooldown = !!lastRepliedAt && (Date.now() - new Date(lastRepliedAt).getTime()) < cooldownMs;\n\nif (!withinCooldown) {\n  staticData.lastRepliedAt[identifier] = new Date().toISOString();\n}\n\nreturn { json: { ...$json, within_reply_cooldown: withinCooldown } };"
+        "jsCode": "// Avoids texting/emailing the same client multiple times in quick succession if they send\n// several messages close together (common when someone double-texts waiting for a reply).\n// Tracked via n8n's own workflow static data, keyed by phone/email.\nconst identifier = $('Parse Incoming Status Email').first().json.from_email;\nconst COOLDOWN_MINUTES = Number($vars.STATUS_REPLY_COOLDOWN_MINUTES || 5);\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastRepliedAt) staticData.lastRepliedAt = {};\nconst lastRepliedAt = staticData.lastRepliedAt[identifier];\nconst cooldownMs = COOLDOWN_MINUTES * 60 * 1000;\nconst withinCooldown = !!lastRepliedAt && (Date.now() - new Date(lastRepliedAt).getTime()) < cooldownMs;\n\nif (!withinCooldown) {\n  staticData.lastRepliedAt[identifier] = new Date().toISOString();\n}\n\nreturn { json: { ...$json, within_reply_cooldown: withinCooldown } };"
       },
       "id": "8000aa00-0080-4000-a000-0000000031",
-      "name": "Check Reply Cooldown For Email",
+      "name": "Check Email Reply Cooldown",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1120,
-        740
+        592
       ],
       "notes": "STATUS_REPLY_COOLDOWN_MINUTES controls how long to wait before replying to the same client again — defaults to 5 minutes, so rapid double-texts only get one reply."
     },
@@ -739,24 +901,24 @@
         }
       },
       "id": "8000aa00-0080-4000-a000-0000000032",
-      "name": "If Within Reply Cooldown (SMS)",
+      "name": "If Within SMS Reply Cooldown",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
         1344,
-        -160
+        -304
       ],
       "notes": "True means this number already got a status reply within the cooldown window — skips straight to a no-op instead of fetching matters and texting again."
     },
     {
       "parameters": {},
       "id": "8000aa00-0080-4000-a000-0000000033",
-      "name": "Skip — Replied Recently (SMS)",
+      "name": "Skip SMS - Recently Replied",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
         1568,
-        -240
+        -384
       ],
       "notes": "No re-text sent — the client already got a status reply within the cooldown window."
     },
@@ -786,31 +948,31 @@
         }
       },
       "id": "8000aa00-0080-4000-a000-0000000034",
-      "name": "If Within Reply Cooldown (Email)",
+      "name": "If Within Email Reply Cooldown",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
         1344,
-        740
+        592
       ],
       "notes": "True means this address already got a status reply within the cooldown window — skips straight to a no-op instead of fetching matters and emailing again."
     },
     {
       "parameters": {},
       "id": "8000aa00-0080-4000-a000-0000000035",
-      "name": "Skip — Replied Recently (Email)",
+      "name": "Skip Email - Recently Replied",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
         1568,
-        660
+        512
       ],
       "notes": "No re-reply sent — the client already got a status reply within the cooldown window."
     }
   ],
   "active": false,
   "pinData": {
-    "When Client Texts For Status": [
+    "When Client Sends Status Text": [
       {
         "json": {
           "headers": {},
@@ -850,7 +1012,7 @@
         }
       }
     ],
-    "Fetch Client Open Matters From Clio": [
+    "Fetch Open Matters By Phone": [
       {
         "json": {
           "data": [
@@ -873,7 +1035,7 @@
         }
       }
     ],
-    "When Client Emails For Status": [
+    "When Client Emails Status Request": [
       {
         "json": {
           "from": {
@@ -911,7 +1073,7 @@
         }
       }
     ],
-    "Fetch Client Open Matters For Email Reply": [
+    "Fetch Open Matters By Email": [
       {
         "json": {
           "data": [
@@ -948,18 +1110,18 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "When Client Texts For Status": {
+    "When Client Sends Status Text": {
       "main": [
         [
           {
-            "node": "Parse Incoming Status Text",
+            "node": "Parse Incoming Status SMS",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Incoming Status Text": {
+    "Parse Incoming Status SMS": {
       "main": [
         [
           {
@@ -974,116 +1136,116 @@
       "main": [
         [
           {
-            "node": "Match Client By Phone Number",
+            "node": "Match Client Using Phone Number",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Match Client By Phone Number": {
+    "Match Client Using Phone Number": {
       "main": [
         [
           {
-            "node": "If Client Identified By Phone",
+            "node": "If Client Found By Phone",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Client Identified By Phone": {
+    "If Client Found By Phone": {
       "main": [
         [
           {
-            "node": "Check Reply Cooldown For Phone",
+            "node": "Check SMS Reply Cooldown",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Build Client Not Found Reply",
+            "node": "Build Phone Client Not Found Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Client Not Found Reply": {
+    "Build Phone Client Not Found Reply": {
       "main": [
         [
           {
-            "node": "Send Client Not Found Text Reply",
+            "node": "Send Phone Client Not Found SMS",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Client Open Matters From Clio": {
+    "Fetch Open Matters By Phone": {
       "main": [
         [
           {
-            "node": "Build Matter Status Reply",
+            "node": "Build Matter Status SMS Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Matter Status Reply": {
+    "Build Matter Status SMS Reply": {
       "main": [
         [
           {
-            "node": "Check Compliance Before Texting Back",
+            "node": "Check SMS Compliance Before Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Compliance Before Texting Back": {
+    "Check SMS Compliance Before Reply": {
       "main": [
         [
           {
-            "node": "If Approved To Text Back",
+            "node": "If Approved To Send SMS Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Approved To Text Back": {
+    "If Approved To Send SMS Reply": {
       "main": [
         [
           {
-            "node": "Send Matter Status Text Reply",
+            "node": "Send Matter Status SMS Reply",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — Client Opted Out Of Texts",
+            "node": "Skip SMS - Client Opted Out",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "When Client Emails For Status": {
+    "When Client Emails Status Request": {
       "main": [
         [
           {
-            "node": "Parse Status Request Email",
+            "node": "Parse Incoming Status Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Status Request Email": {
+    "Parse Incoming Status Email": {
       "main": [
         [
           {
@@ -1098,29 +1260,29 @@
       "main": [
         [
           {
-            "node": "Match Client By Email",
+            "node": "Match Client Using Email Address",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Match Client By Email": {
+    "Match Client Using Email Address": {
       "main": [
         [
           {
-            "node": "If Client Identified By Email",
+            "node": "If Client Found By Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Client Identified By Email": {
+    "If Client Found By Email": {
       "main": [
         [
           {
-            "node": "Check Reply Cooldown For Email",
+            "node": "Check Email Reply Cooldown",
             "type": "main",
             "index": 0
           }
@@ -1145,109 +1307,109 @@
         ]
       ]
     },
-    "Fetch Client Open Matters For Email Reply": {
+    "Fetch Open Matters By Email": {
       "main": [
         [
           {
-            "node": "Build Email Matter Status Reply",
+            "node": "Build Matter Status Email Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Email Matter Status Reply": {
+    "Build Matter Status Email Reply": {
       "main": [
         [
           {
-            "node": "Check Compliance Before Emailing Back",
+            "node": "Check Email Compliance Before Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Compliance Before Emailing Back": {
+    "Check Email Compliance Before Reply": {
       "main": [
         [
           {
-            "node": "If Approved To Email Back",
+            "node": "If Approved To Send Email Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Approved To Email Back": {
+    "If Approved To Send Email Reply": {
       "main": [
         [
           {
-            "node": "Send Email Matter Status Reply",
+            "node": "Send Matter Status Email Reply",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — Client Opted Out Of Emails",
+            "node": "Skip Email - Client Opted Out",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Reply Cooldown For Phone": {
+    "Check SMS Reply Cooldown": {
       "main": [
         [
           {
-            "node": "If Within Reply Cooldown (SMS)",
+            "node": "If Within SMS Reply Cooldown",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Within Reply Cooldown (SMS)": {
+    "If Within SMS Reply Cooldown": {
       "main": [
         [
           {
-            "node": "Skip — Replied Recently (SMS)",
+            "node": "Skip SMS - Recently Replied",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Fetch Client Open Matters From Clio",
+            "node": "Fetch Open Matters By Phone",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Reply Cooldown For Email": {
+    "Check Email Reply Cooldown": {
       "main": [
         [
           {
-            "node": "If Within Reply Cooldown (Email)",
+            "node": "If Within Email Reply Cooldown",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Within Reply Cooldown (Email)": {
+    "If Within Email Reply Cooldown": {
       "main": [
         [
           {
-            "node": "Skip — Replied Recently (Email)",
+            "node": "Skip Email - Recently Replied",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Fetch Client Open Matters For Email Reply",
+            "node": "Fetch Open Matters By Email",
             "type": "main",
             "index": 0
           }
