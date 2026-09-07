@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Security & Compliance Content Digest\n\n### Internal Protomated tool — Authority pillar, not deployed to clients\n\nSolo and small firms rarely see plain-English security/compliance guidance written for their scale — most of what exists is written for enterprise IT departments. This is a content gap Protomated can own to reinforce the 'we never touch your legal work, and we take your data seriously' brand promise, feeding the newsletter/Field Notes content pipeline.\n\n### How it works\n\n1. Runs weekly. Pulls from a configurable list of public RSS feeds — breach-notification filings, bar-association security guidance, data-protection-law update trackers.\n2. Filters to items published recently and matching relevance keywords (mentions of small/solo firms, breaches, compliance, data protection).\n3. Drafts a plain-English digest entry per relevant item — a templated 'why this matters for small firms' blurb based on which keyword matched, not real analysis.\n4. Logs the draft to a review ledger and emails it to the content reviewer. Nothing publishes without a human pass.\n\n**This monitors and summarizes public information only — it is explicitly informational, never advice.** It never touches legal work, gives compliance guidance to a specific firm's situation, or drafts anything that could be read as legal advice (ABA Op. 512 doesn't directly apply since this isn't a law-firm-facing template, but the same discipline is kept regardless). Every digest draft requires a human review pass before anything goes into the newsletter pipeline.\n\n### Setup steps\n\n- [ ] Create a Google Sheet with a 'Digest Drafts' tab — see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: SECURITY_DIGEST_FEED_URLS, CONTENT_REVIEWER_EMAIL, FIRM_FROM_EMAIL, DIGEST_LOG_SHEET_ID.\n- [ ] Optionally tune RELEVANCE_KEYWORDS and DIGEST_LOOKBACK_DAYS.\n- [ ] Activate the workflow.\n\n### Customization\n\nSECURITY_DIGEST_FEED_URLS and RELEVANCE_KEYWORDS are the entire content-sourcing surface — swap in real feed URLs (state AG breach notification pages, ABA/state bar publications, IAPP or similar data-protection-law trackers, if they publish RSS) rather than editing the code."
+        "content": "## Security & Compliance Content Digest\n\n### Internal Protomated tool — Authority pillar, not deployed to clients\n\nSolo and small firms rarely see plain-English security/compliance guidance written for their scale — most of what exists is written for enterprise IT departments. This is a content gap Protomated can own to reinforce the 'we never touch your legal work, and we take your data seriously' brand promise, feeding the newsletter/Field Notes content pipeline.\n\n### How it works\n\n1. Runs weekly. Pulls from a configurable list of public RSS feeds — breach-notification filings, bar-association security guidance, data-protection-law update trackers.\n2. Filters to items published recently and matching relevance keywords (mentions of small/solo firms, breaches, compliance, data protection).\n3. Drafts a plain-English digest entry per relevant item — a templated 'why this matters for small firms' blurb based on which keyword matched, not real analysis.\n4. Logs the draft to a review ledger and emails it to the content reviewer. Nothing publishes without a human pass.\n5. Separately, a stale-draft reminder nudges the reviewer if a draft sits at pending_review too long.\n\nIf SECURITY_DIGEST_FEED_URLS isn't configured yet, the run still logs and emails an explicit 'setup needed' notice instead of silently doing nothing.\n\n**This monitors and summarizes public information only — it is explicitly informational, never advice.** It never touches legal work, gives compliance guidance to a specific firm's situation, or drafts anything that could be read as legal advice (ABA Op. 512 doesn't directly apply since this isn't a law-firm-facing template, but the same discipline is kept regardless). Every digest draft requires a human review pass before anything goes into the newsletter pipeline.\n\n### Setup steps\n\n- [ ] Create a Google Sheet with a 'Digest Drafts' tab — see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: SECURITY_DIGEST_FEED_URLS, CONTENT_REVIEWER_EMAIL, FIRM_FROM_EMAIL, DIGEST_LOG_SHEET_ID.\n- [ ] Optionally tune RELEVANCE_KEYWORDS and DIGEST_LOOKBACK_DAYS.\n- [ ] Activate the workflow.\n\n### Customization\n\nSECURITY_DIGEST_FEED_URLS and RELEVANCE_KEYWORDS are the entire content-sourcing surface — swap in real feed URLs (state AG breach notification pages, ABA/state bar publications, IAPP or similar data-protection-law trackers, if they publish RSS) rather than editing the code."
       },
       "id": "8400aa00-0084-4000-a000-0000000001",
       "name": "📖 Workflow doc",
@@ -163,7 +163,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Reads deal-equivalent fields back from 'Assign Digest ID' by name, not $json -- the Sheets\n// append node in between echoes back its own written row, not the original structured data,\n// same gotcha already found and fixed in this catalog's other Sheets-logging templates.\nconst d = $('Assign Digest ID').item.json;\nconst subject = `Security digest draft ready for review — ${d.item_count} item(s)`;\nconst message = `This week's security/compliance digest draft (${d.digest_id}) is ready:\\n\\n${d.draft_content}\\n\\nThis is informational monitoring only, not advice or analysis -- review, polish, and approve before it goes into the newsletter/Field Notes pipeline.`;\n\nconst itemsHtml = (d.items && d.items.length)\n  ? d.items.map(i => `\n    <div style=\\\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px;\\\">\n      <div style=\\\"font-size:14px;font-weight:600;color:#0f172a;\\\">${escapeHtml(i.title)}</div>\n      <div style=\\\"font-size:12px;color:#64748b;margin-top:2px;\\\">${escapeHtml(i.source_feed)}</div>\n      <div style=\\\"font-size:13px;color:#334155;margin-top:8px;\\\">${escapeHtml(i.why_it_matters)}</div>\n      <div style=\\\"margin-top:8px;\\\"><a href=\\\"${escapeHtml(i.link)}\\\" style=\\\"font-size:12px;color:#2563eb;\\\">${escapeHtml(i.link)}</a></div>\n    </div>`).join('')\n  : `<div style=\\\"color:#64748b;font-size:13px;\\\">No relevant items found this week.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Pending review</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">Security digest draft — ${d.item_count} item(s)</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#64748b;font-size:12px;margin-bottom:16px;\\\">Digest ${escapeHtml(d.digest_id)} — informational monitoring only, not advice or analysis. Review, polish, and approve before it goes into the newsletter/Field Notes pipeline.</div>\n      ${itemsHtml}\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.CONTENT_REVIEWER_EMAIL, subject, message, email_html: emailHtml } };"
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Reads deal-equivalent fields back from 'Assign Digest ID' by name, not $json -- the Sheets\n// append node in between echoes back its own written row, not the original structured data,\n// same gotcha already found and fixed in this catalog's other Sheets-logging templates.\nconst d = $('Assign Digest ID').item.json;\nconst subject = `Security digest draft ready for review — ${d.item_count} item(s)`;\nconst message = `This week's security/compliance digest draft (${d.digest_id}) is ready:\\n\\n${d.draft_content}\\n\\nThis is informational monitoring only, not advice or analysis -- review, polish, and approve before it goes into the newsletter/Field Notes pipeline.`;\n\nconst itemsHtml = (d.items && d.items.length)\n  ? d.items.map(i => `\n    <div style=\\\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px;\\\">\n      <div style=\\\"font-size:14px;font-weight:600;color:#0f172a;\\\">${escapeHtml(i.title)}</div>\n      <div style=\\\"font-size:12px;color:#64748b;margin-top:2px;\\\">${escapeHtml(i.source_feed)}</div>\n      <div style=\\\"font-size:13px;color:#334155;margin-top:8px;\\\">${escapeHtml(i.why_it_matters)}</div>\n      <div style=\\\"margin-top:8px;\\\"><a href=\\\"${escapeHtml(i.link)}\\\" style=\\\"font-size:12px;color:#2563eb;\\\">${escapeHtml(i.link)}</a></div>\n    </div>`).join('')\n  : `<div style=\\\"color:#64748b;font-size:13px;\\\">No relevant items found this week.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Pending review</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">Security digest draft — ${d.item_count} item(s)</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#64748b;font-size:12px;margin-bottom:16px;\\\">Digest ${escapeHtml(d.digest_id)} — informational monitoring only, not advice or analysis. Review, polish, and approve before it goes into the newsletter/Field Notes pipeline.</div>\n      ${itemsHtml}\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.CONTENT_REVIEWER_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
       },
       "id": "8400aa00-0084-4000-a000-0000000017",
       "name": "Build Digest Review Request Email",
@@ -313,7 +313,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst drafts = $json.stale_drafts;\nconst subject = `Reminder: ${drafts.length} security digest draft(s) still awaiting review`;\nconst listText = drafts.map(d => `- ${d.digest_id} (${d.item_count} item(s), logged ${d.created_at})`).join('\\n');\nconst message = `${drafts.length} security/compliance digest draft(s) have been sitting at pending_review for a while:\\n\\n${listText}\\n\\nA quick pass to approve or discard keeps the newsletter/Field Notes pipeline moving.`;\n\nconst rowsHtml = drafts.map(d => `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(d.digest_id)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;text-align:center;\\\">${escapeHtml(d.item_count)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(d.created_at)}</td></tr>`).join('');\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#ea580c;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Reminder</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${drafts.length} draft(s) awaiting review</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\">\n        <thead><tr><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Digest</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:center;background:#f8fafc;\\\">Items</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Logged</th></tr></thead>\n        <tbody>${rowsHtml}</tbody>\n      </table>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { recipient: $vars.CONTENT_REVIEWER_EMAIL, subject, message, email_html: emailHtml } }];"
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst drafts = $json.stale_drafts;\nconst subject = `Reminder: ${drafts.length} security digest draft(s) still awaiting review`;\nconst listText = drafts.map(d => `- ${d.digest_id} (${d.item_count} item(s), logged ${d.created_at})`).join('\\n');\nconst message = `${drafts.length} security/compliance digest draft(s) have been sitting at pending_review for a while:\\n\\n${listText}\\n\\nA quick pass to approve or discard keeps the newsletter/Field Notes pipeline moving.`;\n\nconst rowsHtml = drafts.map(d => `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(d.digest_id)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;text-align:center;\\\">${escapeHtml(d.item_count)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(d.created_at)}</td></tr>`).join('');\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#ea580c;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Reminder</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${drafts.length} draft(s) awaiting review</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\">\n        <thead><tr><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Digest</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:center;background:#f8fafc;\\\">Items</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Logged</th></tr></thead>\n        <tbody>${rowsHtml}</tbody>\n      </table>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { recipient: $vars.CONTENT_REVIEWER_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } }];"
       },
       "id": "8400aa00-0084-4000-a000-0000000024",
       "name": "Build Stale Draft Reminder Email",
@@ -362,6 +362,55 @@
         680
       ],
       "notes": "Nothing to nudge about this run — every draft has either been reviewed or is still fresh."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_feeds_configured",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ ($vars.SECURITY_DIGEST_FEED_URLS || '').trim() }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8400aa00-0084-4000-a000-0000000030",
+      "name": "If Feed URLs Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Checked here, while there's still guaranteed exactly one item from the trigger -- if SECURITY_DIGEST_FEED_URLS is unset or empty, the run used to silently die at zero items with nothing logged and nothing sent. Now it explicitly logs and emails a 'setup needed' notice instead."
+    },
+    {
+      "parameters": {
+        "jsCode": "// SECURITY_DIGEST_FEED_URLS isn't configured yet -- rather than letting the run silently\n// die at zero items (the previous behavior), log and email an explicit setup reminder so\n// whoever owns this sees it needs configuring, same shape as a normal digest draft.\nreturn [{ json: {\n  item_count: 0,\n  draft_content: '(no feed URLs configured yet -- set SECURITY_DIGEST_FEED_URLS in n8n Variables to start pulling content)',\n  items: [],\n} }];"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000031",
+      "name": "Draft Setup-Needed Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        120
+      ],
+      "notes": "Fires only when SECURITY_DIGEST_FEED_URLS is empty — keeps the log and review email showing up on schedule even before feeds are configured, instead of the run just disappearing."
     }
   ],
   "active": false,
@@ -434,7 +483,7 @@
       "main": [
         [
           {
-            "node": "Build Feed URL List",
+            "node": "If Feed URLs Configured",
             "type": "main",
             "index": 0
           }
@@ -574,6 +623,35 @@
         [
           {
             "node": "Send Stale Draft Reminder Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Feed URLs Configured": {
+      "main": [
+        [
+          {
+            "node": "Build Feed URL List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Draft Setup-Needed Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Setup-Needed Notice": {
+      "main": [
+        [
+          {
+            "node": "Assign Digest ID",
             "type": "main",
             "index": 0
           }

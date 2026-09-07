@@ -81,19 +81,23 @@ Copy the Sheet's ID from its URL — the long string between `/d/` and `/edit`.
 
 The workflow ships with pinned sample feed data: two genuinely relevant items (a breach notification guidance update, a ransomware trend report) and one irrelevant item (a bar association golf tournament writeup), simulating a mixed real-world feed.
 
-1. Run **"Build Feed URL List"** → **"Fetch Each Security Feed"** → **"Filter Relevant Recent Items"** and confirm exactly 2 of the 3 pinned items survive — the golf tournament item should be filtered out.
-2. Continue through **"Draft Plain-English Digest"** and confirm `item_count: 2` and both surviving items appear in `draft_content` with a "why this matters" blurb each.
-3. Continue through **"Assign Digest ID"** → **"Log Digest Draft For Review"** and confirm a new row would be logged.
-4. Continue through **"Build Digest Review Request Email"** and confirm the message reads correctly.
-5. Temporarily clear the pinned data on **"Fetch Each Security Feed"** to an empty array, re-run, and confirm the digest still logs and sends with `(no relevant items found this week)` rather than breaking or going silent.
+1. Run **"If Feed URLs Configured"** and confirm it routes to the true branch (**"Build Feed URL List"**) as long as `SECURITY_DIGEST_FEED_URLS` is set to something.
+2. Continue through **"Build Feed URL List"** → **"Fetch Each Security Feed"** → **"Filter Relevant Recent Items"** and confirm exactly 2 of the 3 pinned items survive — the golf tournament item should be filtered out.
+3. Continue through **"Draft Plain-English Digest"** and confirm `item_count: 2` and both surviving items appear in `draft_content` with a "why this matters" blurb each.
+4. Continue through **"Assign Digest ID"** → **"Log Digest Draft For Review"** and confirm a new row would be logged.
+5. Continue through **"Build Digest Review Request Email"** and confirm the message reads correctly.
+6. Temporarily clear the pinned data on **"Fetch Each Security Feed"** to an empty array, re-run, and confirm the digest still logs and sends with `(no relevant items found this week)` rather than breaking or going silent.
+7. Temporarily clear `SECURITY_DIGEST_FEED_URLS` (or leave it unset before you configure Step 3), re-run from **"Check Security Content Sources Weekly"**, and confirm it routes to **"Draft Setup-Needed Notice"** and still logs and emails a `(no feed URLs configured yet...)` message rather than the run silently producing nothing.
 
 **Testing against your real setup:** unpin the RSS and Sheets nodes, connect real credentials, and configure at least one real feed URL to confirm actual items come through and get filtered as expected.
 
 **Stale draft reminder branch:**
-6. Run **"Check For Stale Digest Drafts Weekly"** → **"Read Digest Drafts Log"** and confirm the 2 pinned rows come through (one `pending_review` logged 13 days ago, one already `approved`).
-7. Continue through **"Find Stale Pending Drafts"** and confirm `stale_count: 1` — only the still-pending, 13-day-old draft counts; the approved one doesn't, regardless of age.
-8. Continue through **"If Any Stale Drafts Found"** → **"Build Stale Draft Reminder Email"** and confirm the message lists that one draft.
-9. Edit the pinned `pending_review` row's `created_at` to today, re-run, and confirm `stale_count: 0` and the run routes to **"Skip — No Stale Drafts"** instead of sending a reminder.
+8. Run **"Check For Stale Digest Drafts Weekly"** → **"Read Digest Drafts Log"** and confirm the 2 pinned rows come through (one `pending_review` logged 13 days ago, one already `approved`).
+9. Continue through **"Find Stale Pending Drafts"** and confirm `stale_count: 1` — only the still-pending, 13-day-old draft counts; the approved one doesn't, regardless of age.
+10. Continue through **"If Any Stale Drafts Found"** → **"Build Stale Draft Reminder Email"** and confirm the message lists that one draft.
+11. Edit the pinned `pending_review` row's `created_at` to today, re-run, and confirm `stale_count: 0` and the run routes to **"Skip — No Stale Drafts"** instead of sending a reminder.
+
+**If a send ever fails with "No recipients defined":** it means neither `CONTENT_REVIEWER_EMAIL` nor `FIRM_FROM_EMAIL` is set — both review emails fall back to `FIRM_FROM_EMAIL` if `CONTENT_REVIEWER_EMAIL` isn't configured, but at least one of the two must be set in n8n Variables (Settings → Variables) for any send to succeed.
 
 ---
 
@@ -101,10 +105,12 @@ The workflow ships with pinned sample feed data: two genuinely relevant items (a
 
 | Scenario | What happens |
 |---|---|
+| `SECURITY_DIGEST_FEED_URLS` isn't configured yet | The run still logs and emails an explicit "setup needed" notice instead of silently producing nothing |
 | A feed item mentions a relevance keyword and was published recently | Included in the digest with a templated "why this matters" blurb |
 | A feed item is old (outside the lookback window) or irrelevant | Excluded |
 | No relevant items found across any feed this week | The digest still sends, explicitly saying so |
 | The digest draft is logged | Status starts `pending_review` — publishing to the newsletter pipeline is always a manual step afterward |
+| `CONTENT_REVIEWER_EMAIL` isn't set | Both review emails fall back to `FIRM_FROM_EMAIL` instead of failing with "No recipients defined" |
 | A draft sits at `pending_review` past `STALE_DRAFT_REMINDER_DAYS` | The reviewer gets a separate reminder email listing every stale draft |
 | No drafts are currently stale | No reminder is sent — the run ends quietly at "Skip — No Stale Drafts" |
 
