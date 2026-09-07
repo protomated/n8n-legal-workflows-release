@@ -16,6 +16,10 @@ Get value in under 15 minutes. Attorneys spend the first minutes of every lead m
 
 **A non-consumer email domain is a signal, not proof.** Someone emailing from `@theircompany.com` is *probably* inquiring in a business context, but this can't confirm it — it's a free, useful heuristic for deciding whether an enrichment lookup is worth attempting, nothing more.
 
+**This has two independent parts on one canvas:**
+1. **Per-lead briefing** — fires the moment a new lead comes in, so the attorney has research in hand before the first callback.
+2. **Weekly lead quality summary** — a firm-wide digest of the value-tier mix and top enriched companies over the trailing week, so patterns are visible beyond a single lead at a time.
+
 ---
 
 ## What you need before you start
@@ -62,6 +66,7 @@ Copy the Sheet's ID from its URL — the long string between `/d/` and `/edit`.
 | `ENRICHMENT_API_URL` | Your enrichment provider's actual API endpoint |
 | `CONSUMER_EMAIL_DOMAINS` *(optional)* | Comma-separated list of personal email domains to exclude from lookups — defaults to `gmail.com,yahoo.com,hotmail.com,outlook.com,aol.com,icloud.com,live.com` |
 | `HIGH_VALUE_KEYWORDS` *(optional)* | Comma-separated value signals — defaults to `wrongful death,class action,commercial litigation,catastrophic injury,multi-million` |
+| `LEAD_SUMMARY_LOOKBACK_DAYS` *(optional)* | How many trailing days the weekly summary covers — defaults to 7 |
 
 ---
 
@@ -90,6 +95,12 @@ The workflow ships with a pinned lead from a business email domain (`acmecorp.co
 6. Edit the pinned data's `case_description` to remove both the keyword and dollar amount, re-run — confirm the tier drops to `"Medium"` (company still found) or `"Low"` (no company signal).
 
 **Testing against your real setup:** unpin the webhook and enrichment nodes, connect your real provider credential, and submit a real test lead with a real company email domain to confirm the actual API response shape matches what Step 4 expects.
+
+**Weekly summary branch:**
+7. Run **"Check Weekly Lead Quality Summary"** → **"Read Weekly Enrichment Log"** and confirm the 3 pinned rows come through.
+8. Continue through **"Compute Weekly Lead Quality Summary"** and confirm `total_leads: 3` (1 High, 1 Medium, 1 Low) with `Acme Corp` as the top company (count 2).
+9. Continue through **"Build Weekly Lead Quality Summary Email"** and confirm the message includes the tier breakdown and the top-companies list.
+10. Temporarily clear the pinned data on **"Read Weekly Enrichment Log"** to an empty array, re-run, and confirm the summary still sends, explicitly saying no leads were logged rather than going silent.
 
 ---
 
