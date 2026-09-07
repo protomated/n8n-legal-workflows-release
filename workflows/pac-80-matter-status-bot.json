@@ -215,7 +215,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1120,
+        1568,
         0
       ],
       "notes": "Only Open matters are reported — a client asking about a closed matter gets pointed to their attorney rather than a stale status."
@@ -229,7 +229,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1344,
+        1792,
         0
       ],
       "notes": "The actual status text — only facts already in Clio, never advice or predictions."
@@ -262,7 +262,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        1568,
+        2016,
         0
       ],
       "notes": "Runs the client through the Bar-Compliance Guardrail (NTC-33) before anything sends — opt-out respected, required disclaimer appended, send logged, same as every other client-facing send in this catalog."
@@ -297,7 +297,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1792,
+        2240,
         0
       ],
       "notes": "Mirrors the guardrail's approved/opted-out result — true sends the reply, false means the client has opted out of texts."
@@ -306,18 +306,18 @@
       "parameters": {
         "operation": "send",
         "from": "={{ $vars.FIRM_TWILIO_NUMBER }}",
-        "to": "={{ $json.recipient }}",
-        "message": "={{ $json.message }}"
+        "to": "={{ $('Build Matter Status Reply').item.json.recipient }}",
+        "message": "={{ $('Build Matter Status Reply').item.json.message }}"
       },
       "id": "8000aa00-0080-4000-a000-000000001a",
       "name": "Send Matter Status Text Reply",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
       "position": [
-        2016,
+        2464,
         -80
       ],
-      "notes": "Sends the status reply. Credential: Credentials → New → Twilio → Account SID and Auth Token.",
+      "notes": "Reaches back to 'Build Matter Status Reply' by name, not $json, since the guardrail call in between replaces $json with its own response.",
       "credentials": {
         "twilioApi": {
           "id": "1",
@@ -332,7 +332,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        2016,
+        2464,
         80
       ],
       "notes": "The client's opt-out is respected even for a status reply they themselves requested — texting them anyway would defeat the point of an opt-out."
@@ -536,21 +536,21 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1120,
+        1568,
         900
       ],
       "notes": "Same open-matters lookup as the SMS branch."
     },
     {
       "parameters": {
-        "jsCode": "const matters = $json.data || [];\nconst clientName = $('Match Client By Email').first().json.client_name;\nconst subject = 'Re: ' + ($('Parse Status Request Email').first().json.subject || 'Case status');\nlet message;\nif (matters.length === 0) {\n  message = `Hi ${clientName},\\n\\nWe don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.`;\n} else if (matters.length === 1) {\n  const m = matters[0];\n  message = `Hi ${clientName},\\n\\nYour matter ${m.display_number} (${(m.practice_area && m.practice_area.name) || m.description}) is currently: ${m.status}.\\n\\nFor details or questions, please contact your attorney directly.`;\n} else {\n  const lines = matters.map(m => `- ${m.display_number}: ${m.status}`).join('\\n');\n  message = `Hi ${clientName},\\n\\nYou have ${matters.length} open matters:\\n${lines}\\n\\nFor details on any of these, please contact your attorney directly.`;\n}\nreturn { json: { recipient: $('Parse Status Request Email').first().json.from_email, subject, message } };"
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst matters = $json.data || [];\nconst clientName = $('Match Client By Email').first().json.client_name;\nconst subject = 'Re: ' + ($('Parse Status Request Email').first().json.subject || 'Case status');\nlet message;\nlet rowsHtml;\nif (matters.length === 0) {\n  message = `Hi ${clientName},\\n\\nWe don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.`;\n  rowsHtml = '';\n} else {\n  message = matters.length === 1\n    ? `Hi ${clientName},\\n\\nYour matter ${matters[0].display_number} (${(matters[0].practice_area && matters[0].practice_area.name) || matters[0].description}) is currently: ${matters[0].status}.\\n\\nFor details or questions, please contact your attorney directly.`\n    : `Hi ${clientName},\\n\\nYou have ${matters.length} open matters:\\n${matters.map(m => `- ${m.display_number}: ${m.status}`).join('\\n')}\\n\\nFor details on any of these, please contact your attorney directly.`;\n  rowsHtml = matters.map(m => `\n    <tr>\n      <td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(m.display_number)}</td>\n      <td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml((m.practice_area && m.practice_area.name) || m.description)}</td>\n      <td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;text-align:right;\\\">${escapeHtml(m.status)}</td>\n    </tr>`).join('');\n}\n\nconst bodyHtml = matters.length === 0\n  ? `<div style=\\\"color:#334155;font-size:14px;\\\">We don't see any open matters on file for you right now. If this seems wrong, please contact our office directly.</div>`\n  : `\n    <div style=\\\"color:#334155;font-size:14px;margin-bottom:16px;\\\">Hi ${escapeHtml(clientName)}, here's the current status of your open matter${matters.length === 1 ? '' : 's'}:</div>\n    <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;\\\">\n      <thead><tr style=\\\"background:#f1f5f9;\\\">\n        <th style=\\\"padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:left;\\\">Matter</th>\n        <th style=\\\"padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:left;\\\">Description</th>\n        <th style=\\\"padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;text-align:right;\\\">Status</th>\n      </tr></thead>\n      <tbody>${rowsHtml}</tbody>\n    </table>\n    <div style=\\\"color:#64748b;font-size:13px;\\\">For details or questions, please contact your attorney directly.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:18px;font-weight:700;\\\">${escapeHtml($vars.FIRM_NAME || 'Case status')}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { recipient: $('Parse Status Request Email').first().json.from_email, subject, message, email_html: emailHtml } };"
       },
       "id": "8000aa00-0080-4000-a000-0000000027",
       "name": "Build Email Matter Status Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1344,
+        1792,
         900
       ],
       "notes": "Same status-only reply logic as the SMS branch, formatted for email."
@@ -583,7 +583,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        1568,
+        2016,
         900
       ],
       "notes": "Runs the client through the Bar-Compliance Guardrail before anything sends — opt-out respected, disclaimer applied, send logged."
@@ -618,7 +618,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1792,
+        2240,
         900
       ],
       "notes": "Mirrors the guardrail's approved/opted-out result for the email branch."
@@ -626,17 +626,19 @@
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $json.recipient }}",
-        "subject": "={{ $json.subject }}",
-        "text": "={{ $json.message }}",
-        "options": {}
+        "toEmail": "={{ $('Build Email Matter Status Reply').item.json.recipient }}",
+        "subject": "={{ $('Build Email Matter Status Reply').item.json.subject }}",
+        "text": "={{ $('Build Email Matter Status Reply').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Email Matter Status Reply').item.json.email_html }}"
       },
       "id": "8000aa00-0080-4000-a000-000000002a",
       "name": "Send Email Matter Status Reply",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        2016,
+        2464,
         820
       ],
       "credentials": {
@@ -645,7 +647,7 @@
           "name": "Email account (SMTP)"
         }
       },
-      "notes": "Sends the actual status reply email."
+      "notes": "Reaches back to 'Build Email Matter Status Reply' by name, not $json, since the guardrail call in between replaces $json with its own response."
     },
     {
       "parameters": {},
@@ -654,7 +656,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        2016,
+        2464,
         980
       ],
       "notes": "The client's opt-out is respected even for a status reply they themselves requested."
@@ -682,6 +684,128 @@
           "name": "Email account (SMTP)"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Avoids texting/emailing the same client multiple times in quick succession if they send\n// several messages close together (common when someone double-texts waiting for a reply).\n// Tracked via n8n's own workflow static data, keyed by phone/email.\nconst identifier = $('Parse Incoming Status Text').first().json.from_number;\nconst COOLDOWN_MINUTES = Number($vars.STATUS_REPLY_COOLDOWN_MINUTES || 5);\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastRepliedAt) staticData.lastRepliedAt = {};\nconst lastRepliedAt = staticData.lastRepliedAt[identifier];\nconst cooldownMs = COOLDOWN_MINUTES * 60 * 1000;\nconst withinCooldown = !!lastRepliedAt && (Date.now() - new Date(lastRepliedAt).getTime()) < cooldownMs;\n\nif (!withinCooldown) {\n  staticData.lastRepliedAt[identifier] = new Date().toISOString();\n}\n\nreturn { json: { ...$json, within_reply_cooldown: withinCooldown } };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000030",
+      "name": "Check Reply Cooldown For Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -160
+      ],
+      "notes": "STATUS_REPLY_COOLDOWN_MINUTES controls how long to wait before replying to the same client again — defaults to 5 minutes, so rapid double-texts only get one reply."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Avoids texting/emailing the same client multiple times in quick succession if they send\n// several messages close together (common when someone double-texts waiting for a reply).\n// Tracked via n8n's own workflow static data, keyed by phone/email.\nconst identifier = $('Parse Status Request Email').first().json.from_email;\nconst COOLDOWN_MINUTES = Number($vars.STATUS_REPLY_COOLDOWN_MINUTES || 5);\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastRepliedAt) staticData.lastRepliedAt = {};\nconst lastRepliedAt = staticData.lastRepliedAt[identifier];\nconst cooldownMs = COOLDOWN_MINUTES * 60 * 1000;\nconst withinCooldown = !!lastRepliedAt && (Date.now() - new Date(lastRepliedAt).getTime()) < cooldownMs;\n\nif (!withinCooldown) {\n  staticData.lastRepliedAt[identifier] = new Date().toISOString();\n}\n\nreturn { json: { ...$json, within_reply_cooldown: withinCooldown } };"
+      },
+      "id": "8000aa00-0080-4000-a000-0000000031",
+      "name": "Check Reply Cooldown For Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        740
+      ],
+      "notes": "STATUS_REPLY_COOLDOWN_MINUTES controls how long to wait before replying to the same client again — defaults to 5 minutes, so rapid double-texts only get one reply."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_cooldown",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.within_reply_cooldown }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000032",
+      "name": "If Within Reply Cooldown (SMS)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        -160
+      ],
+      "notes": "True means this number already got a status reply within the cooldown window — skips straight to a no-op instead of fetching matters and texting again."
+    },
+    {
+      "parameters": {},
+      "id": "8000aa00-0080-4000-a000-0000000033",
+      "name": "Skip — Replied Recently (SMS)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -240
+      ],
+      "notes": "No re-text sent — the client already got a status reply within the cooldown window."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_cooldown",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.within_reply_cooldown }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8000aa00-0080-4000-a000-0000000034",
+      "name": "If Within Reply Cooldown (Email)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        740
+      ],
+      "notes": "True means this address already got a status reply within the cooldown window — skips straight to a no-op instead of fetching matters and emailing again."
+    },
+    {
+      "parameters": {},
+      "id": "8000aa00-0080-4000-a000-0000000035",
+      "name": "Skip — Replied Recently (Email)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        660
+      ],
+      "notes": "No re-reply sent — the client already got a status reply within the cooldown window."
     }
   ],
   "active": false,
@@ -872,7 +996,7 @@
       "main": [
         [
           {
-            "node": "Fetch Client Open Matters From Clio",
+            "node": "Check Reply Cooldown For Phone",
             "type": "main",
             "index": 0
           }
@@ -996,7 +1120,7 @@
       "main": [
         [
           {
-            "node": "Fetch Client Open Matters For Email Reply",
+            "node": "Check Reply Cooldown For Email",
             "type": "main",
             "index": 0
           }
@@ -1066,6 +1190,64 @@
         [
           {
             "node": "Skip — Client Opted Out Of Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Reply Cooldown For Phone": {
+      "main": [
+        [
+          {
+            "node": "If Within Reply Cooldown (SMS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Within Reply Cooldown (SMS)": {
+      "main": [
+        [
+          {
+            "node": "Skip — Replied Recently (SMS)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Client Open Matters From Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Reply Cooldown For Email": {
+      "main": [
+        [
+          {
+            "node": "If Within Reply Cooldown (Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Within Reply Cooldown (Email)": {
+      "main": [
+        [
+          {
+            "node": "Skip — Replied Recently (Email)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Client Open Matters For Email Reply",
             "type": "main",
             "index": 0
           }
