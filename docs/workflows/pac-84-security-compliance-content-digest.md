@@ -22,6 +22,10 @@ It's still built to this catalog's usual bar (harness-tested code, pinned test d
 
 **Content quality depends entirely on the feeds you configure.** This template ships with no real feed URLs — you need to find and configure actual RSS feeds (state AG breach notification pages, ABA/state bar security guidance publications, IAPP or similar data-protection-law trackers) that publish RSS. Not every source that would be relevant here actually publishes an RSS feed; some research is needed to build a good feed list.
 
+**This has two independent parts on one canvas:**
+1. **Weekly digest draft** — pulls, filters, and drafts the digest, then emails it for review.
+2. **Stale draft reminder** — separately checks the log for anything still sitting at `pending_review` past a configurable age and nudges the reviewer, so a draft doesn't quietly go stale between one week's digest and the next.
+
 ---
 
 ## What you need before you start
@@ -62,13 +66,14 @@ Copy the Sheet's ID from its URL — the long string between `/d/` and `/edit`.
 | `DIGEST_LOG_SHEET_ID` | The Google Sheet ID from Step 1 |
 | `RELEVANCE_KEYWORDS` *(optional)* | Comma-separated relevance filter — defaults to `small firm,solo firm,law firm,breach,ransomware,data protection,compliance,privacy law` |
 | `DIGEST_LOOKBACK_DAYS` *(optional)* | How far back to consider an item "recent" — defaults to 7 |
+| `STALE_DRAFT_REMINDER_DAYS` *(optional)* | How many days a draft can sit at `pending_review` before the reminder nudges the reviewer — defaults to 5 |
 
 ---
 
 ## Step 4 — Activate (2 min)
 
 1. Toggle the workflow to **Active**.
-2. Adjust the cron expression on **"Check Security Content Sources Weekly"** (default Monday 8am) if a different time suits.
+2. Adjust the cron expression on **"Check Security Content Sources Weekly"** (default Monday 8am) and **"Check For Stale Digest Drafts Weekly"** (default Thursday 9am) if different times suit.
 
 ---
 
@@ -84,6 +89,12 @@ The workflow ships with pinned sample feed data: two genuinely relevant items (a
 
 **Testing against your real setup:** unpin the RSS and Sheets nodes, connect real credentials, and configure at least one real feed URL to confirm actual items come through and get filtered as expected.
 
+**Stale draft reminder branch:**
+6. Run **"Check For Stale Digest Drafts Weekly"** → **"Read Digest Drafts Log"** and confirm the 2 pinned rows come through (one `pending_review` logged 13 days ago, one already `approved`).
+7. Continue through **"Find Stale Pending Drafts"** and confirm `stale_count: 1` — only the still-pending, 13-day-old draft counts; the approved one doesn't, regardless of age.
+8. Continue through **"If Any Stale Drafts Found"** → **"Build Stale Draft Reminder Email"** and confirm the message lists that one draft.
+9. Edit the pinned `pending_review` row's `created_at` to today, re-run, and confirm `stale_count: 0` and the run routes to **"Skip — No Stale Drafts"** instead of sending a reminder.
+
 ---
 
 ## How the workflow behaves
@@ -94,6 +105,8 @@ The workflow ships with pinned sample feed data: two genuinely relevant items (a
 | A feed item is old (outside the lookback window) or irrelevant | Excluded |
 | No relevant items found across any feed this week | The digest still sends, explicitly saying so |
 | The digest draft is logged | Status starts `pending_review` — publishing to the newsletter pipeline is always a manual step afterward |
+| A draft sits at `pending_review` past `STALE_DRAFT_REMINDER_DAYS` | The reviewer gets a separate reminder email listing every stale draft |
+| No drafts are currently stale | No reminder is sent — the run ends quietly at "Skip — No Stale Drafts" |
 
 ---
 

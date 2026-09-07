@@ -163,7 +163,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Reads deal-equivalent fields back from 'Assign Digest ID' by name, not $json -- the Sheets\n// append node in between echoes back its own written row, not the original structured data,\n// same gotcha already found and fixed in this catalog's other Sheets-logging templates.\nconst d = $('Assign Digest ID').item.json;\nreturn { json: {\n  ...d,\n  recipient: $vars.CONTENT_REVIEWER_EMAIL,\n  subject: `Security digest draft ready for review — ${d.item_count} item(s)`,\n  message: `This week's security/compliance digest draft (${d.digest_id}) is ready:\\n\\n${d.draft_content}\\n\\nThis is informational monitoring only, not advice or analysis -- review, polish, and approve before it goes into the newsletter/Field Notes pipeline.`,\n} };"
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Reads deal-equivalent fields back from 'Assign Digest ID' by name, not $json -- the Sheets\n// append node in between echoes back its own written row, not the original structured data,\n// same gotcha already found and fixed in this catalog's other Sheets-logging templates.\nconst d = $('Assign Digest ID').item.json;\nconst subject = `Security digest draft ready for review — ${d.item_count} item(s)`;\nconst message = `This week's security/compliance digest draft (${d.digest_id}) is ready:\\n\\n${d.draft_content}\\n\\nThis is informational monitoring only, not advice or analysis -- review, polish, and approve before it goes into the newsletter/Field Notes pipeline.`;\n\nconst itemsHtml = (d.items && d.items.length)\n  ? d.items.map(i => `\n    <div style=\\\"border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px;\\\">\n      <div style=\\\"font-size:14px;font-weight:600;color:#0f172a;\\\">${escapeHtml(i.title)}</div>\n      <div style=\\\"font-size:12px;color:#64748b;margin-top:2px;\\\">${escapeHtml(i.source_feed)}</div>\n      <div style=\\\"font-size:13px;color:#334155;margin-top:8px;\\\">${escapeHtml(i.why_it_matters)}</div>\n      <div style=\\\"margin-top:8px;\\\"><a href=\\\"${escapeHtml(i.link)}\\\" style=\\\"font-size:12px;color:#2563eb;\\\">${escapeHtml(i.link)}</a></div>\n    </div>`).join('')\n  : `<div style=\\\"color:#64748b;font-size:13px;\\\">No relevant items found this week.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Pending review</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">Security digest draft — ${d.item_count} item(s)</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#64748b;font-size:12px;margin-bottom:16px;\\\">Digest ${escapeHtml(d.digest_id)} — informational monitoring only, not advice or analysis. Review, polish, and approve before it goes into the newsletter/Field Notes pipeline.</div>\n      ${itemsHtml}\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.CONTENT_REVIEWER_EMAIL, subject, message, email_html: emailHtml } };"
       },
       "id": "8400aa00-0084-4000-a000-0000000017",
       "name": "Build Digest Review Request Email",
@@ -178,10 +178,12 @@
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $json.recipient }}",
-        "subject": "={{ $json.subject }}",
-        "text": "={{ $json.message }}",
-        "options": {}
+        "toEmail": "={{ $('Build Digest Review Request Email').item.json.recipient }}",
+        "subject": "={{ $('Build Digest Review Request Email').item.json.subject }}",
+        "text": "={{ $('Build Digest Review Request Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Digest Review Request Email').item.json.email_html }}"
       },
       "id": "8400aa00-0084-4000-a000-0000000018",
       "name": "Send Digest Review Request Email",
@@ -198,6 +200,168 @@
           "name": "Email account (SMTP)"
         }
       }
+    },
+    {
+      "parameters": {
+        "content": "## Stale draft reminder — a second, independent branch\n\nChecks the Digest Drafts log for anything still sitting at `pending_review` past a configurable age, and nudges the reviewer so drafts don't quietly go stale — mirrors the reviewer-nudge pattern already used elsewhere in this catalog (e.g. the conflict-check and case-study templates).",
+        "width": 1100,
+        "height": 240,
+        "color": 7
+      },
+      "id": "8400aa00-0084-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 4"
+            }
+          ]
+        }
+      },
+      "id": "8400aa00-0084-4000-a000-0000000020",
+      "name": "Check For Stale Digest Drafts Weekly",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        600
+      ],
+      "notes": "Runs weekly, Thursday 9am by default — a few days after the Monday digest, so a draft that's gone unreviewed gets one nudge before the next week's digest arrives on top of it."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.DIGEST_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Digest Drafts",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "8400aa00-0084-4000-a000-0000000021",
+      "name": "Read Digest Drafts Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        224,
+        600
+      ],
+      "notes": "Reads the full log — filtered down to stale pending drafts in the next step."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flags any draft still sitting at pending_review past the configured age -- reviewers are\n// human and busy, so a draft can otherwise sit unseen indefinitely with no signal that it did.\n// Aggregates into a single item so the IF node downstream gets a real value to branch on,\n// rather than relying on n8n silently skipping both IF outputs when zero items come through.\nconst rows = $input.all().map(i => i.json);\nconst STALE_DRAFT_DAYS = Number($vars.STALE_DRAFT_REMINDER_DAYS || 5);\nconst cutoff = Date.now() - STALE_DRAFT_DAYS * 24 * 60 * 60 * 1000;\n\nconst stale = rows.filter(r => {\n  if (r.status !== 'pending_review') return false;\n  const createdAt = r.created_at ? new Date(r.created_at).getTime() : null;\n  return createdAt !== null && !Number.isNaN(createdAt) && createdAt <= cutoff;\n});\n\nreturn [{ json: { stale_count: stale.length, stale_drafts: stale } }];"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000022",
+      "name": "Find Stale Pending Drafts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        600
+      ],
+      "notes": "STALE_DRAFT_REMINDER_DAYS controls the age threshold — defaults to 5 days."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_stale_found",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ $json.stale_count }}",
+              "rightValue": 0
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8400aa00-0084-4000-a000-0000000023",
+      "name": "If Any Stale Drafts Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        600
+      ],
+      "notes": "Only sends a reminder when there's actually something stale — no reminder email when the queue is clean."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst drafts = $json.stale_drafts;\nconst subject = `Reminder: ${drafts.length} security digest draft(s) still awaiting review`;\nconst listText = drafts.map(d => `- ${d.digest_id} (${d.item_count} item(s), logged ${d.created_at})`).join('\\n');\nconst message = `${drafts.length} security/compliance digest draft(s) have been sitting at pending_review for a while:\\n\\n${listText}\\n\\nA quick pass to approve or discard keeps the newsletter/Field Notes pipeline moving.`;\n\nconst rowsHtml = drafts.map(d => `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(d.digest_id)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;text-align:center;\\\">${escapeHtml(d.item_count)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(d.created_at)}</td></tr>`).join('');\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#ea580c;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Reminder</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${drafts.length} draft(s) awaiting review</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\">\n        <thead><tr><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Digest</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:center;background:#f8fafc;\\\">Items</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Logged</th></tr></thead>\n        <tbody>${rowsHtml}</tbody>\n      </table>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { recipient: $vars.CONTENT_REVIEWER_EMAIL, subject, message, email_html: emailHtml } }];"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000024",
+      "name": "Build Stale Draft Reminder Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        560
+      ],
+      "notes": "Runs once for the whole batch of stale drafts, not once per draft — one reminder email listing all of them."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $json.email_html }}"
+      },
+      "id": "8400aa00-0084-4000-a000-0000000025",
+      "name": "Send Stale Draft Reminder Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        560
+      ],
+      "notes": "This is an internal Protomated notification, not a client communication — no compliance guardrail wrap needed, same as the main review request email.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "8400aa00-0084-4000-a000-0000000026",
+      "name": "Skip — No Stale Drafts",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        896,
+        680
+      ],
+      "notes": "Nothing to nudge about this run — every draft has either been reviewed or is still fresh."
     }
   ],
   "active": false,
@@ -234,6 +398,30 @@
           "meta": {
             "title": "Example Bar Association Feed"
           }
+        }
+      }
+    ],
+    "Read Digest Drafts Log": [
+      {
+        "json": {
+          "digest_id": "DIGEST-1756000000000",
+          "item_count": 2,
+          "draft_content": "- Sample item one\\n  Sample blurb\\n  https://example.com/1",
+          "status": "pending_review",
+          "created_at": "2026-08-25T08:00:00.000Z",
+          "reviewed_at": "",
+          "published_at": ""
+        }
+      },
+      {
+        "json": {
+          "digest_id": "DIGEST-1756500000000",
+          "item_count": 1,
+          "draft_content": "- Sample item two\\n  Sample blurb\\n  https://example.com/2",
+          "status": "approved",
+          "created_at": "2026-09-01T08:00:00.000Z",
+          "reviewed_at": "2026-09-02T10:00:00.000Z",
+          "published_at": "2026-09-02T10:00:00.000Z"
         }
       }
     ]
@@ -324,6 +512,68 @@
         [
           {
             "node": "Send Digest Review Request Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check For Stale Digest Drafts Weekly": {
+      "main": [
+        [
+          {
+            "node": "Read Digest Drafts Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Digest Drafts Log": {
+      "main": [
+        [
+          {
+            "node": "Find Stale Pending Drafts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Stale Pending Drafts": {
+      "main": [
+        [
+          {
+            "node": "If Any Stale Drafts Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Any Stale Drafts Found": {
+      "main": [
+        [
+          {
+            "node": "Build Stale Draft Reminder Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — No Stale Drafts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Stale Draft Reminder Email": {
+      "main": [
+        [
+          {
+            "node": "Send Stale Draft Reminder Email",
             "type": "main",
             "index": 0
           }
