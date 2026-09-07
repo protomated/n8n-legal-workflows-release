@@ -16,6 +16,11 @@ Get value in under 15 minutes. Unqualified inquiries eat attorney time while goo
 
 **The scoring is deliberately simple and transparent:** a base score, +30 for a practice-area match, +20 for an urgency keyword, -50 for a disqualifying keyword, clamped 0–100. Only a match *plus* an urgency signal reaches the "hot" tier — a plain practice-area match alone lands in "warm," not "hot," so attorney-alert volume stays meaningful.
 
+**This has three independent parts on one canvas:**
+1. **Score, log, and reply** — fires on every new intake submission.
+2. **Hot lead alert** — a parallel branch off the same submission, only for the highest-fit tier.
+3. **Weekly intake quality summary** — a firm-wide digest of the tier mix, average fit score, and top practice areas over the trailing week, so patterns are visible beyond a single submission at a time.
+
 ---
 
 ## What you need before you start
@@ -60,6 +65,7 @@ Copy the Sheet's ID from its URL — the long string between `/d/` and `/edit`.
 | `INTAKE_LOG_SHEET_ID` | The Google Sheet ID from Step 1 |
 | `URGENT_KEYWORDS` *(optional)* | Comma-separated urgency signals — defaults to `arrested,court date,eviction notice,restraining order,emergency` |
 | `DISQUALIFYING_KEYWORDS` *(optional)* | Comma-separated disqualifying signals — defaults to `already have a lawyer,already retained,just researching,student project` |
+| `INTAKE_SUMMARY_LOOKBACK_DAYS` *(optional)* | How many trailing days the weekly summary covers — defaults to 7 |
 
 ---
 
@@ -83,6 +89,12 @@ The workflow ships with a pinned submission: Alex Rivera, Personal Injury, menti
 
 **Testing against your real setup:** unpin the webhook trigger and Sheets node, connect real credentials, and submit a real test inquiry through your actual intake form.
 
+**Weekly intake quality summary branch:**
+7. Run **"Check Weekly Intake Quality Summary"** → **"Read Weekly Intake Log"** and confirm the 3 pinned rows come through.
+8. Continue through **"Compute Weekly Intake Quality Summary"** and confirm `total_submissions: 3` (1 hot, 1 warm, 1 referral) with `Personal Injury` as the top practice area (count 2) and an average fit score of `77`.
+9. Continue through **"Build Weekly Intake Quality Summary Email"** and confirm the message includes the tier breakdown, average fit score, and top-practice-areas list.
+10. Temporarily clear the pinned data on **"Read Weekly Intake Log"** to an empty array, re-run, and confirm the summary still sends, explicitly saying no submissions came in rather than going silent.
+
 ---
 
 ## How the workflow behaves
@@ -94,6 +106,7 @@ The workflow ships with a pinned submission: Alex Rivera, Personal Injury, menti
 | Practice area doesn't match anything the firm handles | Referral tier — polite reply suggesting they seek a specializing firm, soft LegalContext mention |
 | A disqualifying phrase is present, regardless of practice area | Decline tier — polite reply, still logged for human review |
 | Every submission, any tier | Logged to the Intake Log sheet |
+| A week passes | The intake attorney gets a summary of that week's tier mix, average fit score, and top practice areas |
 
 ---
 

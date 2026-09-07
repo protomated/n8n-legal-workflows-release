@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## AI Intake Qualifier (Routing)\n\n### How it works\n\n1. A new intake form submission arrives.\n2. It's scored against the firm's own configured rules: does the practice area match what the firm handles, are there urgent-signal keywords, are there disqualifying-signal keywords.\n3. Every submission is logged for tracking, regardless of outcome.\n4. The lead gets an auto-reply tailored to their routing tier (hot / warm / wrong practice area / decline) — always compliance-checked, always polite, never a hard automatic no.\n5. Hot leads ALSO trigger an immediate internal alert so an attorney can follow up fast.\n\n**This is eligibility routing by keyword and configuration, not an AI legal assessment.** It never evaluates the merits of a case, gives an opinion on whether someone has a claim, or makes a legally binding decision to reject anyone. 'Decline' tier still gets a reply and still gets logged for a human to review and override — the workflow just doesn't escalate it as urgently (ABA Op. 512 — operational routing only, no legal judgment).\n\n**This overlaps LegalContext's own Intake Screening feature**, which does true AI-based fit scoring beyond keyword rules — the wrong-practice-area and decline replies include a soft mention of it, since that's this template's upsell path.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the lead's auto-reply goes through it.\n- [ ] Create a Google Sheet with an 'Intake Log' tab — see the deploy guide for exact columns.\n- [ ] Wire your intake form (Fluent Forms or similar) to POST to this workflow's webhook URL.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_PRACTICE_AREAS, FIRM_FROM_EMAIL, FIRM_EMAIL, INTAKE_ATTORNEY_EMAIL, GUARDRAIL_WORKFLOW_ID, INTAKE_LOG_SHEET_ID.\n- [ ] Optionally tune URGENT_KEYWORDS and DISQUALIFYING_KEYWORDS.\n- [ ] Activate the workflow.\n\n### Customization\n\nFIRM_PRACTICE_AREAS, URGENT_KEYWORDS, and DISQUALIFYING_KEYWORDS are the entire rule surface — edit these n8n Variables to match your firm's actual intake criteria rather than editing the code."
+        "content": "## AI Intake Qualifier (Routing)\n\n### How it works\n\n1. A new intake form submission arrives.\n2. It's scored against the firm's own configured rules: does the practice area match what the firm handles, are there urgent-signal keywords, are there disqualifying-signal keywords.\n3. Every submission is logged for tracking, regardless of outcome.\n4. The lead gets an auto-reply tailored to their routing tier (hot / warm / wrong practice area / decline) — always compliance-checked, always polite, never a hard automatic no.\n5. Hot leads ALSO trigger an immediate internal alert so an attorney can follow up fast.\n6. Separately, a weekly summary reports the tier mix, average fit score, and top practice areas seen that week, so intake quality and volume trends are visible beyond a single submission at a time.\n\n**This is eligibility routing by keyword and configuration, not an AI legal assessment.** It never evaluates the merits of a case, gives an opinion on whether someone has a claim, or makes a legally binding decision to reject anyone. 'Decline' tier still gets a reply and still gets logged for a human to review and override — the workflow just doesn't escalate it as urgently (ABA Op. 512 — operational routing only, no legal judgment).\n\n**This overlaps LegalContext's own Intake Screening feature**, which does true AI-based fit scoring beyond keyword rules — the wrong-practice-area and decline replies include a soft mention of it, since that's this template's upsell path.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first — the lead's auto-reply goes through it.\n- [ ] Create a Google Sheet with an 'Intake Log' tab — see the deploy guide for exact columns.\n- [ ] Wire your intake form (Fluent Forms or similar) to POST to this workflow's webhook URL.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_PRACTICE_AREAS, FIRM_FROM_EMAIL, FIRM_EMAIL, INTAKE_ATTORNEY_EMAIL, GUARDRAIL_WORKFLOW_ID, INTAKE_LOG_SHEET_ID.\n- [ ] Optionally tune URGENT_KEYWORDS and DISQUALIFYING_KEYWORDS.\n- [ ] Activate the workflow.\n\n### Customization\n\nFIRM_PRACTICE_AREAS, URGENT_KEYWORDS, and DISQUALIFYING_KEYWORDS are the entire rule surface — edit these n8n Variables to match your firm's actual intake criteria rather than editing the code."
       },
       "id": "8100aa00-0081-4000-a000-0000000001",
       "name": "📖 Workflow doc",
@@ -356,6 +356,122 @@
           "name": "Email account (SMTP)"
         }
       }
+    },
+    {
+      "parameters": {
+        "content": "## Weekly intake quality summary — a third, independent branch\n\nReads the trailing week's intake log and reports the tier mix, average fit score, and top practice areas seen, so intake quality and volume trends are visible beyond a single submission at a time.",
+        "width": 1100,
+        "height": 240,
+        "color": 7
+      },
+      "id": "8100aa00-0081-4000-a000-0000000004",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "8100aa00-0081-4000-a000-0000000030",
+      "name": "Check Weekly Intake Quality Summary",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        1040
+      ],
+      "notes": "Runs weekly, Monday 8am by default."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.INTAKE_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Intake Log",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "8100aa00-0081-4000-a000-0000000031",
+      "name": "Read Weekly Intake Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        224,
+        1040
+      ],
+      "notes": "Reads the full log — filtered down to the trailing week in the next step, since Sheets doesn't filter server-side here."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rolls the week's logged submissions into a firm-wide summary: tier mix, average fit score,\n// and the practice areas seen most, so intake quality and volume patterns are visible beyond\n// one submission at a time. This is descriptive only -- it never scores the firm's performance.\nconst rows = $input.all().map(i => i.json);\nconst INTAKE_SUMMARY_LOOKBACK_DAYS = Number($vars.INTAKE_SUMMARY_LOOKBACK_DAYS || 7);\nconst cutoff = Date.now() - INTAKE_SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;\n\nconst recent = rows.filter(r => {\n  const submittedAt = r.submitted_at ? new Date(r.submitted_at).getTime() : null;\n  return submittedAt !== null && !Number.isNaN(submittedAt) && submittedAt >= cutoff;\n});\n\nconst tierCounts = { hot: 0, warm: 0, referral: 0, decline: 0 };\nconst practiceAreaCounts = {};\nlet fitScoreSum = 0;\nlet fitScoreCount = 0;\nfor (const r of recent) {\n  if (tierCounts[r.routing_tier] !== undefined) tierCounts[r.routing_tier]++;\n  if (r.practice_area) practiceAreaCounts[r.practice_area] = (practiceAreaCounts[r.practice_area] || 0) + 1;\n  const score = Number(r.fit_score);\n  if (!Number.isNaN(score)) { fitScoreSum += score; fitScoreCount++; }\n}\nconst topPracticeAreas = Object.entries(practiceAreaCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);\nconst avgFitScore = fitScoreCount > 0 ? Math.round(fitScoreSum / fitScoreCount) : null;\n\nreturn [{ json: {\n  total_submissions: recent.length,\n  hot_count: tierCounts.hot,\n  warm_count: tierCounts.warm,\n  referral_count: tierCounts.referral,\n  decline_count: tierCounts.decline,\n  avg_fit_score: avgFitScore,\n  top_practice_areas: topPracticeAreas.map(([name, count]) => ({ name, count })),\n} }];"
+      },
+      "id": "8100aa00-0081-4000-a000-0000000032",
+      "name": "Compute Weekly Intake Quality Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        1040
+      ],
+      "notes": "INTAKE_SUMMARY_LOOKBACK_DAYS controls the window — defaults to 7."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'the firm';\nconst subject = `Weekly intake quality summary — ${d.total_submissions} submission(s)`;\nlet message;\nlet bodyHtml;\nif (d.total_submissions === 0) {\n  message = `${FIRM_NAME} had no new intake submissions this week.`;\n  bodyHtml = `<div style=\\\"color:#334155;font-size:14px;\\\">No new intake submissions this week.</div>`;\n} else {\n  const areasLines = d.top_practice_areas.length\n    ? d.top_practice_areas.map(a => `- ${a.name} (${a.count})`).join('\\n')\n    : '(no repeat practice areas this week)';\n  message = `${FIRM_NAME} logged ${d.total_submissions} intake submission(s) this week: ${d.hot_count} hot, ${d.warm_count} warm, ${d.referral_count} referral, ${d.decline_count} decline. Average fit score: ${d.avg_fit_score ?? 'n/a'}.\\n\\nTop practice areas:\\n${areasLines}`;\n  const areasRows = d.top_practice_areas.length\n    ? d.top_practice_areas.map(a => `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(a.name)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;text-align:right;\\\">${a.count}</td></tr>`).join('')\n    : `<tr><td colspan=\\\"2\\\" style=\\\"padding:8px 10px;font-size:13px;color:#64748b;\\\">No repeat practice areas this week.</td></tr>`;\n  bodyHtml = `\n    <div style=\\\"display:flex;gap:8px;margin-bottom:16px;\\\">\n      <div style=\\\"flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;\\\"><div style=\\\"font-size:18px;font-weight:700;color:#dc2626;\\\">${d.hot_count}</div><div style=\\\"font-size:11px;color:#64748b;\\\">Hot</div></div>\n      <div style=\\\"flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;\\\"><div style=\\\"font-size:18px;font-weight:700;color:#ea580c;\\\">${d.warm_count}</div><div style=\\\"font-size:11px;color:#64748b;\\\">Warm</div></div>\n      <div style=\\\"flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;\\\"><div style=\\\"font-size:18px;font-weight:700;color:#64748b;\\\">${d.referral_count}</div><div style=\\\"font-size:11px;color:#64748b;\\\">Referral</div></div>\n      <div style=\\\"flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;\\\"><div style=\\\"font-size:18px;font-weight:700;color:#64748b;\\\">${d.decline_count}</div><div style=\\\"font-size:11px;color:#64748b;\\\">Decline</div></div>\n    </div>\n    <div style=\\\"font-size:13px;color:#64748b;margin-bottom:6px;\\\">Average fit score: ${d.avg_fit_score ?? 'n/a'}</div>\n    <div style=\\\"font-size:13px;color:#64748b;margin-bottom:6px;\\\">Top practice areas this week</div>\n    <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\"><tbody>${areasRows}</tbody></table>`;\n}\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Weekly intake quality summary</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${d.total_submissions} submission(s) logged</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.INTAKE_ATTORNEY_EMAIL || $vars.FIRM_EMAIL, subject, message, email_html: emailHtml } };"
+      },
+      "id": "8100aa00-0081-4000-a000-0000000033",
+      "name": "Build Weekly Intake Quality Summary Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        1040
+      ],
+      "notes": "Explicitly sends a 'no submissions this week' message rather than a blank digest when nothing came in."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $json.email_html }}"
+      },
+      "id": "8100aa00-0081-4000-a000-0000000034",
+      "name": "Send Weekly Intake Quality Summary Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        896,
+        1040
+      ],
+      "notes": "This is an internal, firm-wide summary, not tied to any single lead — no guardrail wrap needed, matching the internal-summary pattern used elsewhere in this catalog (e.g. PAC-82's weekly summary).",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
     }
   ],
   "active": false,
@@ -375,6 +491,38 @@
           },
           "webhookUrl": "https://your-n8n.example.com/webhook/intake-qualifier",
           "executionMode": "production"
+        }
+      }
+    ],
+    "Read Weekly Intake Log": [
+      {
+        "json": {
+          "name": "Alex Rivera",
+          "email": "alex.rivera@example.com",
+          "practice_area": "Personal Injury",
+          "fit_score": 100,
+          "routing_tier": "hot",
+          "submitted_at": "2026-09-05T00:00:00.000Z"
+        }
+      },
+      {
+        "json": {
+          "name": "Jamie Cole",
+          "email": "jamie.cole@example.com",
+          "practice_area": "Personal Injury",
+          "fit_score": 80,
+          "routing_tier": "warm",
+          "submitted_at": "2026-09-04T00:00:00.000Z"
+        }
+      },
+      {
+        "json": {
+          "name": "Taylor Wood",
+          "email": "taylor.wood@example.com",
+          "practice_area": "Immigration",
+          "fit_score": 50,
+          "routing_tier": "referral",
+          "submitted_at": "2026-09-03T00:00:00.000Z"
         }
       }
     ]
@@ -500,6 +648,50 @@
         [
           {
             "node": "Send Hot Lead Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Weekly Intake Quality Summary": {
+      "main": [
+        [
+          {
+            "node": "Read Weekly Intake Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Weekly Intake Log": {
+      "main": [
+        [
+          {
+            "node": "Compute Weekly Intake Quality Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Weekly Intake Quality Summary": {
+      "main": [
+        [
+          {
+            "node": "Build Weekly Intake Quality Summary Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Weekly Intake Quality Summary Email": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Intake Quality Summary Email",
             "type": "main",
             "index": 0
           }
