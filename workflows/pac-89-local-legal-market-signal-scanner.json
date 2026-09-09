@@ -1,0 +1,654 @@
+{
+  "name": "Local Legal-Market Signal Scanner",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Local Legal-Market Signal Scanner\n\n### Internal Protomated tool — Authority pillar, powers BD and pipeline\n\nDemand signals for a practice area are public but never collected -- a new business license, a building permit, an entity filing can all mean a new prospect. This watches a configurable public open-data feed (business filings, permits, licenses) and tags each new record against the practice areas it might create demand for, so BD conversations start from an actual signal instead of a cold list.\n\n### How it works\n\n1. Runs daily. Queries a configured public open-data API (built against the common Socrata SODA API pattern used by most city/county/state open-data portals) for records filed since the last run.\n2. Normalizes each record's fields using a firm-configured field-name map, since every open-data dataset names its columns differently.\n3. Dedupes against signals already seen (no database -- workflow static data, same pattern used throughout this catalog).\n4. Tags each new signal against a configurable practice-area keyword map -- a signal can suggest demand for more than one practice area, or none, in which case it's dropped.\n5. Logs matched signals and emails a digest to the BD reviewer.\n6. Separately, a weekly rollup reports signal volume and top signal types by practice area over the trailing week.\n\n**This monitors and tags public information only -- it is never a legal or business assessment of any specific entity, and it never contacts anyone on the firm's behalf.** It surfaces a public record and a keyword match, nothing more (ABA Op. 512 doesn't directly apply since this isn't law-firm-facing, but the same discipline is kept).\n\n### Before you start: there's no single canonical API for this\n\nBusiness filing and permit data is scattered across thousands of separate city/county/state open-data portals with no unified national API. This template is built against the Socrata SODA API pattern (used by NYC Open Data, Chicago Data Portal, Austin Open Data, and hundreds of others) since it's the most common standard -- but you need to find and configure a real dataset URL and its actual field names for your target market. If your target jurisdiction doesn't publish on a Socrata portal, this template's HTTP call will need adjusting to that portal's own API shape.\n\n### Setup steps\n\n- [ ] Find a real Socrata-based open-data dataset for business filings/permits/licenses in your target market.\n- [ ] Create a Google Sheet with a 'Signal Log' tab -- see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: SIGNAL_DATA_API_URL, SIGNAL_DATE_FIELD, SIGNAL_ID_FIELD, SIGNAL_TYPE_FIELD, SIGNAL_NAME_FIELD, SIGNAL_KEYWORDS_BY_PRACTICE_AREA, BD_REVIEWER_EMAIL, FIRM_FROM_EMAIL, SIGNAL_LOG_SHEET_ID.\n- [ ] Optionally tune SIGNAL_LOOKBACK_DAYS, SIGNAL_ADDRESS_FIELD, SIGNAL_LINK_FIELD, SIGNAL_DATA_APP_TOKEN.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe SIGNAL_*_FIELD variables and SIGNAL_KEYWORDS_BY_PRACTICE_AREA are the entire data-mapping and tagging surface -- edit those n8n Variables, not the code, when you point this at a new dataset.",
+        "width": 520,
+        "height": 1100
+      },
+      "id": "8900aa00-0089-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -740,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Query, normalize, and dedupe\n\nPulls recent records from a configured open-data API, normalizes the dataset-specific field names, and drops anything already seen on a prior run.",
+        "width": 1550,
+        "height": 280,
+        "color": 7
+      },
+      "id": "8900aa00-0089-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Tag, log, and draft the daily signal digest\n\nTags each new signal against a configurable practice-area keyword map, logs matches, and emails a digest -- always sends something, even a 'nothing new' notice.",
+        "width": 1550,
+        "height": 260,
+        "color": 7
+      },
+      "id": "8900aa00-0089-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Weekly signal volume rollup — a second, independent branch\n\nAggregates the trailing week's logged signals into a practice-area mix and top signal types, so BD can see patterns beyond one signal at a time.",
+        "width": 1150,
+        "height": 240,
+        "color": 7
+      },
+      "id": "8900aa00-0089-4000-a000-0000000004",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "8900aa00-0089-4000-a000-0000000010",
+      "name": "Check Signal Sources Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Runs daily, 7am by default."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_source_configured",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ ($vars.SIGNAL_DATA_API_URL || '').trim() }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8900aa00-0089-4000-a000-0000000011",
+      "name": "If Data Source Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Checked here, while there's still guaranteed exactly one item from the trigger -- an unconfigured SIGNAL_DATA_API_URL routes to a setup-needed notice instead of the run silently dying at zero items."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds a Socrata SODA query URL filtering to records on or after the lookback cutoff,\n// ordered newest first. SIGNAL_DATE_FIELD is the dataset's own date column name -- every\n// dataset names it differently ('issue_date', 'filing_date', 'date_issued', etc.).\nconst baseUrl = ($vars.SIGNAL_DATA_API_URL || '').trim();\nconst dateField = ($vars.SIGNAL_DATE_FIELD || 'date').trim();\nconst lookbackDays = Number($vars.SIGNAL_LOOKBACK_DAYS || 1);\nconst cutoff = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 19);\n\nconst where = encodeURIComponent(`${dateField} >= '${cutoff}'`);\nconst order = encodeURIComponent(`${dateField} DESC`);\nconst separator = baseUrl.includes('?') ? '&' : '?';\nconst url = `${baseUrl}${separator}$where=${where}&$order=${order}&$limit=1000`;\n\nreturn [{ json: { query_url: url } }];"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000012",
+      "name": "Build Signal Query URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -80
+      ],
+      "notes": "SIGNAL_LOOKBACK_DAYS controls the query window -- defaults to 1 (yesterday's filings), since this runs daily."
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.query_url }}",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-App-Token",
+              "value": "={{ $vars.SIGNAL_DATA_APP_TOKEN || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8900aa00-0089-4000-a000-0000000013",
+      "name": "Fetch New Signal Records",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        -80
+      ],
+      "notes": "Most Socrata portals work without an App Token for light traffic, but a daily scheduled poll should use one to avoid throttling -- get a free one from the specific portal's developer settings and set SIGNAL_DATA_APP_TOKEN."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Maps the dataset's own arbitrary field names onto a consistent shape -- every open-data\n// dataset names its columns differently, so this is entirely driven by the configured field\n// name variables rather than hardcoded here.\nconst records = $input.all().map(i => i.json);\nconst idField = $vars.SIGNAL_ID_FIELD || '';\nconst typeField = $vars.SIGNAL_TYPE_FIELD || '';\nconst nameField = $vars.SIGNAL_NAME_FIELD || '';\nconst addressField = $vars.SIGNAL_ADDRESS_FIELD || '';\nconst dateField = $vars.SIGNAL_DATE_FIELD || 'date';\nconst linkField = $vars.SIGNAL_LINK_FIELD || '';\n\nreturn records\n  .filter(r => r && typeof r === 'object' && !r.error)\n  .map(r => ({ json: {\n    signal_id: String(r[idField] ?? `${r[nameField] || ''}-${r[dateField] || ''}`),\n    business_name: r[nameField] || '(name not available)',\n    signal_type: r[typeField] || '(type not available)',\n    address: addressField ? (r[addressField] || '') : '',\n    signal_date: r[dateField] || '',\n    source_link: linkField ? (r[linkField] || '') : '',\n  } }));"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000014",
+      "name": "Normalize Signal Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -80
+      ],
+      "notes": "SIGNAL_ID_FIELD / SIGNAL_TYPE_FIELD / SIGNAL_NAME_FIELD / SIGNAL_ADDRESS_FIELD / SIGNAL_LINK_FIELD are your dataset's actual column names -- check the portal's API docs (usually an 'API' or 'export' tab on the dataset page) and set these to match."
+    },
+    {
+      "parameters": {
+        "jsCode": "// No-database dedupe, same pattern used throughout this catalog: workflow static data keeps\n// a set of signal IDs already seen across runs, so the same filing doesn't get logged twice.\nconst records = $input.all().map(i => i.json);\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.seenSignalIds) staticData.seenSignalIds = [];\nconst seen = new Set(staticData.seenSignalIds);\n\nconst fresh = records.filter(r => !seen.has(r.signal_id));\nfor (const r of fresh) seen.add(r.signal_id);\n\n// Cap stored history so static data doesn't grow unbounded over years of daily runs.\nstaticData.seenSignalIds = Array.from(seen).slice(-20000);\n\nreturn fresh.map(r => ({ json: r }));"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000015",
+      "name": "Dedupe Against Previously Seen Signals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -80
+      ],
+      "notes": "Uses n8n's workflow static data, not an external database, to remember which signal IDs have already been logged -- consistent with this catalog's established dedupe pattern."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tags each new signal against a configurable practice-area keyword map -- a signal can\n// suggest demand for more than one practice area, or none, in which case it's dropped. This\n// is plain keyword matching against the signal's own type/name text, not an assessment of the\n// underlying business or individual.\nconst signals = $input.all().map(i => i.json);\n\n// SIGNAL_KEYWORDS_BY_PRACTICE_AREA format: 'Area One:kw1,kw2;Area Two:kw3,kw4'\nconst areaMap = ($vars.SIGNAL_KEYWORDS_BY_PRACTICE_AREA || 'Business Formation:llc,corporation,new business,incorporation;Employment Law:staffing,employment agency,payroll;Real Estate:construction,building permit,renovation,commercial lease')\n  .split(';').map(s => s.trim()).filter(Boolean)\n  .map(entry => {\n    const [area, kwStr] = entry.split(':');\n    const keywords = (kwStr || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);\n    return { area: (area || '').trim(), keywords };\n  }).filter(a => a.area && a.keywords.length);\n\nconst tagged = [];\nfor (const signal of signals) {\n  const text = `${signal.business_name} ${signal.signal_type}`.toLowerCase();\n  const impacted = [];\n  for (const { area, keywords } of areaMap) {\n    const matched = keywords.find(k => text.includes(k));\n    if (matched) impacted.push({ area, matched_keyword: matched });\n  }\n  if (impacted.length === 0) continue;\n  tagged.push({ ...signal, impacted_areas: impacted });\n}\n\nreturn tagged.map(t => ({ json: t }));"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000016",
+      "name": "Tag Signals By Practice Area",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -80
+      ],
+      "notes": "SIGNAL_KEYWORDS_BY_PRACTICE_AREA controls which signals are worth surfacing -- a signal matching nothing configured is dropped rather than logged."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.SIGNAL_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Signal Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "signal_id": "={{ $json.signal_id }}",
+            "business_name": "={{ $json.business_name }}",
+            "signal_type": "={{ $json.signal_type }}",
+            "practice_areas": "={{ $json.impacted_areas.map(a => a.area).join(', ') }}",
+            "address": "={{ $json.address }}",
+            "signal_date": "={{ $json.signal_date }}",
+            "logged_at": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "8900aa00-0089-4000-a000-0000000017",
+      "name": "Log New Signals For Tracking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1568,
+        -80
+      ],
+      "notes": "One row per matched signal. Column headers must match exactly."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Groups tagged signals by practice area for the digest. Reads from 'Tag Signals By Practice\n// Area' by name, not $input/$json -- the Sheets append node in between echoes back its own\n// written rows (flattened, no impacted_areas structure), same gotcha already found and fixed\n// elsewhere in this catalog. Runs once for the whole batch.\nconst signals = $('Tag Signals By Practice Area').all().map(i => i.json);\n\nconst byArea = {};\nfor (const s of signals) {\n  for (const { area, matched_keyword } of s.impacted_areas) {\n    if (!byArea[area]) byArea[area] = [];\n    byArea[area].push({ business_name: s.business_name, signal_type: s.signal_type, address: s.address, matched_keyword, source_link: s.source_link });\n  }\n}\n\nconst areaNames = Object.keys(byArea).sort();\nconst digestLines = areaNames.length\n  ? areaNames.map(area => {\n      const lines = byArea[area].map(s => `  - ${s.business_name} (${s.signal_type})${s.address ? ' — ' + s.address : ''} — matched \"${s.matched_keyword}\"`).join('\\n');\n      return `${area}:\\n${lines}`;\n    }).join('\\n\\n')\n  : '(no new signals matched a configured practice area today)';\n\nreturn [{ json: {\n  signal_count: signals.length,\n  area_count: areaNames.length,\n  digest_content: digestLines,\n  signals_by_area: areaNames.map(area => ({ area, items: byArea[area] })),\n} }];"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000018",
+      "name": "Draft Signal Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -80
+      ],
+      "notes": "Groups matched signals by practice area -- the same signal can appear under multiple areas if it matched keywords in more than one."
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { signal_count: 0, area_count: 0, digest_content: '(no data source configured yet -- set SIGNAL_DATA_API_URL in n8n Variables)', signals_by_area: [] } }];"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000019",
+      "name": "Draft Setup-Needed Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        120
+      ],
+      "notes": "Fires only when SIGNAL_DATA_API_URL is empty -- keeps the digest email showing up on schedule even before a real data source is configured."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $json;\nconst subject = `Local market signals — ${d.signal_count} new (${d.area_count} practice area(s))`;\nconst message = `${d.signal_count} new local-market signal(s) matched today:\\n\\n${d.digest_content}\\n\\nThis is public-record monitoring only, not an assessment of any specific business or individual.`;\n\nconst areasHtml = (d.signals_by_area && d.signals_by_area.length)\n  ? d.signals_by_area.map(group => `\n    <div style=\\\"margin-bottom:16px;\\\">\n      <div style=\\\"font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;\\\">${escapeHtml(group.area)}</div>\n      ${group.items.map(i => `<div style=\\\"border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:8px;\\\">\n        <div style=\\\"font-size:14px;font-weight:600;color:#0f172a;\\\">${escapeHtml(i.business_name)}</div>\n        <div style=\\\"font-size:12px;color:#64748b;margin-top:2px;\\\">${escapeHtml(i.signal_type)}${i.address ? ' — ' + escapeHtml(i.address) : ''}</div>\n        <div style=\\\"font-size:12px;color:#64748b;margin-top:2px;\\\">matched \\\"${escapeHtml(i.matched_keyword)}\\\"</div>\n      </div>`).join('')}\n    </div>`).join('')\n  : `<div style=\\\"color:#64748b;font-size:13px;\\\">No new signals matched a configured practice area today.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Daily signal digest</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${d.signal_count} new signal(s)</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${areasHtml}</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.BD_REVIEWER_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000020",
+      "name": "Build Signal Digest Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        0
+      ],
+      "notes": "Falls back the recipient to FIRM_FROM_EMAIL if BD_REVIEWER_EMAIL isn't set."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Signal Digest Email').item.json.recipient }}",
+        "subject": "={{ $('Build Signal Digest Email').item.json.subject }}",
+        "text": "={{ $('Build Signal Digest Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Signal Digest Email').item.json.email_html }}"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000021",
+      "name": "Send Signal Digest Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        0
+      ],
+      "notes": "Internal Protomated/BD notification, not a client communication — no compliance guardrail wrap needed.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "8900aa00-0089-4000-a000-0000000030",
+      "name": "Check Weekly Signal Volume Rollup",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        760
+      ],
+      "notes": "Runs weekly, Monday 8am by default."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.SIGNAL_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Signal Log",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "8900aa00-0089-4000-a000-0000000031",
+      "name": "Read Weekly Signal Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        224,
+        760
+      ],
+      "notes": "Reads the full log — filtered down to the trailing week in the next step."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rolls the week's logged signals into a practice-area mix and top signal types, so BD can\n// see patterns beyond one signal at a time. Descriptive only -- never ranks or scores anyone.\nconst rows = $input.all().map(i => i.json);\nconst SIGNAL_SUMMARY_LOOKBACK_DAYS = Number($vars.SIGNAL_SUMMARY_LOOKBACK_DAYS || 7);\nconst cutoff = Date.now() - SIGNAL_SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;\n\nconst recent = rows.filter(r => {\n  const loggedAt = r.logged_at ? new Date(r.logged_at).getTime() : null;\n  return loggedAt !== null && !Number.isNaN(loggedAt) && loggedAt >= cutoff;\n});\n\nconst areaCounts = {};\nconst typeCounts = {};\nfor (const r of recent) {\n  for (const area of (r.practice_areas || '').split(',').map(s => s.trim()).filter(Boolean)) {\n    areaCounts[area] = (areaCounts[area] || 0) + 1;\n  }\n  if (r.signal_type) typeCounts[r.signal_type] = (typeCounts[r.signal_type] || 0) + 1;\n}\nconst topAreas = Object.entries(areaCounts).sort((a, b) => b[1] - a[1]);\nconst topTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);\n\nreturn [{ json: {\n  total_signals: recent.length,\n  top_areas: topAreas.map(([name, count]) => ({ name, count })),\n  top_types: topTypes.map(([name, count]) => ({ name, count })),\n} }];"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000032",
+      "name": "Compute Weekly Signal Volume Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        760
+      ],
+      "notes": "SIGNAL_SUMMARY_LOOKBACK_DAYS controls the window — defaults to 7."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $json;\nconst subject = `Weekly signal volume summary — ${d.total_signals} signal(s)`;\nlet message;\nlet bodyHtml;\nif (d.total_signals === 0) {\n  message = 'No new local-market signals were logged this week.';\n  bodyHtml = `<div style=\\\"color:#334155;font-size:14px;\\\">No new signals logged this week.</div>`;\n} else {\n  const areaLines = d.top_areas.map(a => `- ${a.name}: ${a.count}`).join('\\n');\n  const typeLines = d.top_types.length ? d.top_types.map(t => `- ${t.name} (${t.count})`).join('\\n') : '(no repeat signal types this week)';\n  message = `${d.total_signals} local-market signal(s) logged this week.\\n\\nBy practice area:\\n${areaLines}\\n\\nTop signal types:\\n${typeLines}`;\n  const areaRows = d.top_areas.map(a => `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(a.name)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;text-align:right;\\\">${a.count}</td></tr>`).join('');\n  const typeRows = d.top_types.length\n    ? d.top_types.map(t => `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(t.name)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;text-align:right;\\\">${t.count}</td></tr>`).join('')\n    : `<tr><td colspan=\\\"2\\\" style=\\\"padding:8px 10px;font-size:13px;color:#64748b;\\\">No repeat signal types this week.</td></tr>`;\n  bodyHtml = `\n    <div style=\\\"font-size:13px;color:#64748b;margin-bottom:6px;\\\">By practice area</div>\n    <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;\\\"><tbody>${areaRows}</tbody></table>\n    <div style=\\\"font-size:13px;color:#64748b;margin-bottom:6px;\\\">Top signal types</div>\n    <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\"><tbody>${typeRows}</tbody></table>`;\n}\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Weekly signal volume summary</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${d.total_signals} signal(s) logged</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.BD_REVIEWER_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000033",
+      "name": "Build Weekly Signal Volume Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        760
+      ],
+      "notes": "Explicitly sends a 'no signals this week' message rather than a blank digest when nothing came in."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $json.email_html }}"
+      },
+      "id": "8900aa00-0089-4000-a000-0000000034",
+      "name": "Send Weekly Signal Volume Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        896,
+        760
+      ],
+      "notes": "Internal, firm-wide summary — no guardrail wrap needed.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "Fetch New Signal Records": [
+      {
+        "json": {
+          "record_id": "REC-1001",
+          "biz_name": "Riverside Contracting LLC",
+          "license_type": "General Contractor License",
+          "issue_date": "2026-09-08T00:00:00.000",
+          "street_address": "400 Riverside Dr"
+        }
+      },
+      {
+        "json": {
+          "record_id": "REC-1002",
+          "biz_name": "Metro Staffing Solutions Inc",
+          "license_type": "Employment Agency License",
+          "issue_date": "2026-09-08T00:00:00.000",
+          "street_address": "12 Main St"
+        }
+      },
+      {
+        "json": {
+          "record_id": "REC-1003",
+          "biz_name": "Sunrise Bakery",
+          "license_type": "Retail Food License",
+          "issue_date": "2026-09-08T00:00:00.000",
+          "street_address": "88 Oak Ave"
+        }
+      }
+    ],
+    "Read Weekly Signal Log": [
+      {
+        "json": {
+          "signal_id": "REC-0900",
+          "business_name": "Old Co",
+          "signal_type": "General Contractor License",
+          "practice_areas": "Real Estate",
+          "address": "1 First St",
+          "signal_date": "2026-09-02T00:00:00.000",
+          "logged_at": "2026-09-03T07:00:00.000Z"
+        }
+      },
+      {
+        "json": {
+          "signal_id": "REC-0901",
+          "business_name": "Other Co",
+          "signal_type": "Employment Agency License",
+          "practice_areas": "Employment Law",
+          "address": "2 Second St",
+          "signal_date": "2026-09-04T00:00:00.000",
+          "logged_at": "2026-09-05T07:00:00.000Z"
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "Check Signal Sources Daily": {
+      "main": [
+        [
+          {
+            "node": "If Data Source Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Data Source Configured": {
+      "main": [
+        [
+          {
+            "node": "Build Signal Query URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Draft Setup-Needed Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Signal Query URL": {
+      "main": [
+        [
+          {
+            "node": "Fetch New Signal Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch New Signal Records": {
+      "main": [
+        [
+          {
+            "node": "Normalize Signal Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Signal Records": {
+      "main": [
+        [
+          {
+            "node": "Dedupe Against Previously Seen Signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe Against Previously Seen Signals": {
+      "main": [
+        [
+          {
+            "node": "Tag Signals By Practice Area",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Signals By Practice Area": {
+      "main": [
+        [
+          {
+            "node": "Log New Signals For Tracking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log New Signals For Tracking": {
+      "main": [
+        [
+          {
+            "node": "Draft Signal Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Signal Digest": {
+      "main": [
+        [
+          {
+            "node": "Build Signal Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Setup-Needed Notice": {
+      "main": [
+        [
+          {
+            "node": "Build Signal Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Signal Digest Email": {
+      "main": [
+        [
+          {
+            "node": "Send Signal Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Weekly Signal Volume Rollup": {
+      "main": [
+        [
+          {
+            "node": "Read Weekly Signal Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Weekly Signal Log": {
+      "main": [
+        [
+          {
+            "node": "Compute Weekly Signal Volume Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Weekly Signal Volume Summary": {
+      "main": [
+        [
+          {
+            "node": "Build Weekly Signal Volume Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Weekly Signal Volume Email": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Signal Volume Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Internal Protomated tool, Authority pillar, not deployed to clients. Runs daily: queries a configured public open-data API (built against the Socrata SODA pattern) for recent business filing/permit/license records, normalizes dataset-specific field names, dedupes against previously seen signals, tags each against a configurable practice-area keyword map, logs matches, and emails a digest to a BD reviewer. Separately, a weekly rollup reports signal volume and top signal types by practice area. Powers Protomated's own BD pipeline and authority content. Replaces manual BD research and paid data vendors."
+}
