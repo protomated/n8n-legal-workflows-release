@@ -287,7 +287,8 @@
         1792,
         -80
       ],
-      "notes": "Reads from 'Compare Against Bill Tracker' by name, not $input, since the Sheets update node in between echoes back its own written rows, not the original is_new/status_changed flags."
+      "notes": "Reads from 'Compare Against Bill Tracker' by name, not $input, since the Sheets update node in between echoes back its own written rows, not the original is_new/status_changed flags.",
+      "alwaysOutputData": true
     },
     {
       "parameters": {

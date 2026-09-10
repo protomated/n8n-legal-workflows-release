@@ -174,7 +174,8 @@
         672,
         0
       ],
-      "notes": "RELEVANCE_KEYWORDS and DIGEST_LOOKBACK_DAYS control what makes it into the digest — most weeks this should still find something across multiple feeds."
+      "notes": "RELEVANCE_KEYWORDS and DIGEST_LOOKBACK_DAYS control what makes it into the digest — most weeks this should still find something across multiple feeds.",
+      "alwaysOutputData": true
     },
     {
       "parameters": {

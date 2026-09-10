@@ -159,7 +159,8 @@
         896,
         -80
       ],
-      "notes": "PRACTICE_AREA_KEYWORDS and DIGEST_LOOKBACK_DAYS control what makes it into the digest and how it's tagged. An item with zero practice-area matches is dropped."
+      "notes": "PRACTICE_AREA_KEYWORDS and DIGEST_LOOKBACK_DAYS control what makes it into the digest and how it's tagged. An item with zero practice-area matches is dropped.",
+      "alwaysOutputData": true
     },
     {
       "parameters": {

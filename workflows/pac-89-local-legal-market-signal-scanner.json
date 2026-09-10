@@ -207,7 +207,8 @@
         1344,
         -80
       ],
-      "notes": "SIGNAL_KEYWORDS_BY_PRACTICE_AREA controls which signals are worth surfacing -- a signal matching nothing configured is dropped rather than logged."
+      "notes": "SIGNAL_KEYWORDS_BY_PRACTICE_AREA controls which signals are worth surfacing -- a signal matching nothing configured is dropped rather than logged.",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -250,7 +251,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Groups tagged signals by practice area for the digest. Reads from 'Tag Signals By Practice\n// Area' by name, not $input/$json -- the Sheets append node in between echoes back its own\n// written rows (flattened, no impacted_areas structure), same gotcha already found and fixed\n// elsewhere in this catalog. Runs once for the whole batch.\nconst signals = $('Tag Signals By Practice Area').all().map(i => i.json);\n\nconst byArea = {};\nfor (const s of signals) {\n  for (const { area, matched_keyword } of s.impacted_areas) {\n    if (!byArea[area]) byArea[area] = [];\n    byArea[area].push({ business_name: s.business_name, signal_type: s.signal_type, address: s.address, matched_keyword, source_link: s.source_link });\n  }\n}\n\nconst areaNames = Object.keys(byArea).sort();\nconst digestLines = areaNames.length\n  ? areaNames.map(area => {\n      const lines = byArea[area].map(s => `  - ${s.business_name} (${s.signal_type})${s.address ? ' — ' + s.address : ''} — matched \"${s.matched_keyword}\"`).join('\\n');\n      return `${area}:\\n${lines}`;\n    }).join('\\n\\n')\n  : '(no new signals matched a configured practice area today)';\n\nreturn [{ json: {\n  signal_count: signals.length,\n  area_count: areaNames.length,\n  digest_content: digestLines,\n  signals_by_area: areaNames.map(area => ({ area, items: byArea[area] })),\n} }];"
+        "jsCode": "// Groups tagged signals by practice area for the digest. Reads from 'Tag Signals By Practice\n// Area' by name, not $input/$json -- this node sits in a parallel branch off Tag Signals (not\n// serially after the Sheets append), so the digest still runs even on a zero-signal day. Runs\n// once for the whole batch.\nconst signals = $('Tag Signals By Practice Area').all().map(i => i.json);\n\nconst byArea = {};\nfor (const s of signals) {\n  for (const { area, matched_keyword } of s.impacted_areas) {\n    if (!byArea[area]) byArea[area] = [];\n    byArea[area].push({ business_name: s.business_name, signal_type: s.signal_type, address: s.address, matched_keyword, source_link: s.source_link });\n  }\n}\n\nconst areaNames = Object.keys(byArea).sort();\nconst digestLines = areaNames.length\n  ? areaNames.map(area => {\n      const lines = byArea[area].map(s => `  - ${s.business_name} (${s.signal_type})${s.address ? ' — ' + s.address : ''} — matched \"${s.matched_keyword}\"`).join('\\n');\n      return `${area}:\\n${lines}`;\n    }).join('\\n\\n')\n  : '(no new signals matched a configured practice area today)';\n\nreturn [{ json: {\n  signal_count: signals.length,\n  area_count: areaNames.length,\n  digest_content: digestLines,\n  signals_by_area: areaNames.map(area => ({ area, items: byArea[area] })),\n} }];"
       },
       "id": "8900aa00-0089-4000-a000-0000000018",
       "name": "Draft Signal Digest",
@@ -557,13 +558,7 @@
             "node": "Log New Signals For Tracking",
             "type": "main",
             "index": 0
-          }
-        ]
-      ]
-    },
-    "Log New Signals For Tracking": {
-      "main": [
-        [
+          },
           {
             "node": "Draft Signal Digest",
             "type": "main",
