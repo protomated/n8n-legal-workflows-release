@@ -1,0 +1,572 @@
+{
+  "name": "Win-Back / Reactivation Drip",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Win-Back / Reactivation Drip\n\n### How it works\n\n1. Runs daily. Reads a firm-maintained tracker of lost or cold inquiries.\n2. For each lead still marked active, works out which stage of a configured drip sequence is due based on days since they went cold -- catching up automatically if a run gets missed, rather than permanently skipping a stage.\n3. Sends a templated, practice-area-aware re-engagement email for that stage, compliance-checked and logged through the Bar-Compliance Guardrail.\n4. Updates the tracker with the stage just sent, so the same message never repeats.\n5. Separately, a weekly rollup reports how many leads are in each stage and how many have reached the final one, for the firm's own follow-up decisions.\n\n**This is templated marketing copy, not legal work or a legal opinion on anyone's situation** (ABA Op. 512). It never decides on its own that a lead is truly unreachable -- opting out or marking a lead reactivated is always a manual, firm-driven decision in the tracker sheet.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first -- every drip email goes through it.\n- [ ] Create a Google Sheet with a 'Win-Back Tracker' tab -- see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, WIN_BACK_TRACKER_SHEET_ID.\n- [ ] Optionally tune WIN_BACK_DRIP_STAGES.\n- [ ] Activate the workflow.\n\n### Customization\n\nWIN_BACK_DRIP_STAGES is the entire sequence and timing surface -- edit that n8n Variable, not the code, to change how many stages there are, their spacing, or their content key.",
+        "width": 520,
+        "height": 940
+      },
+      "id": "9400aa00-0094-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -740,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Check the tracker, compute the due stage, and send\n\nReads the firm-maintained win-back tracker, works out which drip stage each active lead is due for, and sends a compliance-checked re-engagement email.",
+        "width": 1750,
+        "height": 280,
+        "color": 7
+      },
+      "id": "9400aa00-0094-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Weekly win-back performance rollup — a second, independent branch\n\nReports how many leads are in each stage and how many have reached the final one, so the firm can decide what to do with anyone who's gone all the way through the sequence.",
+        "width": 1150,
+        "height": 240,
+        "color": 7
+      },
+      "id": "9400aa00-0094-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "9400aa00-0094-4000-a000-0000000010",
+      "name": "Check Win-Back Drip Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Runs daily, 9am by default."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.WIN_BACK_TRACKER_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Win-Back Tracker",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "9400aa00-0094-4000-a000-0000000011",
+      "name": "Fetch Win-Back Tracker",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Reads the firm-maintained list of lost/cold leads -- your team adds rows here (or wires an intake form's 'marked lost' action to append one), this workflow never decides on its own that a lead is cold."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Works out which drip stage (if any) each still-active lead is due for today, based on\n// days since they went cold -- catching up automatically if a run was missed, rather than\n// permanently skipping a stage the way an exact-day match would.\n//\n// WIN_BACK_DRIP_STAGES format: 'day_offset|stage_label;day_offset|stage_label', e.g.\n// '0|check-in;14|resources;30|last-call'. Stages are sent in order -- a lead only ever\n// advances one stage per run, even if several thresholds have passed at once.\nconst leads = $input.all().map(i => i.json);\nconst stages = ($vars.WIN_BACK_DRIP_STAGES || '0|check-in;14|resources;30|last-call')\n  .split(';').map(s => s.trim()).filter(Boolean)\n  .map(entry => {\n    const [offsetStr, label] = entry.split('|').map(s => (s || '').trim());\n    return { day_offset: Number(offsetStr) || 0, stage_label: label || 'check-in' };\n  })\n  .sort((a, b) => a.day_offset - b.day_offset);\n\nconst results = [];\nfor (const lead of leads) {\n  if ((lead.status || 'active').toLowerCase() !== 'active') continue;\n\n  const coldAt = new Date(lead.marked_cold_at);\n  if (Number.isNaN(coldAt.getTime())) continue;\n  const daysSinceCold = Math.floor((Date.now() - coldAt.getTime()) / (24 * 60 * 60 * 1000));\n\n  const lastStageIndex = stages.findIndex(s => s.stage_label === lead.last_stage_sent);\n  const nextStageIndex = lastStageIndex + 1;\n  if (nextStageIndex >= stages.length) continue; // sequence complete\n\n  const nextStage = stages[nextStageIndex];\n  if (daysSinceCold >= nextStage.day_offset) {\n    results.push({ ...lead, due_stage_label: nextStage.stage_label, days_since_cold: daysSinceCold });\n  }\n}\n\nreturn results.map(r => ({ json: r }));"
+      },
+      "id": "9400aa00-0094-4000-a000-0000000012",
+      "name": "Compute Due Drip Stage Per Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "WIN_BACK_DRIP_STAGES controls the whole sequence — number of stages, spacing, and content key. A lead only advances one stage per run regardless of how many days have passed."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Templated, stage-keyed copy -- not AI-generated, not tailored to the specifics of anyone's\n// legal situation. Purely a scheduled marketing touch (ABA Op. 512).\nconst BODY_BY_STAGE = {\n  'check-in': (name, area, FIRM_NAME) => `Hi ${name}, it's been a little while since you reached out to ${FIRM_NAME} about ${area || 'your situation'}. We wanted to check in and see if you still need help -- we're here whenever you're ready.`,\n  'resources': (name, area, FIRM_NAME) => `Hi ${name}, in case it's useful, ${FIRM_NAME} has put together some resources related to ${area || 'your situation'}. Feel free to reach out anytime if you'd like to talk it through.`,\n  'last-call': (name, area, FIRM_NAME) => `Hi ${name}, this will be our last check-in for now. If your situation involving ${area || 'this matter'} has changed and you'd like to talk, ${FIRM_NAME} is just a call away.`,\n};\nconst DEFAULT_BODY = (name, area, FIRM_NAME) => `Hi ${name}, we wanted to reach out about ${area || 'your situation'} -- ${FIRM_NAME} is here if you'd like to talk.`;\n\nconst lead = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'our firm';\nconst bodyFn = BODY_BY_STAGE[lead.due_stage_label] || DEFAULT_BODY;\nconst message = bodyFn(lead.name, lead.practice_area, FIRM_NAME);\nconst subject = `A note from ${FIRM_NAME}`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:18px;font-weight:700;\\\">${escapeHtml(FIRM_NAME)}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#334155;font-size:15px;line-height:1.6;\\\">${escapeHtml(message)}</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...lead, recipient: lead.email, subject, message, email_html: emailHtml } };"
+      },
+      "id": "9400aa00-0094-4000-a000-0000000013",
+      "name": "Build Win-Back Drip Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "One templated body per stage_label — edit BODY_BY_STAGE here if you want different copy per stage (the timing itself lives in the WIN_BACK_DRIP_STAGES variable, not this code)."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "win-back-drip",
+            "matter_id": ""
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "9400aa00-0094-4000-a000-0000000014",
+      "name": "Check Compliance Before Drip Email",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Real marketing email to a real lead -- opt-out and disclaimer handling here are genuinely load-bearing, not inert like some of this catalog's internal-staff sends."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "9400aa00-0094-4000-a000-0000000015",
+      "name": "If Drip Email Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        0
+      ],
+      "notes": "Mirrors the guardrail's approved/opted-out result."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Win-Back Drip Email').item.json.recipient }}",
+        "subject": "={{ $('Build Win-Back Drip Email').item.json.subject }}",
+        "text": "={{ $('Build Win-Back Drip Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Win-Back Drip Email').item.json.email_html }}"
+      },
+      "id": "9400aa00-0094-4000-a000-0000000016",
+      "name": "Send Win-Back Drip Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -80
+      ],
+      "notes": "Reaches back to 'Build Win-Back Drip Email' by name, not $json, since the guardrail call in between replaces $json with its own response.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.WIN_BACK_TRACKER_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Win-Back Tracker",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $('Build Win-Back Drip Email').item.json.lead_id }}",
+            "last_stage_sent": "={{ $('Build Win-Back Drip Email').item.json.due_stage_label }}",
+            "last_sent_at": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9400aa00-0094-4000-a000-0000000017",
+      "name": "Update Tracker With Stage Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1568,
+        -80
+      ],
+      "notes": "Only updates last_stage_sent and last_sent_at -- matched on lead_id, so this never touches the other columns (name, email, status, etc.) a firm maintains directly."
+    },
+    {
+      "parameters": {},
+      "id": "9400aa00-0094-4000-a000-0000000018",
+      "name": "Skip — Lead Opted Out",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        80
+      ],
+      "notes": "Opted out via the guardrail's own opt-out list -- doesn't advance the tracker's stage, but also doesn't retry; mark the lead 'unsubscribed' in the tracker sheet directly to stop future attempts cleanly."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "9400aa00-0094-4000-a000-0000000030",
+      "name": "Check Weekly Win-Back Rollup",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        760
+      ],
+      "notes": "Runs weekly, Monday 8am by default."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.WIN_BACK_TRACKER_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Win-Back Tracker",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "9400aa00-0094-4000-a000-0000000031",
+      "name": "Read Full Win-Back Tracker",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        224,
+        760
+      ],
+      "notes": "Reads every lead in the tracker, regardless of status."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarizes the win-back campaign's current state: how many leads are active vs.\n// reactivated vs. unsubscribed, and how many active leads have already reached the final\n// configured stage (candidates for the firm to manually decide what to do with next).\nconst leads = $input.all().map(i => i.json);\nconst stages = ($vars.WIN_BACK_DRIP_STAGES || '0|check-in;14|resources;30|last-call')\n  .split(';').map(s => s.trim()).filter(Boolean)\n  .map(entry => (entry.split('|')[1] || '').trim());\nconst finalStageLabel = stages[stages.length - 1];\n\nconst statusCounts = { active: 0, reactivated: 0, unsubscribed: 0 };\nlet completedSequenceCount = 0;\nfor (const lead of leads) {\n  const status = (lead.status || 'active').toLowerCase();\n  if (statusCounts[status] === undefined) statusCounts[status] = 0;\n  statusCounts[status]++;\n  if (status === 'active' && lead.last_stage_sent === finalStageLabel) completedSequenceCount++;\n}\n\nreturn [{ json: {\n  total_leads: leads.length,\n  active_count: statusCounts.active,\n  reactivated_count: statusCounts.reactivated,\n  unsubscribed_count: statusCounts.unsubscribed,\n  completed_sequence_count: completedSequenceCount,\n} }];"
+      },
+      "id": "9400aa00-0094-4000-a000-0000000032",
+      "name": "Compute Weekly Win-Back Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        760
+      ],
+      "notes": "completed_sequence_count flags active leads who've already received every configured stage — worth a manual decision on what (if anything) to do next."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $json;\nconst subject = `Weekly win-back summary — ${d.active_count} active, ${d.reactivated_count} reactivated`;\nconst message = `${d.total_leads} lead(s) in the win-back tracker: ${d.active_count} active, ${d.reactivated_count} reactivated, ${d.unsubscribed_count} unsubscribed.\\n\\n${d.completed_sequence_count} active lead(s) have received every stage in the sequence and may need a manual decision on next steps.`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Weekly win-back summary</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${d.total_leads} lead(s) tracked</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"display:flex;gap:8px;margin-bottom:16px;\\\">\n        <div style=\\\"flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;\\\"><div style=\\\"font-size:18px;font-weight:700;color:#0f172a;\\\">${d.active_count}</div><div style=\\\"font-size:11px;color:#64748b;\\\">Active</div></div>\n        <div style=\\\"flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;\\\"><div style=\\\"font-size:18px;font-weight:700;color:#16a34a;\\\">${d.reactivated_count}</div><div style=\\\"font-size:11px;color:#64748b;\\\">Reactivated</div></div>\n        <div style=\\\"flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;\\\"><div style=\\\"font-size:18px;font-weight:700;color:#64748b;\\\">${d.unsubscribed_count}</div><div style=\\\"font-size:11px;color:#64748b;\\\">Unsubscribed</div></div>\n      </div>\n      <div style=\\\"color:#334155;font-size:14px;\\\">${d.completed_sequence_count} active lead(s) have received every stage and may need a manual decision on next steps.</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.FIRM_EMAIL, subject, message, email_html: emailHtml } };"
+      },
+      "id": "9400aa00-0094-4000-a000-0000000033",
+      "name": "Build Weekly Win-Back Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        760
+      ],
+      "notes": "Internal, firm-wide summary — no guardrail wrap needed, matching this catalog's other weekly rollups."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $json.email_html }}"
+      },
+      "id": "9400aa00-0094-4000-a000-0000000034",
+      "name": "Send Weekly Win-Back Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        896,
+        760
+      ],
+      "notes": "Internal, firm-wide summary — no guardrail wrap needed.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "Fetch Win-Back Tracker": [
+      {
+        "json": {
+          "lead_id": "L-1001",
+          "name": "Jordan Lee",
+          "email": "jordan.lee@example.com",
+          "practice_area": "Personal Injury",
+          "status": "active",
+          "marked_cold_at": "2026-09-10T00:00:00.000Z",
+          "last_stage_sent": ""
+        }
+      },
+      {
+        "json": {
+          "lead_id": "L-1002",
+          "name": "Sam Chen",
+          "email": "sam.chen@example.com",
+          "practice_area": "Family Law",
+          "status": "active",
+          "marked_cold_at": "2026-08-27T00:00:00.000Z",
+          "last_stage_sent": "check-in"
+        }
+      },
+      {
+        "json": {
+          "lead_id": "L-1003",
+          "name": "Taylor Ruiz",
+          "email": "taylor.ruiz@example.com",
+          "practice_area": "Estate Planning",
+          "status": "reactivated",
+          "marked_cold_at": "2026-07-01T00:00:00.000Z",
+          "last_stage_sent": "resources"
+        }
+      }
+    ],
+    "Read Full Win-Back Tracker": [
+      {
+        "json": {
+          "lead_id": "L-1001",
+          "status": "active",
+          "last_stage_sent": ""
+        }
+      },
+      {
+        "json": {
+          "lead_id": "L-1002",
+          "status": "active",
+          "last_stage_sent": "last-call"
+        }
+      },
+      {
+        "json": {
+          "lead_id": "L-1003",
+          "status": "reactivated",
+          "last_stage_sent": "resources"
+        }
+      },
+      {
+        "json": {
+          "lead_id": "L-1004",
+          "status": "unsubscribed",
+          "last_stage_sent": "check-in"
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "Check Win-Back Drip Daily": {
+      "main": [
+        [
+          {
+            "node": "Fetch Win-Back Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Win-Back Tracker": {
+      "main": [
+        [
+          {
+            "node": "Compute Due Drip Stage Per Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Due Drip Stage Per Lead": {
+      "main": [
+        [
+          {
+            "node": "Build Win-Back Drip Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Win-Back Drip Email": {
+      "main": [
+        [
+          {
+            "node": "Check Compliance Before Drip Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Compliance Before Drip Email": {
+      "main": [
+        [
+          {
+            "node": "If Drip Email Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Drip Email Approved": {
+      "main": [
+        [
+          {
+            "node": "Send Win-Back Drip Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Lead Opted Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Win-Back Drip Email": {
+      "main": [
+        [
+          {
+            "node": "Update Tracker With Stage Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Weekly Win-Back Rollup": {
+      "main": [
+        [
+          {
+            "node": "Read Full Win-Back Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Full Win-Back Tracker": {
+      "main": [
+        [
+          {
+            "node": "Compute Weekly Win-Back Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Weekly Win-Back Summary": {
+      "main": [
+        [
+          {
+            "node": "Build Weekly Win-Back Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Weekly Win-Back Email": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Win-Back Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Runs daily: reads a firm-maintained tracker of lost/cold leads, works out which stage of a configured drip sequence each active lead is due for based on days since going cold (catching up automatically if a run is missed), sends a templated re-engagement email through the Bar-Compliance Guardrail, and updates the tracker with the stage sent. Separately, a weekly rollup reports active/reactivated/unsubscribed counts and flags leads who've completed the whole sequence. Never decides a lead is unreachable on its own -- opting out or marking reactivated is always a manual, firm-driven decision. Replaces Lawmatics for this specific use case."
+}
