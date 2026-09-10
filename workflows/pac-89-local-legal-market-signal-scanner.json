@@ -244,7 +244,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        1568,
+        1792,
         -80
       ],
       "notes": "One row per matched signal. Column headers must match exactly."
@@ -416,6 +416,53 @@
           "name": "Email account (SMTP)"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_real_signal",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.signal_id }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8900aa00-0089-4000-a000-0000000043",
+      "name": "If Real Signal",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1568,
+        -160
+      ],
+      "notes": "Tag Signals By Practice Area has alwaysOutputData enabled so a zero-match day doesn't halt the digest branch -- but that means it can emit a single placeholder empty item on those days. This guard keeps that placeholder from being written to the Signal Log sheet as a garbage blank row; only items with a real signal_id proceed to logging."
+    },
+    {
+      "parameters": {},
+      "id": "8900aa00-0089-4000-a000-0000000044",
+      "name": "Skip — No Real Signal To Log",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        -240
+      ],
+      "notes": "Nothing to log here -- either zero signals matched today (the alwaysOutputData placeholder) or the item is otherwise incomplete."
     }
   ],
   "active": false,
@@ -555,7 +602,7 @@
       "main": [
         [
           {
-            "node": "Log New Signals For Tracking",
+            "node": "If Real Signal",
             "type": "main",
             "index": 0
           },
@@ -638,6 +685,24 @@
         [
           {
             "node": "Send Weekly Signal Volume Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Real Signal": {
+      "main": [
+        [
+          {
+            "node": "Log New Signals For Tracking",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — No Real Signal To Log",
             "type": "main",
             "index": 0
           }
