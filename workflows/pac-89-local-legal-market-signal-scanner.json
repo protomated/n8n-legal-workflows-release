@@ -4,66 +4,130 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Local Legal-Market Signal Scanner\n\n### Internal Protomated tool — Authority pillar, powers BD and pipeline\n\nDemand signals for a practice area are public but never collected -- a new business license, a building permit, an entity filing can all mean a new prospect. This watches a configurable public open-data feed (business filings, permits, licenses) and tags each new record against the practice areas it might create demand for, so BD conversations start from an actual signal instead of a cold list.\n\n### How it works\n\n1. Runs daily. Queries a configured public open-data API (built against the common Socrata SODA API pattern used by most city/county/state open-data portals) for records filed since the last run.\n2. Normalizes each record's fields using a firm-configured field-name map, since every open-data dataset names its columns differently.\n3. Dedupes against signals already seen (no database -- workflow static data, same pattern used throughout this catalog).\n4. Tags each new signal against a configurable practice-area keyword map -- a signal can suggest demand for more than one practice area, or none, in which case it's dropped.\n5. Logs matched signals and emails a digest to the BD reviewer.\n6. Separately, a weekly rollup reports signal volume and top signal types by practice area over the trailing week.\n\n**This monitors and tags public information only -- it is never a legal or business assessment of any specific entity, and it never contacts anyone on the firm's behalf.** It surfaces a public record and a keyword match, nothing more (ABA Op. 512 doesn't directly apply since this isn't law-firm-facing, but the same discipline is kept).\n\n### Before you start: there's no single canonical API for this\n\nBusiness filing and permit data is scattered across thousands of separate city/county/state open-data portals with no unified national API. This template is built against the Socrata SODA API pattern (used by NYC Open Data, Chicago Data Portal, Austin Open Data, and hundreds of others) since it's the most common standard -- but you need to find and configure a real dataset URL and its actual field names for your target market. If your target jurisdiction doesn't publish on a Socrata portal, this template's HTTP call will need adjusting to that portal's own API shape.\n\n### Setup steps\n\n- [ ] Find a real Socrata-based open-data dataset for business filings/permits/licenses in your target market.\n- [ ] Create a Google Sheet with a 'Signal Log' tab -- see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: SIGNAL_DATA_API_URL, SIGNAL_DATE_FIELD, SIGNAL_ID_FIELD, SIGNAL_TYPE_FIELD, SIGNAL_NAME_FIELD, SIGNAL_KEYWORDS_BY_PRACTICE_AREA, BD_REVIEWER_EMAIL, FIRM_FROM_EMAIL, SIGNAL_LOG_SHEET_ID.\n- [ ] Optionally tune SIGNAL_LOOKBACK_DAYS, SIGNAL_ADDRESS_FIELD, SIGNAL_LINK_FIELD, SIGNAL_DATA_APP_TOKEN.\n- [ ] Activate the workflow.\n\n### Customization\n\nThe SIGNAL_*_FIELD variables and SIGNAL_KEYWORDS_BY_PRACTICE_AREA are the entire data-mapping and tagging surface -- edit those n8n Variables, not the code, when you point this at a new dataset.",
-        "width": 520,
-        "height": 1100
+        "content": "## Local Legal-Market Signal Scanner\n\n### How it works\n\n1. The workflow triggers daily and checks if a signal data source is configured.\n2. If configured, it builds a query URL, fetches new signal records, normalizes and deduplicates them, then tags them by practice area.\n3. Real signals get logged for tracking, and a digest email summarizing signals or a setup-needed notice is drafted and sent.\n4. A separate weekly trigger reads logged signals, computes a weekly summary, and sends a weekly signal volume email.\n5. Conditional branches manage flow for missing data sources and signals without real value.\n\n### Setup steps\n\n- [ ] Configure schedule triggers for daily signal checking and weekly rollup as per your needs.\n- [ ] Set up the Socrata data source credentials or connections for signal retrieval.\n- [ ] Configure the Google Sheets integration for logging signals and reading logs.\n- [ ] Configure email service credentials for sending digest and weekly summary emails.\n- [ ] Customize the keyword map for tagging signals by practice area and any query parameters as needed.\n\n### Customization\n\nAdjust the practice area keyword mappings in the tagging node to fit your local legal market.\nModify email template code nodes to tailor digest and weekly summary content and appearance.",
+        "width": 480,
+        "height": 896
       },
-      "id": "8900aa00-0089-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -740,
-        -460
-      ]
+        -608,
+        -400
+      ],
+      "id": "6905981f-c8aa-4179-9811-7446813fe8d0",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Query, normalize, and dedupe\n\nPulls recent records from a configured open-data API, normalizes the dataset-specific field names, and drops anything already seen on a prior run.",
-        "width": 1550,
-        "height": 280,
+        "content": "## Trigger and data source check\n\nStarts the workflow on a schedule and checks if the signal data source is configured to decide the next steps.",
+        "width": 416,
+        "height": 320,
         "color": 7
       },
-      "id": "8900aa00-0089-4000-a000-0000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -160
+      ],
+      "id": "43b0f746-82e7-4884-a841-ab4d97defbdd",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Tag, log, and draft the daily signal digest\n\nTags each new signal against a configurable practice-area keyword map, logs matches, and emails a digest -- always sends something, even a 'nothing new' notice.",
-        "width": 1550,
-        "height": 260,
+        "content": "## Fetch and process new signals\n\nBuilds the query URL, fetches new signal records from the data source, normalizes their format, removes duplicates, and tags them by practice area.",
+        "width": 1088,
+        "height": 304,
         "color": 7
       },
-      "id": "8900aa00-0089-4000-a000-0000000003",
-      "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1450,
-        -200
-      ]
+        400,
+        -208
+      ],
+      "id": "660ffb84-667b-43dc-bd86-877f60498451",
+      "name": "Sticky Note2"
     },
     {
       "parameters": {
-        "content": "## Weekly signal volume rollup — a second, independent branch\n\nAggregates the trailing week's logged signals into a practice-area mix and top signal types, so BD can see patterns beyond one signal at a time.",
-        "width": 1150,
-        "height": 240,
+        "content": "## Real signal condition and logging\n\nDecides if signals are real and should be logged to Google Sheets for tracking or skipped if they are not real.",
+        "width": 416,
+        "height": 480,
         "color": 7
       },
-      "id": "8900aa00-0089-4000-a000-0000000004",
-      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        -400
+      ],
+      "id": "0a14f3a6-1428-4ad3-b07e-4df03c7bb791",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Draft and send daily digest email\n\nDrafts either a signal digest or a setup-needed notice and builds and sends a daily digest email summarizing signals or alerting about missing setup.",
+        "width": 1984,
+        "height": 480,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        128
+      ],
+      "id": "bcf408bc-e5ee-4a5f-86bf-aa91834a88e7",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Weekly signal volume rollup trigger\n\nStarts the weekly rollup workflow to analyze logged signal volume.",
+        "width": 240,
+        "height": 352,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        620
-      ]
+        560
+      ],
+      "id": "a1a3f8ee-577c-4e20-aa24-3930ca134ceb",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Read and compute weekly summary\n\nReads logged signal data from Google Sheets and computes a weekly practice-area and signal type summary for business development.",
+        "width": 416,
+        "height": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        224,
+        640
+      ],
+      "id": "8b0ed452-d162-44b9-b81c-636aac83f5a8",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Build and send weekly summary email\n\nBuilds the email content for weekly signal volume summary and sends the email.",
+        "width": 416,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        656
+      ],
+      "id": "3fe84eff-ee3a-48c1-ae32-1ac62279291f",
+      "name": "Sticky Note7"
     },
     {
       "parameters": {
@@ -77,7 +141,7 @@
         }
       },
       "id": "8900aa00-0089-4000-a000-0000000010",
-      "name": "Check Signal Sources Daily",
+      "name": "Every Morning at 7am",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -112,7 +176,7 @@
         "options": {}
       },
       "id": "8900aa00-0089-4000-a000-0000000011",
-      "name": "If Data Source Configured",
+      "name": "If Signal Data API Set",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -126,7 +190,7 @@
         "jsCode": "// Builds a Socrata SODA query URL filtering to records on or after the lookback cutoff,\n// ordered newest first. SIGNAL_DATE_FIELD is the dataset's own date column name -- every\n// dataset names it differently ('issue_date', 'filing_date', 'date_issued', etc.).\nconst baseUrl = ($vars.SIGNAL_DATA_API_URL || '').trim();\nconst dateField = ($vars.SIGNAL_DATE_FIELD || 'date').trim();\nconst lookbackDays = Number($vars.SIGNAL_LOOKBACK_DAYS || 1);\nconst cutoff = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 19);\n\nconst where = encodeURIComponent(`${dateField} >= '${cutoff}'`);\nconst order = encodeURIComponent(`${dateField} DESC`);\nconst separator = baseUrl.includes('?') ? '&' : '?';\nconst url = `${baseUrl}${separator}$where=${where}&$order=${order}&$limit=1000`;\n\nreturn [{ json: { query_url: url } }];"
       },
       "id": "8900aa00-0089-4000-a000-0000000012",
-      "name": "Build Signal Query URL",
+      "name": "Build Socrata Query URL",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -158,7 +222,7 @@
         }
       },
       "id": "8900aa00-0089-4000-a000-0000000013",
-      "name": "Fetch New Signal Records",
+      "name": "Fetch Signal Records",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -172,7 +236,7 @@
         "jsCode": "// Maps the dataset's own arbitrary field names onto a consistent shape -- every open-data\n// dataset names its columns differently, so this is entirely driven by the configured field\n// name variables rather than hardcoded here.\nconst records = $input.all().map(i => i.json);\nconst idField = $vars.SIGNAL_ID_FIELD || '';\nconst typeField = $vars.SIGNAL_TYPE_FIELD || '';\nconst nameField = $vars.SIGNAL_NAME_FIELD || '';\nconst addressField = $vars.SIGNAL_ADDRESS_FIELD || '';\nconst dateField = $vars.SIGNAL_DATE_FIELD || 'date';\nconst linkField = $vars.SIGNAL_LINK_FIELD || '';\n\nreturn records\n  .filter(r => r && typeof r === 'object' && !r.error)\n  .map(r => ({ json: {\n    signal_id: String(r[idField] ?? `${r[nameField] || ''}-${r[dateField] || ''}`),\n    business_name: r[nameField] || '(name not available)',\n    signal_type: r[typeField] || '(type not available)',\n    address: addressField ? (r[addressField] || '') : '',\n    signal_date: r[dateField] || '',\n    source_link: linkField ? (r[linkField] || '') : '',\n  } }));"
       },
       "id": "8900aa00-0089-4000-a000-0000000014",
-      "name": "Normalize Signal Records",
+      "name": "Normalize Signal Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -186,7 +250,7 @@
         "jsCode": "// No-database dedupe, same pattern used throughout this catalog: workflow static data keeps\n// a set of signal IDs already seen across runs, so the same filing doesn't get logged twice.\nconst records = $input.all().map(i => i.json);\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.seenSignalIds) staticData.seenSignalIds = [];\nconst seen = new Set(staticData.seenSignalIds);\n\nconst fresh = records.filter(r => !seen.has(r.signal_id));\nfor (const r of fresh) seen.add(r.signal_id);\n\n// Cap stored history so static data doesn't grow unbounded over years of daily runs.\nstaticData.seenSignalIds = Array.from(seen).slice(-20000);\n\nreturn fresh.map(r => ({ json: r }));"
       },
       "id": "8900aa00-0089-4000-a000-0000000015",
-      "name": "Dedupe Against Previously Seen Signals",
+      "name": "Deduplicate New Signals",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -240,7 +304,7 @@
         "options": {}
       },
       "id": "8900aa00-0089-4000-a000-0000000017",
-      "name": "Log New Signals For Tracking",
+      "name": "Append Signals to Tracking Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -254,12 +318,12 @@
         "jsCode": "// Groups tagged signals by practice area for the digest. Reads from 'Tag Signals By Practice\n// Area' by name, not $input/$json -- this node sits in a parallel branch off Tag Signals (not\n// serially after the Sheets append), so the digest still runs even on a zero-signal day. Runs\n// once for the whole batch.\n//\n// Tag Signals By Practice Area has alwaysOutputData enabled, so a zero-signal day emits a single\n// placeholder item with no impacted_areas rather than a truly empty array -- filter that out here\n// instead of assuming every item is a real, fully-shaped signal.\nconst signals = $('Tag Signals By Practice Area').all().map(i => i.json).filter(s => Array.isArray(s.impacted_areas));\n\nconst byArea = {};\nfor (const s of signals) {\n  for (const { area, matched_keyword } of s.impacted_areas) {\n    if (!byArea[area]) byArea[area] = [];\n    byArea[area].push({ business_name: s.business_name, signal_type: s.signal_type, address: s.address, matched_keyword, source_link: s.source_link });\n  }\n}\n\nconst areaNames = Object.keys(byArea).sort();\nconst digestLines = areaNames.length\n  ? areaNames.map(area => {\n      const lines = byArea[area].map(s => `  - ${s.business_name} (${s.signal_type})${s.address ? ' — ' + s.address : ''} — matched \"${s.matched_keyword}\"`).join('\\n');\n      return `${area}:\\n${lines}`;\n    }).join('\\n\\n')\n  : '(no new signals matched a configured practice area today)';\n\nreturn [{ json: {\n  signal_count: signals.length,\n  area_count: areaNames.length,\n  digest_content: digestLines,\n  signals_by_area: areaNames.map(area => ({ area, items: byArea[area] })),\n} }];"
       },
       "id": "8900aa00-0089-4000-a000-0000000018",
-      "name": "Draft Signal Digest",
+      "name": "Prepare Signal Digest Grouping",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1792,
-        -80
+        240
       ],
       "notes": "Groups matched signals by practice area -- the same signal can appear under multiple areas if it matched keywords in more than one."
     },
@@ -268,12 +332,12 @@
         "jsCode": "return [{ json: { signal_count: 0, area_count: 0, digest_content: '(no data source configured yet -- set SIGNAL_DATA_API_URL in n8n Variables)', signals_by_area: [] } }];"
       },
       "id": "8900aa00-0089-4000-a000-0000000019",
-      "name": "Draft Setup-Needed Notice",
+      "name": "Prepare Setup Needed Notice",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         448,
-        120
+        448
       ],
       "notes": "Fires only when SIGNAL_DATA_API_URL is empty -- keeps the digest email showing up on schedule even before a real data source is configured."
     },
@@ -287,7 +351,7 @@
       "typeVersion": 2,
       "position": [
         2016,
-        0
+        320
       ],
       "notes": "Falls back the recipient to FIRM_FROM_EMAIL if BD_REVIEWER_EMAIL isn't set."
     },
@@ -307,7 +371,7 @@
       "typeVersion": 2,
       "position": [
         2240,
-        0
+        320
       ],
       "notes": "Internal Protomated/BD notification, not a client communication — no compliance guardrail wrap needed.",
       "credentials": {
@@ -329,7 +393,7 @@
         }
       },
       "id": "8900aa00-0089-4000-a000-0000000030",
-      "name": "Check Weekly Signal Volume Rollup",
+      "name": "Every Monday at 8am",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -358,8 +422,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        224,
-        760
+        272,
+        800
       ],
       "notes": "Reads the full log — filtered down to the trailing week in the next step."
     },
@@ -368,12 +432,12 @@
         "jsCode": "// Rolls the week's logged signals into a practice-area mix and top signal types, so BD can\n// see patterns beyond one signal at a time. Descriptive only -- never ranks or scores anyone.\nconst rows = $input.all().map(i => i.json);\nconst SIGNAL_SUMMARY_LOOKBACK_DAYS = Number($vars.SIGNAL_SUMMARY_LOOKBACK_DAYS || 7);\nconst cutoff = Date.now() - SIGNAL_SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;\n\nconst recent = rows.filter(r => {\n  const loggedAt = r.logged_at ? new Date(r.logged_at).getTime() : null;\n  return loggedAt !== null && !Number.isNaN(loggedAt) && loggedAt >= cutoff;\n});\n\nconst areaCounts = {};\nconst typeCounts = {};\nfor (const r of recent) {\n  for (const area of (r.practice_areas || '').split(',').map(s => s.trim()).filter(Boolean)) {\n    areaCounts[area] = (areaCounts[area] || 0) + 1;\n  }\n  if (r.signal_type) typeCounts[r.signal_type] = (typeCounts[r.signal_type] || 0) + 1;\n}\nconst topAreas = Object.entries(areaCounts).sort((a, b) => b[1] - a[1]);\nconst topTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);\n\nreturn [{ json: {\n  total_signals: recent.length,\n  top_areas: topAreas.map(([name, count]) => ({ name, count })),\n  top_types: topTypes.map(([name, count]) => ({ name, count })),\n} }];"
       },
       "id": "8900aa00-0089-4000-a000-0000000032",
-      "name": "Compute Weekly Signal Volume Summary",
+      "name": "Compute Weekly Signal Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        448,
-        760
+        496,
+        800
       ],
       "notes": "SIGNAL_SUMMARY_LOOKBACK_DAYS controls the window — defaults to 7."
     },
@@ -386,8 +450,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        672,
-        760
+        720,
+        800
       ],
       "notes": "Explicitly sends a 'no signals this week' message rather than a blank digest when nothing came in."
     },
@@ -406,8 +470,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        896,
-        760
+        944,
+        800
       ],
       "notes": "Internal, firm-wide summary — no guardrail wrap needed.",
       "credentials": {
@@ -443,7 +507,7 @@
         "options": {}
       },
       "id": "8900aa00-0089-4000-a000-0000000043",
-      "name": "If Real Signal",
+      "name": "If Signal Is Valid",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -455,7 +519,7 @@
     {
       "parameters": {},
       "id": "8900aa00-0089-4000-a000-0000000044",
-      "name": "Skip — No Real Signal To Log",
+      "name": "Skip Logging Invalid Signal",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -467,7 +531,7 @@
   ],
   "active": false,
   "pinData": {
-    "Fetch New Signal Records": [
+    "Fetch Signal Records": [
       {
         "json": {
           "record_id": "REC-1001",
@@ -525,69 +589,69 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Check Signal Sources Daily": {
+    "Every Morning at 7am": {
       "main": [
         [
           {
-            "node": "If Data Source Configured",
+            "node": "If Signal Data API Set",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Data Source Configured": {
+    "If Signal Data API Set": {
       "main": [
         [
           {
-            "node": "Build Signal Query URL",
+            "node": "Build Socrata Query URL",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Draft Setup-Needed Notice",
+            "node": "Prepare Setup Needed Notice",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Signal Query URL": {
+    "Build Socrata Query URL": {
       "main": [
         [
           {
-            "node": "Fetch New Signal Records",
+            "node": "Fetch Signal Records",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch New Signal Records": {
+    "Fetch Signal Records": {
       "main": [
         [
           {
-            "node": "Normalize Signal Records",
+            "node": "Normalize Signal Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalize Signal Records": {
+    "Normalize Signal Data": {
       "main": [
         [
           {
-            "node": "Dedupe Against Previously Seen Signals",
+            "node": "Deduplicate New Signals",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Dedupe Against Previously Seen Signals": {
+    "Deduplicate New Signals": {
       "main": [
         [
           {
@@ -602,19 +666,19 @@
       "main": [
         [
           {
-            "node": "If Real Signal",
+            "node": "If Signal Is Valid",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Draft Signal Digest",
+            "node": "Prepare Signal Digest Grouping",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Draft Signal Digest": {
+    "Prepare Signal Digest Grouping": {
       "main": [
         [
           {
@@ -625,7 +689,7 @@
         ]
       ]
     },
-    "Draft Setup-Needed Notice": {
+    "Prepare Setup Needed Notice": {
       "main": [
         [
           {
@@ -647,7 +711,7 @@
         ]
       ]
     },
-    "Check Weekly Signal Volume Rollup": {
+    "Every Monday at 8am": {
       "main": [
         [
           {
@@ -662,14 +726,14 @@
       "main": [
         [
           {
-            "node": "Compute Weekly Signal Volume Summary",
+            "node": "Compute Weekly Signal Summary",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Weekly Signal Volume Summary": {
+    "Compute Weekly Signal Summary": {
       "main": [
         [
           {
@@ -691,18 +755,18 @@
         ]
       ]
     },
-    "If Real Signal": {
+    "If Signal Is Valid": {
       "main": [
         [
           {
-            "node": "Log New Signals For Tracking",
+            "node": "Append Signals to Tracking Sheet",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — No Real Signal To Log",
+            "node": "Skip Logging Invalid Signal",
             "type": "main",
             "index": 0
           }

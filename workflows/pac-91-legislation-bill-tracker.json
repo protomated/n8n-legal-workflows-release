@@ -4,66 +4,130 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Legislation / Bill Tracker\n\n### Internal Protomated tool — Authority pillar, not deployed to clients\n\nStaying current on bills in a practice area is manual and slow. This tracks bills matching configured search terms via the LegiScan API (a real, free-tier legislative tracking API covering all 50 states plus federal), watches for status changes against a maintained tracker sheet, alerts on anything new or changed, and separately rolls up the full tracked landscape weekly for newsletter and SEO content.\n\n### How it works\n\n1. Runs daily. Searches LegiScan for each configured practice-area search term.\n2. Compares each matched bill against a maintained tracker sheet -- flags anything brand new or whose status has changed since last checked.\n3. Updates the tracker sheet with the latest status for every matched bill, whether or not it changed.\n4. Drafts a plain-English alert digest for anything new or changed, grouped by practice area, with a templated 'why this matters' blurb based on the bill's own last-action text -- not real legal analysis.\n5. Logs the draft and emails it to the content reviewer. Nothing publishes without a human pass.\n6. Separately, a weekly rollup summarizes the full tracked bill landscape by practice area and status, for newsletter/content planning.\n\n**This monitors and summarizes public legislative information only -- it is explicitly informational, never advice.** It never touches legal work, gives compliance guidance tailored to a specific firm's situation, or drafts anything that could be read as legal advice (ABA Op. 512 doesn't directly apply since this isn't law-firm-facing, but the same discipline is kept).\n\n### Setup steps\n\n- [ ] Get a free LegiScan API key at legiscan.com/legiscan (their free tier covers this use case).\n- [ ] Create a Google Sheet with 'Bill Tracker' and 'Legislation Digest Drafts' tabs -- see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: LEGISCAN_API_KEY, LEGISLATION_SEARCH_TERMS, CONTENT_REVIEWER_EMAIL, FIRM_FROM_EMAIL, BILL_TRACKER_SHEET_ID, LEGISLATION_LOG_SHEET_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nLEGISLATION_SEARCH_TERMS is the entire tracking surface -- edit that n8n Variable, not the code, to change which bills get tracked.\n\n### A note on LEGISCAN_API_KEY\n\nLegiScan's API takes its key as a plain query-string token, not OAuth -- there's no dedicated n8n credential type for that shape, so it lives in a plain n8n Variable rather than a Credential. Treat it with the same care as a secret even though it isn't stored as one.",
-        "width": 520,
-        "height": 1020
+        "content": "## Legislation / Bill Tracker\n\n### How it works\n\n1. The workflow triggers daily and weekly schedules to track legislation and generate digests.\n2. It searches LegiScan using configured terms and compares results against a Google Sheets tracker.\n3. New or status-changed bills are filtered and drafted into alert digests for review.\n4. The workflow logs drafts and sends review request emails to designated recipients.\n5. Weekly, it summarizes the entire tracked bill landscape and sends a landscape summary email.\n\n\n### Setup steps\n\n- [ ] Configure LegiScan API credentials for HTTP requests.\n- [ ] Set up and share the Google Sheets tracker with appropriate access.\n- [ ] Configure email credentials for sending review requests and summaries.\n- [ ] Define search terms in environment variables or workflow parameters for legislation tracking.\n- [ ] Schedule triggers for daily tracking and weekly landscape rollup.\n\n### Customization\n\nAdjust the search terms format and email content templates to match organizational needs and terminology.",
+        "width": 480,
+        "height": 896
       },
-      "id": "9100aa00-0091-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -740,
-        -460
-      ]
+        -608,
+        -240
+      ],
+      "id": "d1c961c9-5359-4f8f-93f4-22d28781d234",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Search, compare, and update the tracker\n\nSearches LegiScan for each configured term, compares results against the maintained Bill Tracker sheet, and flags anything new or changed.",
-        "width": 1750,
-        "height": 280,
+        "content": "## Daily legislation tracking start\n\nThis group includes the initial daily trigger and conditional branch that checks if search terms are configured, determining whether the workflow proceeds to search legislation or drafts a setup notice.",
+        "width": 416,
+        "height": 368,
         "color": 7
       },
-      "id": "9100aa00-0091-4000-a000-0000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -208
+      ],
+      "id": "5a9e19a5-5bee-4de9-9d39-4b3660f76069",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Draft and send the alert digest\n\nOnly for bills flagged new or changed -- always sends something, even a 'nothing changed' notice.",
-        "width": 1350,
-        "height": 260,
+        "content": "## Build and execute search queries\n\nThis group builds LegiScan search queries based on configured terms, executes HTTP requests to LegiScan API to search legislation, and parses the search results.",
+        "width": 640,
+        "height": 320,
         "color": 7
       },
-      "id": "9100aa00-0091-4000-a000-0000000003",
-      "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1650,
-        -200
-      ]
+        400,
+        -240
+      ],
+      "id": "0a88e875-be5b-4ffe-8b7d-3c1ea5eec481",
+      "name": "Sticky Note2"
     },
     {
       "parameters": {
-        "content": "## Weekly legislation landscape rollup — a second, independent branch\n\nSummarizes every actively tracked bill's current status by practice area, for newsletter/content planning -- not just what changed, but the full picture.",
-        "width": 1150,
-        "height": 240,
+        "content": "## Compare and update bill tracker\n\nThis cluster reads the current bill tracker Google Sheet, compares search results to track new or changed bills, and updates the tracker sheet accordingly.",
+        "width": 640,
+        "height": 320,
         "color": 7
       },
-      "id": "9100aa00-0091-4000-a000-0000000004",
-      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -240
+      ],
+      "id": "61ce8b3b-4dcb-498f-864f-a7c0abcf510e",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Filter and draft alert digest\n\nFilters alert-worthy bills (new or status-changed), drafts a keyword-driven alert digest, or drafts a setup-needed notice if search terms are not configured.",
+        "width": 1760,
+        "height": 480,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        112
+      ],
+      "id": "de30ecc4-368e-4eda-81fb-731fa58d25f0",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Finalize and send review request\n\nAssigns unique digest IDs, logs the draft digest into Google Sheets, builds the review request email, and sends it out.",
+        "width": 864,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2192,
+        -128
+      ],
+      "id": "fb7cc308-99cd-4f0a-a93d-9a46950cfbac",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Weekly landscape summary start\n\nWeekly schedule trigger and read full bill tracker to start the legislative landscape rollup process.",
+        "width": 416,
+        "height": 320,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        620
-      ]
+        608
+      ],
+      "id": "3f749851-dcf5-46f9-bbef-1b2304374cab",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Summarize and send landscape email\n\nComputes summary of the full tracked bill landscape by practice area, builds the landscape summary email, and sends it.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        624
+      ],
+      "id": "07d3bf5a-185e-44ec-989d-334197725e95",
+      "name": "Sticky Note7"
     },
     {
       "parameters": {
@@ -77,7 +141,7 @@
         }
       },
       "id": "9100aa00-0091-4000-a000-0000000010",
-      "name": "Check Tracked Legislation Daily",
+      "name": "When Daily at 7 AM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -112,7 +176,7 @@
         "options": {}
       },
       "id": "9100aa00-0091-4000-a000-0000000011",
-      "name": "If Search Terms Configured",
+      "name": "If Search Terms Present",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -170,7 +234,7 @@
         }
       },
       "id": "9100aa00-0091-4000-a000-0000000013",
-      "name": "Search LegiScan For Each Term",
+      "name": "Fetch LegiScan Search Results",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -184,7 +248,7 @@
         "jsCode": "// LegiScan's getSearch response nests results under searchresult as a numerically-keyed\n// object (not an array), with a 'summary' key mixed in that isn't a bill -- skip it.\nconst res = $json;\nconst context = $('Build Legislation Search Queries').item.json;\nconst results = (res && res.searchresult) || {};\n\nreturn Object.keys(results)\n  .filter(k => k !== 'summary')\n  .map(k => results[k])\n  .filter(b => b && b.bill_id)\n  .map(b => ({ json: {\n    bill_id: String(b.bill_id),\n    bill_number: b.bill_number || '',\n    title: b.title || '(untitled)',\n    state: b.state || '',\n    status_code: b.status ?? '',\n    last_action: b.last_action || '',\n    last_action_date: b.last_action_date || '',\n    bill_url: b.research_url || b.text_url || '',\n    practice_area: context.practice_area,\n    matched_term: context.search_term,\n  } }));"
       },
       "id": "9100aa00-0091-4000-a000-0000000014",
-      "name": "Parse Search Results",
+      "name": "Parse LegiScan Search Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -209,7 +273,7 @@
         "options": {}
       },
       "id": "9100aa00-0091-4000-a000-0000000015",
-      "name": "Read Bill Tracker",
+      "name": "Read Bill Tracker Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -220,10 +284,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Flags each matched bill as new or status-changed against the tracker sheet, merging\n// practice areas if the same bill matched more than one search term this run. Bills whose\n// status is unchanged since last check are dropped -- they don't need a fresh alert, but\n// they're still written back to the tracker downstream so last_checked_at stays current.\nconst matched = $('Parse Search Results').all().map(i => i.json);\nconst trackerRows = $input.all().map(i => i.json);\nconst trackerByBillId = {};\nfor (const r of trackerRows) trackerByBillId[r.bill_id] = r;\n\nconst merged = {};\nfor (const b of matched) {\n  if (!merged[b.bill_id]) {\n    merged[b.bill_id] = { ...b, practice_areas: [b.practice_area] };\n  } else if (!merged[b.bill_id].practice_areas.includes(b.practice_area)) {\n    merged[b.bill_id].practice_areas.push(b.practice_area);\n  }\n}\n\nreturn Object.values(merged).map(b => {\n  const tracked = trackerByBillId[b.bill_id];\n  const isNew = !tracked;\n  const statusChanged = !!tracked && tracked.last_action !== b.last_action;\n  return { json: { ...b, is_new: isNew, status_changed: statusChanged, alert_worthy: isNew || statusChanged } };\n});"
+        "jsCode": "// Flags each matched bill as new or status-changed against the tracker sheet, merging\n// practice areas if the same bill matched more than one search term this run. Bills whose\n// status is unchanged since last check are dropped -- they don't need a fresh alert, but\n// they're still written back to the tracker downstream so last_checked_at stays current.\nconst matched = $('Parse LegiScan Search Results').all().map(i => i.json);\nconst trackerRows = $input.all().map(i => i.json);\nconst trackerByBillId = {};\nfor (const r of trackerRows) trackerByBillId[r.bill_id] = r;\n\nconst merged = {};\nfor (const b of matched) {\n  if (!merged[b.bill_id]) {\n    merged[b.bill_id] = { ...b, practice_areas: [b.practice_area] };\n  } else if (!merged[b.bill_id].practice_areas.includes(b.practice_area)) {\n    merged[b.bill_id].practice_areas.push(b.practice_area);\n  }\n}\n\nreturn Object.values(merged).map(b => {\n  const tracked = trackerByBillId[b.bill_id];\n  const isNew = !tracked;\n  const statusChanged = !!tracked && tracked.last_action !== b.last_action;\n  return { json: { ...b, is_new: isNew, status_changed: statusChanged, alert_worthy: isNew || statusChanged } };\n});"
       },
       "id": "9100aa00-0091-4000-a000-0000000016",
-      "name": "Compare Against Bill Tracker",
+      "name": "Compare Bills to Tracker",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -266,7 +330,7 @@
         "options": {}
       },
       "id": "9100aa00-0091-4000-a000-0000000017",
-      "name": "Update Bill Tracker",
+      "name": "Update Bill Tracker Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -277,15 +341,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Only alert-worthy bills (new or status-changed) continue to the digest -- everything else\n// was still written to the tracker upstream, it just doesn't need a fresh alert.\nreturn $('Compare Against Bill Tracker').all().filter(i => i.json.alert_worthy);"
+        "jsCode": "// Only alert-worthy bills (new or status-changed) continue to the digest -- everything else\n// was still written to the tracker upstream, it just doesn't need a fresh alert.\nreturn $('Compare Bills to Tracker').all().filter(i => i.json.alert_worthy);"
       },
       "id": "9100aa00-0091-4000-a000-0000000018",
-      "name": "Filter To Alert-Worthy Bills",
+      "name": "Filter Alert-Worthy Bills",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1792,
-        -80
+        224
       ],
       "notes": "Reads from 'Compare Against Bill Tracker' by name, not $input, since the Sheets update node in between echoes back its own written rows, not the original is_new/status_changed flags.",
       "alwaysOutputData": true
@@ -300,7 +364,7 @@
       "typeVersion": 2,
       "position": [
         2016,
-        -80
+        224
       ],
       "notes": "Runs once for the whole batch — turns alert-worthy bills into a single digest draft, explicitly noting when nothing changed rather than sending an empty draft."
     },
@@ -309,12 +373,12 @@
         "jsCode": "return [{ json: { item_count: 0, area_count: 0, draft_content: '(no search terms configured yet -- set LEGISLATION_SEARCH_TERMS in n8n Variables)', bills_by_area: [] } }];"
       },
       "id": "9100aa00-0091-4000-a000-0000000020",
-      "name": "Draft Setup-Needed Notice",
+      "name": "Draft Setup Needed Notice",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         448,
-        120
+        432
       ],
       "notes": "Fires only when LEGISLATION_SEARCH_TERMS is empty -- keeps the digest email showing up on schedule even before tracking is configured."
     },
@@ -323,7 +387,7 @@
         "jsCode": "const d = $json;\nreturn { json: { ...d, digest_id: 'BILLALERT-' + Date.now(), created_at: new Date().toISOString() } };"
       },
       "id": "9100aa00-0091-4000-a000-0000000021",
-      "name": "Assign Digest ID",
+      "name": "Assign Digest Identifier",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -362,7 +426,7 @@
         "options": {}
       },
       "id": "9100aa00-0091-4000-a000-0000000022",
-      "name": "Log Digest Draft For Review",
+      "name": "Append Digest Draft To Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -373,10 +437,10 @@
     },
     {
       "parameters": {
-        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $('Assign Digest ID').item.json;\nconst subject = `Legislation digest draft ready for review — ${d.item_count} item(s)`;\nconst message = `Today's legislation alert draft (${d.digest_id}) is ready:\\n\\n${d.draft_content}\\n\\nThis is informational monitoring only, not advice or analysis -- review, polish, and approve before it goes into the newsletter/Field Notes pipeline.`;\n\nconst areasHtml = (d.bills_by_area && d.bills_by_area.length)\n  ? d.bills_by_area.map(group => `\n    <div style=\\\"margin-bottom:16px;\\\">\n      <div style=\\\"font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;\\\">${escapeHtml(group.area)}</div>\n      ${group.items.map(b => `<div style=\\\"border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:8px;\\\">\n        <div style=\\\"font-size:14px;font-weight:600;color:#0f172a;\\\">${escapeHtml(b.bill_number)}: ${escapeHtml(b.title)}</div>\n        <div style=\\\"font-size:12px;color:#64748b;margin-top:2px;\\\">${escapeHtml(b.state)} — ${b.is_new ? 'NEW' : 'STATUS CHANGE'} — ${escapeHtml(b.last_action)} (${escapeHtml(b.last_action_date)})</div>\n        <div style=\\\"font-size:13px;color:#334155;margin-top:6px;\\\">${escapeHtml(b.why_it_matters)}</div>\n        <div style=\\\"margin-top:6px;\\\"><a href=\\\"${escapeHtml(b.bill_url)}\\\" style=\\\"font-size:12px;color:#2563eb;\\\">${escapeHtml(b.bill_url)}</a></div>\n      </div>`).join('')}\n    </div>`).join('')\n  : `<div style=\\\"color:#64748b;font-size:13px;\\\">No new or changed bills today.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Pending review</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">Legislation digest — ${d.item_count} item(s)</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#64748b;font-size:12px;margin-bottom:16px;\\\">Digest ${escapeHtml(d.digest_id)} — informational monitoring only, not advice or analysis.</div>\n      ${areasHtml}\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.CONTENT_REVIEWER_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $('Assign Digest Identifier').item.json;\nconst subject = `Legislation digest draft ready for review — ${d.item_count} item(s)`;\nconst message = `Today's legislation alert draft (${d.digest_id}) is ready:\\n\\n${d.draft_content}\\n\\nThis is informational monitoring only, not advice or analysis -- review, polish, and approve before it goes into the newsletter/Field Notes pipeline.`;\n\nconst areasHtml = (d.bills_by_area && d.bills_by_area.length)\n  ? d.bills_by_area.map(group => `\n    <div style=\\\"margin-bottom:16px;\\\">\n      <div style=\\\"font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;\\\">${escapeHtml(group.area)}</div>\n      ${group.items.map(b => `<div style=\\\"border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:8px;\\\">\n        <div style=\\\"font-size:14px;font-weight:600;color:#0f172a;\\\">${escapeHtml(b.bill_number)}: ${escapeHtml(b.title)}</div>\n        <div style=\\\"font-size:12px;color:#64748b;margin-top:2px;\\\">${escapeHtml(b.state)} — ${b.is_new ? 'NEW' : 'STATUS CHANGE'} — ${escapeHtml(b.last_action)} (${escapeHtml(b.last_action_date)})</div>\n        <div style=\\\"font-size:13px;color:#334155;margin-top:6px;\\\">${escapeHtml(b.why_it_matters)}</div>\n        <div style=\\\"margin-top:6px;\\\"><a href=\\\"${escapeHtml(b.bill_url)}\\\" style=\\\"font-size:12px;color:#2563eb;\\\">${escapeHtml(b.bill_url)}</a></div>\n      </div>`).join('')}\n    </div>`).join('')\n  : `<div style=\\\"color:#64748b;font-size:13px;\\\">No new or changed bills today.</div>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Pending review</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">Legislation digest — ${d.item_count} item(s)</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#64748b;font-size:12px;margin-bottom:16px;\\\">Digest ${escapeHtml(d.digest_id)} — informational monitoring only, not advice or analysis.</div>\n      ${areasHtml}\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.CONTENT_REVIEWER_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
       },
       "id": "9100aa00-0091-4000-a000-0000000023",
-      "name": "Build Digest Review Request Email",
+      "name": "Build Digest Review Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -388,15 +452,15 @@
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $('Build Digest Review Request Email').item.json.recipient }}",
-        "subject": "={{ $('Build Digest Review Request Email').item.json.subject }}",
-        "text": "={{ $('Build Digest Review Request Email').item.json.message }}",
+        "toEmail": "={{ $('Build Digest Review Email').item.json.recipient }}",
+        "subject": "={{ $('Build Digest Review Email').item.json.subject }}",
+        "text": "={{ $('Build Digest Review Email').item.json.message }}",
         "options": {},
         "emailFormat": "html",
-        "html": "={{ $('Build Digest Review Request Email').item.json.email_html }}"
+        "html": "={{ $('Build Digest Review Email').item.json.email_html }}"
       },
       "id": "9100aa00-0091-4000-a000-0000000024",
-      "name": "Send Digest Review Request Email",
+      "name": "Send Digest Review Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -423,7 +487,7 @@
         }
       },
       "id": "9100aa00-0091-4000-a000-0000000030",
-      "name": "Check Weekly Legislation Landscape Rollup",
+      "name": "When Weekly on Monday at 8 AM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -448,7 +512,7 @@
         "options": {}
       },
       "id": "9100aa00-0091-4000-a000-0000000031",
-      "name": "Read Full Bill Tracker",
+      "name": "Read Full Bill Tracker Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -462,7 +526,7 @@
         "jsCode": "// Summarizes the full tracked bill landscape by practice area, so content planning can see\n// what's actively being watched, not just what changed today. Descriptive only.\nconst rows = $input.all().map(i => i.json);\n\nconst areaCounts = {};\nfor (const r of rows) {\n  for (const area of (r.practice_areas || '').split(',').map(s => s.trim()).filter(Boolean)) {\n    areaCounts[area] = (areaCounts[area] || 0) + 1;\n  }\n}\nconst areaBreakdown = Object.entries(areaCounts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));\n\nreturn [{ json: { total_tracked: rows.length, area_breakdown: areaBreakdown } }];"
       },
       "id": "9100aa00-0091-4000-a000-0000000032",
-      "name": "Compute Legislation Landscape Summary",
+      "name": "Compute Landscape Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -476,7 +540,7 @@
         "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $json;\nconst subject = `Weekly legislation landscape — ${d.total_tracked} bill(s) tracked`;\nlet message;\nlet bodyHtml;\nif (d.total_tracked === 0) {\n  message = 'No bills are currently being tracked.';\n  bodyHtml = `<div style=\\\"color:#334155;font-size:14px;\\\">No bills are currently being tracked.</div>`;\n} else {\n  const lines = d.area_breakdown.map(a => `- ${a.name}: ${a.count}`).join('\\n');\n  message = `${d.total_tracked} bill(s) currently tracked across all practice areas.\\n\\nBy practice area:\\n${lines}`;\n  const rows = d.area_breakdown.map(a => `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(a.name)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;text-align:right;\\\">${a.count}</td></tr>`).join('');\n  bodyHtml = `<div style=\\\"font-size:13px;color:#64748b;margin-bottom:6px;\\\">By practice area</div>\n    <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\"><tbody>${rows}</tbody></table>`;\n}\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Weekly legislation landscape</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${d.total_tracked} bill(s) tracked</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.CONTENT_REVIEWER_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
       },
       "id": "9100aa00-0091-4000-a000-0000000033",
-      "name": "Build Legislation Landscape Email",
+      "name": "Build Landscape Summary Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -496,7 +560,7 @@
         "html": "={{ $json.email_html }}"
       },
       "id": "9100aa00-0091-4000-a000-0000000034",
-      "name": "Send Legislation Landscape Email",
+      "name": "Send Landscape Summary Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -514,15 +578,11 @@
   ],
   "active": false,
   "pinData": {
-    "Search LegiScan For Each Term": [
+    "Fetch LegiScan Search Results": [
       {
         "json": {
           "status": "OK",
           "searchresult": {
-            "summary": {
-              "page": "1 of 1",
-              "count": 1
-            },
             "0": {
               "relevance": 100,
               "state": "CA",
@@ -533,12 +593,16 @@
               "last_action": "Introduced and referred to committee",
               "title": "An act relating to overtime compensation for exempt employees",
               "research_url": "https://legiscan.com/CA/bill/AB123/2026"
+            },
+            "summary": {
+              "page": "1 of 1",
+              "count": 1
             }
           }
         }
       }
     ],
-    "Read Bill Tracker": [
+    "Read Bill Tracker Sheets": [
       {
         "json": {
           "bill_id": "9999999",
@@ -553,7 +617,7 @@
         }
       }
     ],
-    "Read Full Bill Tracker": [
+    "Read Full Bill Tracker Sheets": [
       {
         "json": {
           "bill_id": "9999999",
@@ -586,18 +650,18 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Check Tracked Legislation Daily": {
+    "When Daily at 7 AM": {
       "main": [
         [
           {
-            "node": "If Search Terms Configured",
+            "node": "If Search Terms Present",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Search Terms Configured": {
+    "If Search Terms Present": {
       "main": [
         [
           {
@@ -608,7 +672,7 @@
         ],
         [
           {
-            "node": "Draft Setup-Needed Notice",
+            "node": "Draft Setup Needed Notice",
             "type": "main",
             "index": 0
           }
@@ -619,69 +683,69 @@
       "main": [
         [
           {
-            "node": "Search LegiScan For Each Term",
+            "node": "Fetch LegiScan Search Results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Search LegiScan For Each Term": {
+    "Fetch LegiScan Search Results": {
       "main": [
         [
           {
-            "node": "Parse Search Results",
+            "node": "Parse LegiScan Search Results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Search Results": {
+    "Parse LegiScan Search Results": {
       "main": [
         [
           {
-            "node": "Read Bill Tracker",
+            "node": "Read Bill Tracker Sheets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Bill Tracker": {
+    "Read Bill Tracker Sheets": {
       "main": [
         [
           {
-            "node": "Compare Against Bill Tracker",
+            "node": "Compare Bills to Tracker",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compare Against Bill Tracker": {
+    "Compare Bills to Tracker": {
       "main": [
         [
           {
-            "node": "Update Bill Tracker",
+            "node": "Update Bill Tracker Sheets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Update Bill Tracker": {
+    "Update Bill Tracker Sheets": {
       "main": [
         [
           {
-            "node": "Filter To Alert-Worthy Bills",
+            "node": "Filter Alert-Worthy Bills",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter To Alert-Worthy Bills": {
+    "Filter Alert-Worthy Bills": {
       "main": [
         [
           {
@@ -696,95 +760,95 @@
       "main": [
         [
           {
-            "node": "Assign Digest ID",
+            "node": "Assign Digest Identifier",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Draft Setup-Needed Notice": {
+    "Draft Setup Needed Notice": {
       "main": [
         [
           {
-            "node": "Assign Digest ID",
+            "node": "Assign Digest Identifier",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Assign Digest ID": {
+    "Assign Digest Identifier": {
       "main": [
         [
           {
-            "node": "Log Digest Draft For Review",
+            "node": "Append Digest Draft To Sheets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Digest Draft For Review": {
+    "Append Digest Draft To Sheets": {
       "main": [
         [
           {
-            "node": "Build Digest Review Request Email",
+            "node": "Build Digest Review Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Digest Review Request Email": {
+    "Build Digest Review Email": {
       "main": [
         [
           {
-            "node": "Send Digest Review Request Email",
+            "node": "Send Digest Review Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Weekly Legislation Landscape Rollup": {
+    "When Weekly on Monday at 8 AM": {
       "main": [
         [
           {
-            "node": "Read Full Bill Tracker",
+            "node": "Read Full Bill Tracker Sheets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Full Bill Tracker": {
+    "Read Full Bill Tracker Sheets": {
       "main": [
         [
           {
-            "node": "Compute Legislation Landscape Summary",
+            "node": "Compute Landscape Summary",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Legislation Landscape Summary": {
+    "Compute Landscape Summary": {
       "main": [
         [
           {
-            "node": "Build Legislation Landscape Email",
+            "node": "Build Landscape Summary Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Legislation Landscape Email": {
+    "Build Landscape Summary Email": {
       "main": [
         [
           {
-            "node": "Send Legislation Landscape Email",
+            "node": "Send Landscape Summary Email",
             "type": "main",
             "index": 0
           }
