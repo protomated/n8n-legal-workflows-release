@@ -1,0 +1,1010 @@
+{
+  "name": "Automated Lead Follow-Up Sequence",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Automated Lead Follow-Up Sequence\n\n### How it works\n\n1. A new inquiry-form lead arrives -- sends an instant acknowledgment email, compliance-checked, and logs the lead for follow-up tracking.\n2. Separately, a daily check works out which follow-up (Day 1, Day 3, or Day 7) each still-unresponsive lead is due for, sends a practice-area-aware templated email, and updates the tracker -- catching up automatically if a run is missed, never skipping ahead.\n3. Separately, an inbox watcher marks a lead 'responded' the moment they reply, so no further follow-ups go out once they've engaged.\n4. If a lead reaches Day 7 with no response, the attorney gets a direct alert instead of another follow-up.\n\n**This sends templated marketing/operational copy only -- never legal advice or a judgment about anyone's case** (ABA Op. 512). Every send is compliance-checked and logged through the Bar-Compliance Guardrail.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first -- every lead-facing email goes through it.\n- [ ] Create a Google Sheet with a 'Lead Follow-Up Tracker' tab -- see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2, SMTP, and IMAP credentials.\n- [ ] Wire your inquiry form (JotForm, Typeform, Fluent Forms, or similar) to POST to the intake webhook.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_FROM_EMAIL, FIRM_ATTORNEY_EMAIL, GUARDRAIL_WORKFLOW_ID, LEAD_FOLLOWUP_SHEET_ID.\n- [ ] Optionally tune FOLLOW_UP_STAGES.\n- [ ] Activate the workflow.\n\n### Customization\n\nFOLLOW_UP_STAGES controls the whole timing surface. Email copy is templated per practice area (family law, estate planning, general) in the two 'Build ... Email' code nodes -- edit the BODY_BY_* maps there, not the timing logic.",
+        "width": 540,
+        "height": 1000
+      },
+      "id": "9700aa00-0097-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -740,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## New lead: instant acknowledgment\n\nSends an immediate acknowledgment the moment a lead comes in, and logs them for follow-up tracking.",
+        "width": 1300,
+        "height": 260,
+        "color": 7
+      },
+      "id": "9700aa00-0097-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Daily follow-up sequence\n\nWorks out which stage (Day 1 / Day 3 / Day 7) each still-unresponsive lead is due for, sends it, and alerts the attorney if Day 7 passes with no response.",
+        "width": 1750,
+        "height": 280,
+        "color": 7
+      },
+      "id": "9700aa00-0097-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Response detection — a third, independent branch\n\nWatches the firm's inbox for a reply from a tracked lead and marks them responded, stopping future follow-ups automatically.",
+        "width": 900,
+        "height": 240,
+        "color": 7
+      },
+      "id": "9700aa00-0097-4000-a000-0000000004",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-follow-up-intake",
+        "options": {}
+      },
+      "id": "9700aa00-0097-4000-a000-0000000010",
+      "name": "When Lead Form Submitted",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Wire your inquiry form (JotForm, Typeform, Fluent Forms, or similar) to POST here with the lead's name, email, phone, and practice area."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nreturn { json: {\n  lead_id: 'LEAD-' + Date.now(),\n  name: (body.name || body.full_name || '').trim(),\n  email: (body.email || '').trim(),\n  phone: (body.phone || '').trim(),\n  practice_area: (body.practice_area || body.matter_type || '').trim(),\n  submitted_at: new Date().toISOString(),\n} };"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000011",
+      "name": "Parse Lead Submission",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Field names here match common inquiry-form defaults (JotForm/Typeform/Fluent Forms) -- adjust to your actual form's field names if they differ."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Templated per practice area -- not AI-generated, not tailored to case specifics (ABA Op. 512).\nconst BODY_BY_AREA = {\n  'family law': (name, FIRM_NAME) => `Hi ${name}, thank you for reaching out to ${FIRM_NAME}. We know family law matters are often urgent and personal -- we've received your inquiry and will be in touch shortly.`,\n  'estate planning': (name, FIRM_NAME) => `Hi ${name}, thank you for reaching out to ${FIRM_NAME} about your estate planning needs. We've received your inquiry and will follow up shortly to discuss next steps.`,\n};\nconst DEFAULT_BODY = (name, FIRM_NAME) => `Hi ${name}, thank you for reaching out to ${FIRM_NAME}. We've received your inquiry and will be in touch shortly.`;\n\nconst lead = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'our firm';\nconst bodyFn = BODY_BY_AREA[(lead.practice_area || '').toLowerCase()] || DEFAULT_BODY;\nconst message = bodyFn(lead.name, FIRM_NAME);\nconst subject = `Thanks for contacting ${FIRM_NAME}`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:18px;font-weight:700;\\\">${escapeHtml(FIRM_NAME)}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#334155;font-size:15px;line-height:1.6;\\\">${escapeHtml(message)}</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...lead, recipient: lead.email, subject, message, email_html: emailHtml } };"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000012",
+      "name": "Build Instant Acknowledgment Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "One templated body per practice area (family law, estate planning) plus a general default -- edit BODY_BY_AREA here for different copy."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "lead-instant-ack",
+            "matter_id": ""
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "9700aa00-0097-4000-a000-0000000013",
+      "name": "Check Compliance Before Ack Email",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Real marketing email to a real lead -- opt-out and disclaimer handling here are genuinely load-bearing."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "9700aa00-0097-4000-a000-0000000014",
+      "name": "If Ack Email Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Mirrors the guardrail's approved/opted-out result."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Instant Acknowledgment Email').item.json.recipient }}",
+        "subject": "={{ $('Build Instant Acknowledgment Email').item.json.subject }}",
+        "text": "={{ $('Build Instant Acknowledgment Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Instant Acknowledgment Email').item.json.email_html }}"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000015",
+      "name": "Send Instant Acknowledgment Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -80
+      ],
+      "notes": "Reaches back to 'Build Instant Acknowledgment Email' by name, not $json, since the guardrail call in between replaces $json with its own response.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "9700aa00-0097-4000-a000-0000000016",
+      "name": "Skip — Lead Opted Out",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        80
+      ],
+      "notes": "Rare for a first-time inquiry, but respected the same as any other opt-out check in this catalog."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.LEAD_FOLLOWUP_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Lead Follow-Up Tracker",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $('Parse Lead Submission').item.json.lead_id }}",
+            "name": "={{ $('Parse Lead Submission').item.json.name }}",
+            "email": "={{ $('Parse Lead Submission').item.json.email }}",
+            "phone": "={{ $('Parse Lead Submission').item.json.phone }}",
+            "practice_area": "={{ $('Parse Lead Submission').item.json.practice_area }}",
+            "submitted_at": "={{ $('Parse Lead Submission').item.json.submitted_at }}",
+            "responded": "false",
+            "last_stage_sent": "",
+            "last_sent_at": ""
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9700aa00-0097-4000-a000-0000000017",
+      "name": "Log Lead For Follow-Up Tracking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1344,
+        0
+      ],
+      "notes": "Logs every lead regardless of the acknowledgment email's approval outcome -- follow-up tracking shouldn't depend on that. Reads from 'Parse Lead Submission' by name since the guardrail call upstream replaced $json."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "9700aa00-0097-4000-a000-0000000020",
+      "name": "Check Follow-Up Sequence Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        460
+      ],
+      "notes": "Runs daily, 9am by default."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.LEAD_FOLLOWUP_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Lead Follow-Up Tracker",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "9700aa00-0097-4000-a000-0000000021",
+      "name": "Fetch Lead Follow-Up Tracker",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        224,
+        460
+      ],
+      "notes": "Reads every tracked lead -- filtered to who's actually due for a follow-up in the next step."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Works out which follow-up stage (if any) each still-unresponsive lead is due for, based on\n// days since they submitted -- catching up automatically if a run is missed, one stage at a\n// time, same pattern as this catalog's win-back drip template.\n//\n// FOLLOW_UP_STAGES format: 'day_offset|stage_label;day_offset|stage_label', e.g.\n// '1|day1;3|day3;7|day7'.\nconst leads = $input.all().map(i => i.json);\nconst stages = ($vars.FOLLOW_UP_STAGES || '1|day1;3|day3;7|day7')\n  .split(';').map(s => s.trim()).filter(Boolean)\n  .map(entry => {\n    const [offsetStr, label] = entry.split('|').map(s => (s || '').trim());\n    return { day_offset: Number(offsetStr) || 0, stage_label: label || 'day1' };\n  })\n  .sort((a, b) => a.day_offset - b.day_offset);\n\nconst results = [];\nfor (const lead of leads) {\n  if (String(lead.responded).toLowerCase() === 'true') continue;\n\n  const submittedAt = new Date(lead.submitted_at);\n  if (Number.isNaN(submittedAt.getTime())) continue;\n  const daysSinceSubmitted = Math.floor((Date.now() - submittedAt.getTime()) / (24 * 60 * 60 * 1000));\n\n  const lastStageIndex = stages.findIndex(s => s.stage_label === lead.last_stage_sent);\n  const nextStageIndex = lastStageIndex + 1;\n  if (nextStageIndex >= stages.length) continue; // sequence complete\n\n  const nextStage = stages[nextStageIndex];\n  if (daysSinceSubmitted >= nextStage.day_offset) {\n    const isFinalStage = nextStageIndex === stages.length - 1;\n    results.push({ ...lead, due_stage_label: nextStage.stage_label, days_since_submitted: daysSinceSubmitted, is_final_stage: isFinalStage });\n  }\n}\n\nreturn results.map(r => ({ json: r }));"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000022",
+      "name": "Compute Due Follow-Up Stage Per Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        460
+      ],
+      "notes": "FOLLOW_UP_STAGES controls the whole sequence — number of stages, spacing, and labels. A responded lead is always skipped regardless of timing."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\n// Templated per (stage, practice area) -- not AI-generated, not tailored to case specifics.\nconst BODY_BY_STAGE = {\n  'day1': (name, area, FIRM_NAME) => `Hi ${name}, just following up on your recent inquiry to ${FIRM_NAME} about ${area || 'your situation'}. We're happy to answer any questions -- feel free to reply anytime.`,\n  'day3': (name, area, FIRM_NAME) => `Hi ${name}, we wanted to check in again about ${area || 'your situation'}. If now isn't a good time, no worries -- we're here whenever you're ready to talk with ${FIRM_NAME}.`,\n  'day7': (name, area, FIRM_NAME) => `Hi ${name}, this will be our last scheduled follow-up for now. If your situation involving ${area || 'this matter'} is still something ${FIRM_NAME} can help with, just reply and we'll pick things back up.`,\n};\nconst DEFAULT_BODY = (name, area, FIRM_NAME) => `Hi ${name}, following up on your inquiry to ${FIRM_NAME} about ${area || 'your situation'}.`;\n\nconst lead = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'our firm';\nconst bodyFn = BODY_BY_STAGE[lead.due_stage_label] || DEFAULT_BODY;\nconst message = bodyFn(lead.name, lead.practice_area, FIRM_NAME);\nconst subject = `Following up: ${FIRM_NAME}`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:18px;font-weight:700;\\\">${escapeHtml(FIRM_NAME)}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#334155;font-size:15px;line-height:1.6;\\\">${escapeHtml(message)}</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...lead, recipient: lead.email, subject, message, email_html: emailHtml } };"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000023",
+      "name": "Build Follow-Up Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        380
+      ],
+      "notes": "One templated body per stage -- edit BODY_BY_STAGE here for different copy per touch."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "lead-follow-up",
+            "matter_id": ""
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "9700aa00-0097-4000-a000-0000000024",
+      "name": "Check Compliance Before Follow-Up Email",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        896,
+        380
+      ],
+      "notes": "Real marketing email to a real lead -- opt-out and disclaimer handling here are genuinely load-bearing."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "9700aa00-0097-4000-a000-0000000025",
+      "name": "If Follow-Up Email Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        380
+      ],
+      "notes": "Mirrors the guardrail's approved/opted-out result."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Follow-Up Email').item.json.recipient }}",
+        "subject": "={{ $('Build Follow-Up Email').item.json.subject }}",
+        "text": "={{ $('Build Follow-Up Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Follow-Up Email').item.json.email_html }}"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000026",
+      "name": "Send Follow-Up Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        300
+      ],
+      "notes": "Reaches back to 'Build Follow-Up Email' by name, not $json, since the guardrail call in between replaces $json with its own response.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "9700aa00-0097-4000-a000-0000000027",
+      "name": "Skip — Lead Opted Out Of Follow-Up",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        460
+      ],
+      "notes": "Doesn't advance the tracker's stage -- mark the lead responded=true directly in the sheet to stop future attempts cleanly."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.LEAD_FOLLOWUP_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Lead Follow-Up Tracker",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $('Build Follow-Up Email').item.json.lead_id }}",
+            "last_stage_sent": "={{ $('Build Follow-Up Email').item.json.due_stage_label }}",
+            "last_sent_at": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9700aa00-0097-4000-a000-0000000028",
+      "name": "Update Tracker With Follow-Up Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1568,
+        300
+      ],
+      "notes": "Only updates last_stage_sent and last_sent_at, matched on lead_id -- never touches responded or the other columns."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_final_stage",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_final_stage }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "9700aa00-0097-4000-a000-0000000029",
+      "name": "If Final Stage Reached",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        620
+      ],
+      "notes": "Only the last configured stage (day7 by default) triggers the attorney no-response alert -- earlier stages just send their own follow-up, no alert."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst lead = $json;\nconst subject = `No response from lead: ${lead.name}`;\nconst message = `${lead.name} (${lead.practice_area || 'no practice area given'}) has not responded after the full follow-up sequence.\\n\\nEmail: ${lead.email}\\nPhone: ${lead.phone}\\nSubmitted: ${lead.submitted_at}\\n\\nWorth a personal check-in if this lead is still worth pursuing.`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#ea580c;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">No response</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${escapeHtml(lead.name)}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"font-size:13px;color:#64748b;margin-bottom:4px;\\\">${escapeHtml(lead.practice_area || 'No practice area given')}</div>\n      <div style=\\\"font-size:13px;color:#64748b;\\\">${escapeHtml(lead.email)} · ${escapeHtml(lead.phone)}</div>\n      <div style=\\\"color:#334155;font-size:14px;margin-top:16px;\\\">No response after the full follow-up sequence -- worth a personal check-in if this lead is still worth pursuing.</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { recipient: $vars.FIRM_ATTORNEY_EMAIL || $vars.FIRM_EMAIL, subject, message, email_html: emailHtml } };"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000030",
+      "name": "Build No-Response Alert Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        580
+      ],
+      "notes": "Internal alert to the attorney -- no guardrail wrap needed, this doesn't go to the lead."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $json.email_html }}"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000031",
+      "name": "Send No-Response Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        580
+      ],
+      "notes": "Internal notification only, not sent to the lead -- no guardrail wrap needed.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "9700aa00-0097-4000-a000-0000000032",
+      "name": "Skip — Not Final Stage",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        700
+      ],
+      "notes": "An earlier stage (day1/day3) -- its own follow-up email already covers this, no attorney alert needed yet."
+    },
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "read",
+        "options": {
+          "forceReconnect": 60
+        }
+      },
+      "id": "9700aa00-0097-4000-a000-0000000040",
+      "name": "When Lead Replies Via Email",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1080
+      ],
+      "notes": "Watches the same inbox FIRM_FROM_EMAIL sends from, via IMAP. Credential: Credentials → New → IMAP → your mailbox's server/login details.",
+      "credentials": {
+        "imap": {
+          "id": "2",
+          "name": "Lead Follow-Up Mailbox (IMAP)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const from = ($json.from && $json.from.value && $json.from.value[0] && $json.from.value[0].address) || $json.from?.text || '';\nreturn { json: { from_email: String(from).toLowerCase().trim() } };"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000041",
+      "name": "Parse Reply Sender",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1080
+      ],
+      "notes": "Extracts the replying address so it can be matched against the tracker in the next step."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.LEAD_FOLLOWUP_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Lead Follow-Up Tracker",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "9700aa00-0097-4000-a000-0000000042",
+      "name": "Read Tracker For Reply Match",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        448,
+        1080
+      ],
+      "notes": "Reads every tracked lead so the replying address can be matched by email."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Matches the reply's sender address against the tracker by email -- only the matched lead\n// continues, so the update step never touches an unrelated row. No match means this reply\n// didn't come from a tracked lead (produces zero items, which is fine here since nothing\n// downstream needs to always run regardless of count -- unlike this catalog's digest chains).\nconst replyFrom = $('Parse Reply Sender').item.json.from_email;\nconst rows = $input.all().map(i => i.json);\nconst matched = rows.find(r => (r.email || '').toLowerCase().trim() === replyFrom);\nreturn matched ? [{ json: matched }] : [];"
+      },
+      "id": "9700aa00-0097-4000-a000-0000000043",
+      "name": "Match Reply To Tracked Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        1080
+      ],
+      "notes": "Matches by exact email address — a reply from an address not in the tracker is simply ignored."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.LEAD_FOLLOWUP_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Lead Follow-Up Tracker",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "responded": "true"
+          },
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9700aa00-0097-4000-a000-0000000044",
+      "name": "Mark Lead As Responded",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        896,
+        1080
+      ],
+      "notes": "Only updates the responded flag, matched on lead_id -- stops all future follow-up emails to this lead immediately."
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When Lead Form Submitted": [
+      {
+        "json": {
+          "headers": {},
+          "params": {},
+          "query": {},
+          "body": {
+            "name": "Jamie Torres",
+            "email": "jamie.torres@example.com",
+            "phone": "+15551230000",
+            "practice_area": "Family Law"
+          },
+          "webhookUrl": "https://your-n8n.example.com/webhook/lead-follow-up-intake",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "Fetch Lead Follow-Up Tracker": [
+      {
+        "json": {
+          "lead_id": "LEAD-1001",
+          "name": "Jamie Torres",
+          "email": "jamie.torres@example.com",
+          "phone": "+15551230000",
+          "practice_area": "Family Law",
+          "submitted_at": "2026-09-05T00:00:00.000Z",
+          "responded": "false",
+          "last_stage_sent": "",
+          "last_sent_at": ""
+        }
+      },
+      {
+        "json": {
+          "lead_id": "LEAD-1002",
+          "name": "Morgan Ellis",
+          "email": "morgan.ellis@example.com",
+          "phone": "+15551230001",
+          "practice_area": "Estate Planning",
+          "submitted_at": "2026-08-29T00:00:00.000Z",
+          "responded": "false",
+          "last_stage_sent": "day3",
+          "last_sent_at": "2026-09-01T09:00:00.000Z"
+        }
+      }
+    ],
+    "When Lead Replies Via Email": [
+      {
+        "json": {
+          "from": {
+            "value": [
+              {
+                "address": "jamie.torres@example.com",
+                "name": "Jamie Torres"
+              }
+            ],
+            "text": "Jamie Torres <jamie.torres@example.com>"
+          },
+          "subject": "Re: Thanks for contacting our firm",
+          "text": "Thanks, I would like to schedule a call."
+        }
+      }
+    ],
+    "Read Tracker For Reply Match": [
+      {
+        "json": {
+          "lead_id": "LEAD-1001",
+          "email": "jamie.torres@example.com",
+          "responded": "false"
+        }
+      },
+      {
+        "json": {
+          "lead_id": "LEAD-1002",
+          "email": "morgan.ellis@example.com",
+          "responded": "false"
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When Lead Form Submitted": {
+      "main": [
+        [
+          {
+            "node": "Parse Lead Submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Lead Submission": {
+      "main": [
+        [
+          {
+            "node": "Build Instant Acknowledgment Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Instant Acknowledgment Email": {
+      "main": [
+        [
+          {
+            "node": "Check Compliance Before Ack Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Compliance Before Ack Email": {
+      "main": [
+        [
+          {
+            "node": "If Ack Email Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Ack Email Approved": {
+      "main": [
+        [
+          {
+            "node": "Send Instant Acknowledgment Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Lead Opted Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Instant Acknowledgment Email": {
+      "main": [
+        [
+          {
+            "node": "Log Lead For Follow-Up Tracking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip — Lead Opted Out": {
+      "main": [
+        [
+          {
+            "node": "Log Lead For Follow-Up Tracking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Follow-Up Sequence Daily": {
+      "main": [
+        [
+          {
+            "node": "Fetch Lead Follow-Up Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Lead Follow-Up Tracker": {
+      "main": [
+        [
+          {
+            "node": "Compute Due Follow-Up Stage Per Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Due Follow-Up Stage Per Lead": {
+      "main": [
+        [
+          {
+            "node": "Build Follow-Up Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Final Stage Reached",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Follow-Up Email": {
+      "main": [
+        [
+          {
+            "node": "Check Compliance Before Follow-Up Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Compliance Before Follow-Up Email": {
+      "main": [
+        [
+          {
+            "node": "If Follow-Up Email Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Follow-Up Email Approved": {
+      "main": [
+        [
+          {
+            "node": "Send Follow-Up Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Lead Opted Out Of Follow-Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Follow-Up Email": {
+      "main": [
+        [
+          {
+            "node": "Update Tracker With Follow-Up Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Final Stage Reached": {
+      "main": [
+        [
+          {
+            "node": "Build No-Response Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Not Final Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build No-Response Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Send No-Response Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Lead Replies Via Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Reply Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Reply Sender": {
+      "main": [
+        [
+          {
+            "node": "Read Tracker For Reply Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tracker For Reply Match": {
+      "main": [
+        [
+          {
+            "node": "Match Reply To Tracked Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Reply To Tracked Lead": {
+      "main": [
+        [
+          {
+            "node": "Mark Lead As Responded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Fires when a new inquiry-form lead arrives: sends an instant acknowledgment email through the Bar-Compliance Guardrail and logs the lead for follow-up tracking. Separately, a daily check advances each still-unresponsive lead through a configured follow-up sequence (Day 1/3/7 by default) one stage at a time, alerting the attorney directly if the final stage passes with no response. Separately, an inbox watcher marks a lead responded the moment they reply, stopping future follow-ups automatically. Replaces manual lead follow-up tracking; conversion bridge to a full CRM pipeline at higher lead volume."
+}
