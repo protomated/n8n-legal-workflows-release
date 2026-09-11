@@ -1,0 +1,712 @@
+{
+  "name": "New Client Kickoff Kit",
+  "tags": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## New Client Kickoff Kit\n\n### How it works\n\n1. Fires when a client is marked signed (wire this to your CRM/PM tool's own 'signed' action, or trigger it manually).\n2. Creates a Drive matter folder with your firm's standard subfolders already inside it.\n3. Sends a kickoff email with a Calendly link to schedule the kickoff meeting, compliance-checked and logged through the Bar-Compliance Guardrail.\n4. Creates your firm's configured follow-up tasks in Clio (e.g. 'send engagement letter', 'confirm signed retainer').\n5. Logs the whole kickoff to a master onboarding sheet -- one row per new client, including whether the Drive folder actually got created.\n6. Separately, a weekly rollup reports how many clients were onboarded and flags any Drive folder creation failures for manual follow-up.\n\n**This assumes your welcome-email day sequence (Day 0/1/3/7) is already handled elsewhere** -- if you haven't deployed the Client Onboarding Sequence template (K7) yet, deploy that first for the actual welcome/what-to-expect emails. This kit is scoped specifically to what that template doesn't do: the Drive folder, the Calendly kickoff link, and the master onboarding log.\n\n**This never touches legal work** (ABA Op. 512) -- folder creation, scheduling links, and task creation are pure administrative setup.\n\n### Setup steps\n\n- [ ] Deploy the Client Onboarding Sequence template (K7) first if you haven't -- this kit doesn't duplicate its welcome-email sequence.\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) -- the kickoff email goes through it.\n- [ ] Configure a Google API (Drive) credential, a Clio OAuth2 credential (reuse if already deployed), and Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_FROM_EMAIL, GUARDRAIL_WORKFLOW_ID, ONBOARDING_DRIVE_PARENT_FOLDER_ID, CALENDLY_KICKOFF_EVENT_URL, CLIO_BASE_URL, ONBOARDING_LOG_SHEET_ID.\n- [ ] Optionally tune ONBOARDING_DRIVE_SUBFOLDERS and ONBOARDING_FOLLOWUP_TASKS.\n- [ ] Activate the workflow and wire your 'client signed' action to the webhook URL.\n\n### Customization\n\nONBOARDING_DRIVE_SUBFOLDERS and ONBOARDING_FOLLOWUP_TASKS are the entire structure/task surface -- edit those n8n Variables, not the code.",
+        "width": 560,
+        "height": 1020
+      },
+      "id": "9900aa00-0099-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -740,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Create the Drive matter folder and standard subfolders\n\nBuilds a top-level matter folder plus your firm's configured standard subfolders inside it, the moment a client is marked signed.",
+        "width": 1300,
+        "height": 260,
+        "color": 7
+      },
+      "id": "9900aa00-0099-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Kickoff email, follow-up tasks, and the master log\n\nSends the kickoff email with a Calendly scheduling link, creates configured follow-up tasks in Clio, and logs the whole kickoff to a master sheet.",
+        "width": 1550,
+        "height": 280,
+        "color": 7
+      },
+      "id": "9900aa00-0099-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1150,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Weekly onboarding kit rollup — a second, independent branch\n\nReports how many clients were onboarded this week and flags any Drive folder creation failures for manual follow-up.",
+        "width": 1150,
+        "height": 240,
+        "color": 7
+      },
+      "id": "9900aa00-0099-4000-a000-0000000004",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "client-signed",
+        "options": {}
+      },
+      "id": "9900aa00-0099-4000-a000-0000000010",
+      "name": "When Client Marked Signed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Wire your CRM/PM tool's 'mark as signed' action (or a simple button/Zapier step) to POST here with the client's name, email, matter ID, practice area, and attorney contact."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nreturn { json: {\n  client_name: (body.client_name || body.name || '').trim(),\n  client_email: (body.client_email || body.email || '').trim(),\n  matter_id: (body.matter_id || '').trim(),\n  practice_area: (body.practice_area || '').trim(),\n  attorney_name: (body.attorney_name || '').trim(),\n  attorney_email: (body.attorney_email || '').trim(),\n  signed_at: new Date().toISOString(),\n} };"
+      },
+      "id": "9900aa00-0099-4000-a000-0000000011",
+      "name": "Parse Signed Client Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Field names here match a generic 'mark as signed' payload — adjust to whatever your CRM/PM tool actually sends."
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.client_name + ' — ' + $json.matter_id, mimeType: 'application/vnd.google-apps.folder', parents: [$vars.ONBOARDING_DRIVE_PARENT_FOLDER_ID] }) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "9900aa00-0099-4000-a000-0000000012",
+      "name": "Create Matter Drive Folder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Creates the top-level matter folder inside your configured parent folder (ONBOARDING_DRIVE_PARENT_FOLDER_ID). Needs a Google API (OAuth2) credential with Drive scope -- wire it manually after import. neverError is on so a failure doesn't halt the rest of kickoff -- checked in the next node."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Drive returns the created folder's { id, ... } on success, or an 'error' object on failure.\n// Either way, kickoff continues -- a folder creation failure shouldn't block the email, tasks,\n// or master log; it's surfaced there instead.\nconst hire = $('Parse Signed Client Data').item.json;\nconst res = $json;\nconst folderCreated = !!(res && res.id && !res.error);\nreturn { json: {\n  ...hire,\n  drive_folder_id: folderCreated ? res.id : '',\n  drive_folder_url: folderCreated ? `https://drive.google.com/drive/folders/${res.id}` : '',\n  folder_created: folderCreated,\n} };"
+      },
+      "id": "9900aa00-0099-4000-a000-0000000013",
+      "name": "Parse Folder Creation Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Reads the previous node's raw HTTP response, not $json passthrough -- checks for a Drive API error and continues either way."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ONBOARDING_DRIVE_SUBFOLDERS is a comma-separated list, e.g. 'Correspondence,Documents,\n// Discovery,Billing'. Produces one item per subfolder, only if the parent folder was actually\n// created -- no point creating subfolders inside a folder that doesn't exist.\nconst data = $json;\nif (!data.folder_created) return [];\n\nconst subfolders = ($vars.ONBOARDING_DRIVE_SUBFOLDERS || 'Correspondence,Documents,Discovery,Billing')\n  .split(',').map(s => s.trim()).filter(Boolean);\n\nreturn subfolders.map(name => ({ json: { ...data, subfolder_name: name } }));"
+      },
+      "id": "9900aa00-0099-4000-a000-0000000014",
+      "name": "Build Subfolder List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -80
+      ],
+      "notes": "ONBOARDING_DRIVE_SUBFOLDERS controls the whole structure -- edit that n8n Variable, not the code."
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.subfolder_name, mimeType: 'application/vnd.google-apps.folder', parents: [$json.drive_folder_id] }) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "9900aa00-0099-4000-a000-0000000015",
+      "name": "Create Drive Subfolder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        -80
+      ],
+      "notes": "Runs once per subfolder from the list above, nested inside the matter folder just created."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst data = $('Parse Folder Creation Response').item.json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'our firm';\nconst calendlyUrl = $vars.CALENDLY_KICKOFF_EVENT_URL || '';\n\nconst message = `Welcome aboard, ${data.client_name}! ${FIRM_NAME} is excited to get started on your ${data.practice_area || 'matter'}.\\n\\nLet's schedule a quick kickoff call: ${calendlyUrl || '(scheduling link not configured yet)'}\\n\\nWe'll be in touch soon with more details on what to expect.`;\nconst subject = `Welcome to ${FIRM_NAME} — let's schedule your kickoff call`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:18px;font-weight:700;\\\">Welcome to ${escapeHtml(FIRM_NAME)}!</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"color:#334155;font-size:15px;line-height:1.6;margin-bottom:20px;\\\">We're excited to get started on your ${escapeHtml(data.practice_area || 'matter')}.</div>\n      ${calendlyUrl ? `<a href=\\\"${escapeHtml(calendlyUrl)}\\\" style=\\\"display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;\\\">Schedule your kickoff call</a>` : `<div style=\\\"color:#64748b;font-size:13px;\\\">(Scheduling link not configured yet)</div>`}\n      <div style=\\\"color:#64748b;font-size:13px;margin-top:20px;\\\">We'll be in touch soon with more details on what to expect.</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...data, recipient: data.client_email, subject, message, email_html: emailHtml } };"
+      },
+      "id": "9900aa00-0099-4000-a000-0000000016",
+      "name": "Build Kickoff Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        200
+      ],
+      "notes": "CALENDLY_KICKOFF_EVENT_URL is your firm's scheduling link for the kickoff-meeting event type — reads from 'Parse Folder Creation Response' by name so this runs independent of how many subfolders were created."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "new-client-kickoff",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "9900aa00-0099-4000-a000-0000000017",
+      "name": "Check Compliance Before Kickoff Email",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        200
+      ],
+      "notes": "Real communication to a real client -- opt-out and disclaimer handling here are genuinely load-bearing."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "9900aa00-0099-4000-a000-0000000018",
+      "name": "If Kickoff Email Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        200
+      ],
+      "notes": "Mirrors the guardrail's approved/opted-out result."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Kickoff Email').item.json.recipient }}",
+        "subject": "={{ $('Build Kickoff Email').item.json.subject }}",
+        "text": "={{ $('Build Kickoff Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Kickoff Email').item.json.email_html }}"
+      },
+      "id": "9900aa00-0099-4000-a000-0000000019",
+      "name": "Send Kickoff Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        120
+      ],
+      "notes": "Reaches back to 'Build Kickoff Email' by name, not $json, since the guardrail call in between replaces $json with its own response.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "9900aa00-0099-4000-a000-0000000020",
+      "name": "Skip — Client Opted Out",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        280
+      ],
+      "notes": "Rare for a brand-new signed client, but respected the same as any other opt-out check in this catalog."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ONBOARDING_FOLLOWUP_TASKS format: 'day_offset|task_name;day_offset|task_name', e.g.\n// '3|Send engagement letter;7|Confirm signed retainer received'. One item per task.\nconst data = $('Parse Folder Creation Response').item.json;\nconst tasks = ($vars.ONBOARDING_FOLLOWUP_TASKS || '3|Send engagement letter;7|Confirm signed retainer received')\n  .split(';').map(s => s.trim()).filter(Boolean)\n  .map(entry => {\n    const [offsetStr, taskName] = entry.split('|').map(s => (s || '').trim());\n    return { day_offset: Number(offsetStr) || 0, task_name: taskName || 'Follow up' };\n  });\n\nreturn tasks.map(t => ({ json: { ...data, task_name: t.task_name, due_date: new Date(Date.now() + t.day_offset * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) } }));"
+      },
+      "id": "9900aa00-0099-4000-a000-0000000021",
+      "name": "Build Onboarding Follow-Up Task List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        420
+      ],
+      "notes": "ONBOARDING_FOLLOWUP_TASKS controls which tasks get created and when — edit that n8n Variable, not the code."
+    },
+    {
+      "parameters": {
+        "url": "=https://{{ $vars.CLIO_BASE_URL.replace('https://', '') }}/api/v4/tasks.json",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { name: $json.task_name + ' — ' + $json.client_name, due_at: $json.due_date + 'T00:00:00.000Z', matter: { id: $json.matter_id }, status: 'pending', priority: 'normal' } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "9900aa00-0099-4000-a000-0000000022",
+      "name": "Create Clio Follow-Up Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        420
+      ],
+      "notes": "Runs once per configured task from the previous step, landing in your firm's normal Clio task queue.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.ONBOARDING_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Master Onboarding Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_name": "={{ $('Parse Folder Creation Response').item.json.client_name }}",
+            "matter_id": "={{ $('Parse Folder Creation Response').item.json.matter_id }}",
+            "practice_area": "={{ $('Parse Folder Creation Response').item.json.practice_area }}",
+            "drive_folder_url": "={{ $('Parse Folder Creation Response').item.json.drive_folder_url }}",
+            "folder_created": "={{ $('Parse Folder Creation Response').item.json.folder_created }}",
+            "onboarded_at": "={{ $('Parse Folder Creation Response').item.json.signed_at }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9900aa00-0099-4000-a000-0000000023",
+      "name": "Log Onboarding To Master Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        896,
+        640
+      ],
+      "notes": "One row per new client, regardless of whether the Drive folder or kickoff email succeeded -- runs in parallel with those branches, not gated behind them. folder_created lets you spot any manual follow-up needed."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "9900aa00-0099-4000-a000-0000000030",
+      "name": "Check Weekly Onboarding Rollup",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        900
+      ],
+      "notes": "Runs weekly, Monday 8am by default."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.ONBOARDING_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Master Onboarding Log",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "9900aa00-0099-4000-a000-0000000031",
+      "name": "Read Full Onboarding Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        224,
+        900
+      ],
+      "notes": "Reads every logged onboarding, regardless of week."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarizes the trailing week's onboarding volume and flags any Drive folder creation\n// failures for manual follow-up -- descriptive only.\nconst rows = $input.all().map(i => i.json);\nconst ONBOARDING_SUMMARY_LOOKBACK_DAYS = Number($vars.ONBOARDING_SUMMARY_LOOKBACK_DAYS || 7);\nconst cutoff = Date.now() - ONBOARDING_SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;\n\nconst recent = rows.filter(r => {\n  const onboardedAt = r.onboarded_at ? new Date(r.onboarded_at).getTime() : null;\n  return onboardedAt !== null && !Number.isNaN(onboardedAt) && onboardedAt >= cutoff;\n});\n\nconst failedFolders = recent.filter(r => String(r.folder_created).toLowerCase() !== 'true');\n\nreturn [{ json: {\n  total_onboarded: recent.length,\n  failed_folder_count: failedFolders.length,\n  failed_folders: failedFolders.map(r => ({ client_name: r.client_name, matter_id: r.matter_id })),\n} }];"
+      },
+      "id": "9900aa00-0099-4000-a000-0000000032",
+      "name": "Compute Weekly Onboarding Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        900
+      ],
+      "notes": "ONBOARDING_SUMMARY_LOOKBACK_DAYS controls the window — defaults to 7."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $json;\nconst subject = `Weekly onboarding summary — ${d.total_onboarded} new client(s)`;\nlet message;\nlet bodyHtml;\nif (d.total_onboarded === 0) {\n  message = 'No new clients onboarded this week.';\n  bodyHtml = `<div style=\\\"color:#334155;font-size:14px;\\\">No new clients onboarded this week.</div>`;\n} else {\n  const failedLines = d.failed_folders.length ? d.failed_folders.map(f => `- ${f.client_name} (matter ${f.matter_id})`).join('\\n') : '(none)';\n  message = `${d.total_onboarded} new client(s) onboarded this week. ${d.failed_folder_count} Drive folder creation failure(s):\\n${failedLines}`;\n  const failedRows = d.failed_folders.length\n    ? d.failed_folders.map(f => `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(f.client_name)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(f.matter_id)}</td></tr>`).join('')\n    : `<tr><td colspan=\\\"2\\\" style=\\\"padding:8px 10px;font-size:13px;color:#64748b;\\\">No folder creation failures this week.</td></tr>`;\n  bodyHtml = `\n    <div style=\\\"font-size:24px;font-weight:700;color:#0f172a;margin-bottom:12px;\\\">${d.total_onboarded} new client(s)</div>\n    <div style=\\\"font-size:13px;color:#64748b;margin-bottom:6px;\\\">Drive folder creation failures (need manual follow-up)</div>\n    <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\"><tbody>${failedRows}</tbody></table>`;\n}\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Weekly onboarding summary</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${d.total_onboarded} new client(s)</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.FIRM_EMAIL, subject, message, email_html: emailHtml } };"
+      },
+      "id": "9900aa00-0099-4000-a000-0000000033",
+      "name": "Build Weekly Onboarding Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        900
+      ],
+      "notes": "Explicitly sends a 'no new clients' message rather than a blank digest when nothing came in this week."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $json.email_html }}"
+      },
+      "id": "9900aa00-0099-4000-a000-0000000034",
+      "name": "Send Weekly Onboarding Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        896,
+        900
+      ],
+      "notes": "Internal, firm-wide summary — no guardrail wrap needed, matching this catalog's other weekly rollups.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "active": false,
+  "pinData": {
+    "When Client Marked Signed": [
+      {
+        "json": {
+          "headers": {},
+          "params": {},
+          "query": {},
+          "body": {
+            "client_name": "Jordan Blake",
+            "client_email": "jordan.blake@example.com",
+            "matter_id": "3001",
+            "practice_area": "Family Law",
+            "attorney_name": "Alex Rivera",
+            "attorney_email": "alex.rivera@smithlaw.com"
+          },
+          "webhookUrl": "https://your-n8n.example.com/webhook/client-signed",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "Create Matter Drive Folder": [
+      {
+        "json": {
+          "id": "1AbCdEfGhIjKlMnOpQrStUvWxYz",
+          "name": "Jordan Blake — 3001"
+        }
+      }
+    ],
+    "Read Full Onboarding Log": [
+      {
+        "json": {
+          "client_name": "Jordan Blake",
+          "matter_id": "3001",
+          "practice_area": "Family Law",
+          "drive_folder_url": "https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+          "folder_created": "true",
+          "onboarded_at": "2026-09-08T00:00:00.000Z"
+        }
+      },
+      {
+        "json": {
+          "client_name": "Casey Nguyen",
+          "matter_id": "3002",
+          "practice_area": "Estate Planning",
+          "drive_folder_url": "",
+          "folder_created": "false",
+          "onboarded_at": "2026-09-09T00:00:00.000Z"
+        }
+      }
+    ]
+  },
+  "settings": {},
+  "nodeGroups": [],
+  "staticData": null,
+  "connections": {
+    "When Client Marked Signed": {
+      "main": [
+        [
+          {
+            "node": "Parse Signed Client Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Signed Client Data": {
+      "main": [
+        [
+          {
+            "node": "Create Matter Drive Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Matter Drive Folder": {
+      "main": [
+        [
+          {
+            "node": "Parse Folder Creation Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Folder Creation Response": {
+      "main": [
+        [
+          {
+            "node": "Build Subfolder List",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Kickoff Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Onboarding Follow-Up Task List",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Onboarding To Master Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Subfolder List": {
+      "main": [
+        [
+          {
+            "node": "Create Drive Subfolder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Kickoff Email": {
+      "main": [
+        [
+          {
+            "node": "Check Compliance Before Kickoff Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Compliance Before Kickoff Email": {
+      "main": [
+        [
+          {
+            "node": "If Kickoff Email Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Kickoff Email Approved": {
+      "main": [
+        [
+          {
+            "node": "Send Kickoff Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Client Opted Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Onboarding Follow-Up Task List": {
+      "main": [
+        [
+          {
+            "node": "Create Clio Follow-Up Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Weekly Onboarding Rollup": {
+      "main": [
+        [
+          {
+            "node": "Read Full Onboarding Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Full Onboarding Log": {
+      "main": [
+        [
+          {
+            "node": "Compute Weekly Onboarding Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Weekly Onboarding Summary": {
+      "main": [
+        [
+          {
+            "node": "Build Weekly Onboarding Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Weekly Onboarding Email": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Onboarding Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "description": "Fires when a client is marked signed. Creates a Drive matter folder with the firm's configured standard subfolders, sends a kickoff email with a Calendly scheduling link through the Bar-Compliance Guardrail, creates configured follow-up tasks in Clio, and logs the kickoff to a master onboarding sheet. Assumes the welcome-email day sequence is already handled by the Client Onboarding Sequence template (K7) -- scoped specifically to the Drive folder, Calendly link, and master log that template doesn't cover. Separately, a weekly rollup reports onboarding volume and flags Drive folder creation failures."
+}
