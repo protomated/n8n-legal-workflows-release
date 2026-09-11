@@ -39,6 +39,7 @@ In n8n, open your project and click the **Variables** tab, then add the followin
 | `FIRM_TWILIO_NUMBER` | Your Twilio number in E.164 format (e.g. `+15550001234`) — clients text replies to this number |
 | `FIRM_GOOGLE_REVIEW_URL` | Google Business Profile → Home → "Get more reviews" → copy the short URL (e.g. `https://g.page/r/YOUR_PLACE_ID/review`) |
 | `FIRM_FEEDBACK_URL` | Your private feedback form or contact page URL |
+| `REVIEW_REQUEST_DELAY_HOURS` *(optional)* | Overrides the 48-hour wait for testing (e.g. `0.02` for about a minute) — leave unset for the real 48-hour delay in production |
 | `GUARDRAIL_WORKFLOW_ID` | The numeric ID of the Bar-Compliance Guardrail workflow — find it in the n8n URL when you open NTC-33: `.../workflow/WORKFLOW_ID` |
 
 ---
@@ -143,7 +144,7 @@ The workflow ships with a pinned Clio `matter.updated` payload on the **When Mat
 3. Confirm `is_valid_closure = true` and the data parses correctly.
 4. Confirm the Set Up Review Request node outputs `send_at` (48 hours from now) and a well-formed `rating_sms`.
 
-> To test the full SMS delivery, change `send_at` in Set Up Review Request temporarily to `new Date(now.getTime() + 30_000).toISOString()` (30 seconds from now), run a live execution, and check that the text arrives on your phone. Reset to `MS_48H` before going live.
+> To test the full SMS delivery without waiting 48 hours, temporarily set the `REVIEW_REQUEST_DELAY_HOURS` n8n Variable to something small (e.g. `0.02` for about a minute), run a live execution, and check that the text arrives on your phone. Delete the variable (or set it back to `48`) before going live — leaving it unset defaults to the real 48-hour delay.
 
 **Negative test — guard node:**
 
