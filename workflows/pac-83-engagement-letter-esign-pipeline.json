@@ -1,0 +1,1552 @@
+{
+  "name": "Engagement Letter & E-Sign Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Engagement-Letter & E-Sign Pipeline\n\n### How it works\n\n1. Fires when a lead is marked qualified for an engagement letter (wire this to wherever your firm decides that -- an intake qualifier's hot-lead branch, or a manual staff action).\n2. Resolves the client's Clio contact (reuses an existing one by email, or creates a new one), then creates a DocuSign envelope from your firm's own engagement-letter template -- filling only the fields your template already defines, never drafting language.\n3. Sends the attorney a review email with an approve link. The envelope is NOT sent to the client yet -- it sits as a draft in DocuSign until the attorney approves.\n4. On approval, the envelope is transitioned from draft to sent -- DocuSign delivers it to the client directly.\n5. When DocuSign reports the envelope fully signed, this opens the Clio matter and notifies the firm.\n\n**This is field population only -- it never drafts engagement terms, and nothing reaches the client until an attorney explicitly approves it.** Nothing here touches legal work (ABA Op. 512).\n\n**This is a different deliverable from the Claude Desktop skill that drafts engagement letter text from unstructured notes** (shipped separately in the Starter Kit). This workflow assumes the letter's terms are already firm-approved in the DocuSign template -- it only fills structured fields, sends for signature, and opens the matter.\n\n### Setup steps\n\n- [ ] Build your firm's engagement letter as a DocuSign template with text tabs for the fields this fills (see deploy guide for the exact tab labels).\n- [ ] Configure a DocuSign OAuth2 credential and a Clio OAuth2 credential (reuse if already deployed).\n- [ ] Create a Google Sheet with an 'Engagement Pipeline' tab -- see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_FROM_EMAIL, FIRM_ATTORNEY_EMAIL, CLIO_BASE_URL, DOCUSIGN_AUTH_BASE_URL, ENGAGEMENT_LETTER_TEMPLATE_ID, ENGAGEMENT_LETTER_ROLE_NAME, ENGAGEMENT_PIPELINE_SHEET_ID, ENGAGEMENT_DECISION_WEBHOOK_URL.\n- [ ] Register a DocuSign Connect webhook pointed at this workflow's signature-completed URL (see deploy guide).\n- [ ] Activate the workflow.\n\n### Customization\n\nThe text tab list in 'Build Engagement Letter Envelope Request' must match your DocuSign template's own field labels exactly -- edit that list, not the surrounding logic, to match your actual template.",
+        "width": 560,
+        "height": 1080
+      },
+      "id": "8300aa00-0083-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -740,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Qualified lead intake, contact resolution, and draft envelope\n\nResolves the Clio contact and creates a DocuSign envelope as a draft -- filling firm-approved fields only, never sent to the client yet.",
+        "width": 1750,
+        "height": 280,
+        "color": 7
+      },
+      "id": "8300aa00-0083-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Attorney review request\n\nLogs the pending envelope and emails the attorney a review link -- nothing reaches the client until this is approved.",
+        "width": 900,
+        "height": 240,
+        "color": 7
+      },
+      "id": "8300aa00-0083-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Attorney approval — a second, independent branch\n\nOn approval, transitions the DocuSign envelope from draft to sent -- DocuSign delivers it to the client directly, this workflow never emails the client itself.",
+        "width": 1400,
+        "height": 260,
+        "color": 7
+      },
+      "id": "8300aa00-0083-4000-a000-0000000004",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Signature completed — a third, independent branch\n\nDocuSign Connect notifies this workflow when the envelope is fully signed. Opens the Clio matter and notifies the firm.",
+        "width": 1400,
+        "height": 260,
+        "color": 7
+      },
+      "id": "8300aa00-0083-4000-a000-0000000005",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "engagement-letter-intake",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000010",
+      "name": "When Lead Qualified For Engagement",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Wire this to wherever your firm decides a lead is ready for an engagement letter -- an intake qualifier's hot-lead branch, or a manual staff action -- POSTing the lead's name, email, phone, practice area, case details, and assigned attorney."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nreturn { json: {\n  full_name: (body.full_name || body.name || '').trim(),\n  email: (body.email || '').trim(),\n  phone: (body.phone || '').trim(),\n  practice_area: (body.practice_area || '').trim(),\n  case_details: (body.case_details || '').trim(),\n  attorney_email: (body.attorney_email || '').trim(),\n  qualified_at: new Date().toISOString(),\n} };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000011",
+      "name": "Parse Qualified Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Field names match a generic 'lead qualified' payload -- adjust to match whatever actually triggers this (your intake qualifier, CRM, or a manual form)."
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/contacts.json",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,name,primary_email_address"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000012",
+      "name": "Fetch Existing Clio Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Searches Clio by email so a returning lead reuses their existing contact instead of creating a duplicate.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Parse Qualified Lead Data').item.json;\nconst results = ($json.data || []);\nconst existing = results.find(c => (c.primary_email_address || '').toLowerCase() === lead.email.toLowerCase());\nreturn { json: { ...lead, existing_contact_id: existing ? existing.id : null } };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000013",
+      "name": "Determine If Contact Exists",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Matches on exact email -- Clio's own query search can return near-matches, so this narrows to a real match before deciding whether to create a new contact."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_exists",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ !!$json.existing_contact_id }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000014",
+      "name": "If Contact Exists In Clio",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        0
+      ],
+      "notes": "Reuses an existing contact when found; creates a new one otherwise."
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/contacts.json",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { type: 'Person', name: $json.full_name, primary_email_address: $json.email, primary_phone_number: $json.phone } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000015",
+      "name": "Create New Clio Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        80
+      ],
+      "notes": "Only runs when no existing contact matched by email.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Determine If Contact Exists').item.json;\nreturn { json: { ...lead, contact_id: $json.data.id } };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000016",
+      "name": "Merge New Contact Id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        80
+      ],
+      "notes": "Reads lead data back from 'Determine If Contact Exists' by name, not $json, since the Clio create call in between replaces $json with its own response."
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $json;\nreturn { json: { ...lead, contact_id: lead.existing_contact_id } };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000017",
+      "name": "Use Existing Contact Id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -80
+      ],
+      "notes": "Only runs when an existing contact matched by email."
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.DOCUSIGN_AUTH_BASE_URL }}/oauth/userinfo",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000018",
+      "name": "Fetch DocuSign User Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1568,
+        0
+      ],
+      "notes": "Resolves the DocuSign account's base_uri and account_id -- both required to call the envelopes API. Same pattern already used in Form-Fill from Intake Data (OPS5).",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "3",
+          "name": "DocuSign account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builds the envelope-creation request for the firm's own engagement-letter DocuSign\n// template. Creates the envelope in 'created' (draft) status -- never 'sent' -- so nothing\n// reaches the client until an attorney explicitly approves it downstream. Tab labels must\n// match your DocuSign template's field labels exactly (case-sensitive) -- add or remove\n// entries here to match what your engagement letter template actually uses. This only fills\n// firm-approved fields -- it never drafts engagement terms.\nconst lead = $('Merge New Contact Id').itemMatching($itemIndex) ? $('Merge New Contact Id').itemMatching($itemIndex).json : $('Use Existing Contact Id').itemMatching($itemIndex).json;\nconst account = $json.accounts[0];\n\nconst templateRoles = [{\n  email: lead.email,\n  name: lead.full_name,\n  roleName: $vars.ENGAGEMENT_LETTER_ROLE_NAME,\n  tabs: {\n    textTabs: [\n      { tabLabel: 'full_name', value: lead.full_name },\n      { tabLabel: 'email', value: lead.email },\n      { tabLabel: 'phone', value: lead.phone || 'Not provided' },\n      { tabLabel: 'practice_area', value: lead.practice_area },\n      { tabLabel: 'case_details', value: lead.case_details || '' },\n      { tabLabel: 'date', value: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },\n    ],\n  },\n}];\n\nreturn { json: {\n  ...lead,\n  docusign_base_uri: account.base_uri,\n  docusign_account_id: account.account_id,\n  envelope_request: { templateId: $vars.ENGAGEMENT_LETTER_TEMPLATE_ID, status: 'created', templateRoles },\n} };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000019",
+      "name": "Build Engagement Letter Envelope Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        0
+      ],
+      "notes": "ENGAGEMENT_LETTER_TEMPLATE_ID and ENGAGEMENT_LETTER_ROLE_NAME point at your firm's own pre-approved DocuSign template -- this never generates new legal language, only fills its existing fields."
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.docusign_base_uri }}/restapi/v2.1/accounts/{{ $json.docusign_account_id }}/envelopes",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.envelope_request) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000020",
+      "name": "Post Draft Envelope To DocuSign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2016,
+        0
+      ],
+      "notes": "Creates the envelope as a draft only -- status stays 'created', nothing is sent to the client at this point.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "3",
+          "name": "DocuSign account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// DocuSign returns { envelopeId, status, ... } on success, or an 'errorCode' on failure.\nconst lead = $('Build Engagement Letter Envelope Request').item.json;\nconst res = $json;\nconst envelopeCreated = !!(res && res.envelopeId && !res.errorCode);\nreturn { json: {\n  ...lead,\n  envelope_id: envelopeCreated ? res.envelopeId : '',\n  envelope_created: envelopeCreated,\n  envelope_status_note: envelopeCreated ? `Draft envelope created: ${res.envelopeId}` : `Envelope creation failed (${res && res.errorCode ? res.errorCode : 'unknown error'})`,\n} };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000021",
+      "name": "Parse Envelope Creation Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        0
+      ],
+      "notes": "Reads the previous node's raw response, not $json passthrough -- surfaces a creation failure to the attorney instead of silently stopping."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nreturn { json: { ...d, review_id: 'ENGL-' + Date.now() } };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000022",
+      "name": "Assign Review Id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        0
+      ],
+      "notes": "Ties the tracking sheet row to this engagement letter and is the key the attorney's approval link comes back with."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.ENGAGEMENT_PIPELINE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Engagement Pipeline",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "review_id": "={{ $json.review_id }}",
+            "full_name": "={{ $json.full_name }}",
+            "email": "={{ $json.email }}",
+            "practice_area": "={{ $json.practice_area }}",
+            "contact_id": "={{ $json.contact_id }}",
+            "envelope_id": "={{ $json.envelope_id }}",
+            "status": "pending_review",
+            "created_at": "={{ $json.qualified_at }}",
+            "sent_at": "",
+            "signed_at": "",
+            "matter_id": ""
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000023",
+      "name": "Log Engagement For Review",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2688,
+        0
+      ],
+      "notes": "Every qualified lead gets a row here, even one whose envelope creation failed -- a visible record for the attorney to follow up on manually. Column headers must match exactly."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $('Assign Review Id').item.json;\nconst approveUrl = `${$vars.ENGAGEMENT_DECISION_WEBHOOK_URL}?review_id=${encodeURIComponent(d.review_id)}&action=approve`;\nconst subject = `Review engagement letter: ${d.full_name}`;\nconst message = `${d.full_name} (${d.practice_area}) has a draft engagement letter ready for your review.\\n\\n${d.envelope_status_note}\\n\\nOpen the draft in DocuSign to review it, then approve here to send it for signature:\\n${approveUrl}\\n\\nNothing is sent to the client until you approve.`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Ready for review</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${escapeHtml(d.full_name)}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"font-size:13px;color:#64748b;margin-bottom:16px;\\\">${escapeHtml(d.practice_area)} — ${escapeHtml(d.envelope_status_note)}</div>\n      <a href=\\\"${escapeHtml(approveUrl)}\\\" style=\\\"display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;\\\">Approve & send for signature</a>\n      <div style=\\\"color:#64748b;font-size:12px;margin-top:16px;\\\">Nothing is sent to the client until you approve. Review the draft in DocuSign first.</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { recipient: d.attorney_email || $vars.FIRM_ATTORNEY_EMAIL, subject, message, email_html: emailHtml } };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000024",
+      "name": "Build Attorney Review Request Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        0
+      ],
+      "notes": "ENGAGEMENT_DECISION_WEBHOOK_URL is this workflow's own Production URL for the approval webhook below -- set it after activating."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $json.email_html }}"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000025",
+      "name": "Send Attorney Review Request Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        0
+      ],
+      "notes": "Internal notification to firm staff, not the client -- no compliance guardrail wrap needed.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "engagement-letter-decision",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000030",
+      "name": "Attorney Decision Request Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        520
+      ],
+      "notes": "Receives the attorney's click on the approve link from the review email. This URL is what ENGAGEMENT_DECISION_WEBHOOK_URL should point to."
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $json.query || {};\nconst reviewId = (query.review_id || '').trim();\nconst action = (query.action || '').trim();\nreturn { json: { review_id: reviewId, action, is_valid: !!reviewId && action === 'approve' } };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000031",
+      "name": "Parse Attorney Decision Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        520
+      ],
+      "notes": "Only 'approve' is a supported action -- there is no reject/decline link because declining just means the attorney never clicks approve."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_valid",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_valid }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000032",
+      "name": "If Attorney Decision Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        520
+      ],
+      "notes": "Catches a malformed or tampered link before it touches the tracking sheet."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<h2>This link is invalid or expired.</h2>",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000033",
+      "name": "Respond Invalid Attorney Decision",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        640
+      ],
+      "notes": "Shown when the approval link is malformed or already used."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.ENGAGEMENT_PIPELINE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Engagement Pipeline",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000034",
+      "name": "Read Engagement Pipeline Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        672,
+        480
+      ],
+      "notes": "Reads the whole tracking sheet so the review_id can be matched by exact value -- more reliable in this environment than a computed row-number match."
+    },
+    {
+      "parameters": {
+        "jsCode": "const reviewId = $('Parse Attorney Decision Request').first().json.review_id;\nconst rows = $input.all().map(i => i.json);\nconst match = rows.find(r => String(r.review_id) === reviewId);\nreturn { json: {\n  review_id: reviewId,\n  is_found: !!match,\n  full_name: match ? match.full_name : '',\n  envelope_id: match ? match.envelope_id : '',\n  status: match ? match.status : '',\n} };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000035",
+      "name": "Find Matching Engagement Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        480
+      ],
+      "notes": "Matches the approval link's review_id against the tracking sheet by exact value -- more reliable than a computed row-number match in this environment."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_found",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_found }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000036",
+      "name": "If Engagement Row Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        480
+      ],
+      "notes": "Confirms the review_id from the link actually matches a logged engagement before touching DocuSign."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<h2>We couldn't find that engagement letter -- it may have already been approved or the link is malformed.</h2>",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000037",
+      "name": "Respond Engagement Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        600
+      ],
+      "notes": "Shown when the review_id in the link doesn't match any row -- the engagement may have already been approved."
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.DOCUSIGN_AUTH_BASE_URL }}/oauth/userinfo",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000038",
+      "name": "Fetch DocuSign Account Info For Send",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        400
+      ],
+      "notes": "This is a separate webhook execution from the draft-creation branch, so the account info is re-fetched here rather than reused.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "3",
+          "name": "DocuSign account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.accounts[0].base_uri }}/restapi/v2.1/accounts/{{ $json.accounts[0].account_id }}/envelopes/{{ $('Find Matching Engagement Row').item.json.envelope_id }}",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'sent' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000039",
+      "name": "Transition Envelope To Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1568,
+        400
+      ],
+      "notes": "This is the moment the client actually receives the engagement letter -- DocuSign emails it to them directly once this call succeeds. This workflow never emails the client itself.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "3",
+          "name": "DocuSign account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $('Find Matching Engagement Row').item.json;\nconst res = $json;\nconst sent = !(res && res.errorCode);\nreturn { json: { ...row, sent_ok: sent, send_error: res && res.errorCode ? res.errorCode : '' } };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000040",
+      "name": "Parse Envelope Send Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        400
+      ],
+      "notes": "Reads DocuSign's response to the send call so a failure is recorded and shown to the attorney instead of silently succeeding."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.ENGAGEMENT_PIPELINE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Engagement Pipeline",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "review_id": "={{ $json.review_id }}",
+            "status": "={{ $json.sent_ok ? 'sent' : 'send_failed' }}",
+            "sent_at": "={{ $json.sent_ok ? $now.toISO() : '' }}"
+          },
+          "matchingColumns": [
+            "review_id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000041",
+      "name": "Update Engagement Row As Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2016,
+        400
+      ],
+      "notes": "Marks the row sent (or send_failed) so the pipeline sheet always reflects the true DocuSign state."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ '<!DOCTYPE html><html><body style=\"font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center;\"><h2>' + ($json.sent_ok ? '✅ Sent for signature' : '⚠️ Could not send') + '</h2><p>' + $json.full_name + ($json.sent_ok ? ' has been sent the engagement letter for signature.' : ' -- DocuSign error: ' + $json.send_error) + '</p></body></html>' }}",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000042",
+      "name": "Respond Attorney Decision Confirmation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2240,
+        400
+      ],
+      "notes": "Confirms to the attorney whether the letter was actually sent to the client."
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "engagement-letter-signed",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000050",
+      "name": "DocuSign Signature Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        1000
+      ],
+      "notes": "Register this URL as a DocuSign Connect webhook (Admin > Connect) subscribed to the Envelope Completed event, so this fires automatically the moment the client finishes signing."
+    },
+    {
+      "parameters": {
+        "jsCode": "// DocuSign Connect's JSON payload shape (aggregate/JSON configuration): body.data.envelopeId\n// and body.event, e.g. 'envelope-completed'. Adjust field paths here if your Connect\n// configuration sends a different payload shape (legacy XML or Connect's classic format).\nconst body = $json.body || $json;\nconst envelopeId = body?.data?.envelopeId || body?.envelopeId || '';\nconst event = body?.event || body?.status || '';\nconst isSigned = /completed/i.test(event);\nreturn { json: { envelope_id: envelopeId, event, is_valid_signed: isSigned && !!envelopeId } };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000051",
+      "name": "Parse DocuSign Signature Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1000
+      ],
+      "notes": "Guard pattern for external webhooks -- DocuSign Connect fires on every envelope status change, not just completion, so non-completion events must be routed away rather than processed."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_signed",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_valid_signed }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000052",
+      "name": "If Envelope Fully Signed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        1000
+      ],
+      "notes": "Guard pattern for external webhooks -- routes anything other than a genuine completion event to the skip branch instead of processing it."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000053",
+      "name": "Skip — Not A Completion Event",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        672,
+        1140
+      ],
+      "notes": "Non-actionable DocuSign Connect events (viewed, delivered, declined, etc.) land here and are ignored."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000054",
+      "name": "Respond Skipped Event",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        1140
+      ],
+      "notes": "Acknowledges the webhook call to DocuSign so it doesn't retry a non-actionable event."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.ENGAGEMENT_PIPELINE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Engagement Pipeline",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000055",
+      "name": "Read Pipeline Log For Signature",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        672,
+        900
+      ],
+      "notes": "Reads the tracking sheet so the signed envelope can be matched back to its lead and Clio contact."
+    },
+    {
+      "parameters": {
+        "jsCode": "const envelopeId = $('Parse DocuSign Signature Event').first().json.envelope_id;\nconst rows = $input.all().map(i => i.json);\nconst match = rows.find(r => String(r.envelope_id) === envelopeId);\nreturn { json: {\n  envelope_id: envelopeId,\n  is_found: !!match,\n  review_id: match ? match.review_id : '',\n  full_name: match ? match.full_name : '',\n  email: match ? match.email : '',\n  practice_area: match ? match.practice_area : '',\n  contact_id: match ? match.contact_id : '',\n} };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000056",
+      "name": "Find Matching Signed Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        900
+      ],
+      "notes": "Matches the signed envelope_id against the tracking sheet by exact value."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_found",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.is_found }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000057",
+      "name": "If Signed Row Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        900
+      ],
+      "notes": "Confirms the signed envelope actually matches a row before opening a Clio matter."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000058",
+      "name": "Respond Signed Row Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        1040
+      ],
+      "notes": "Still returns 200 to DocuSign (so it doesn't retry indefinitely) even though no matching row was found -- check the sheet manually if this happens."
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.CLIO_BASE_URL }}/api/v4/matters.json",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { client: { id: Number($json.contact_id) }, practice_area: { name: $json.practice_area }, description: `Engagement letter signed -- ${$json.full_name}`, status: 'Open' } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8300aa00-0083-4000-a000-0000000059",
+      "name": "Create New Clio Matter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        800
+      ],
+      "notes": "Opens the matter under the same Clio contact resolved when the envelope was created -- reuses PAC-20's create-matter pattern.",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "1",
+          "name": "Clio API (OAuth2)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $('Find Matching Signed Row').item.json;\nconst res = $json;\nconst matterCreated = !!(res && res.data && res.data.id);\nreturn { json: { ...row, matter_id: matterCreated ? res.data.id : '', matter_created: matterCreated } };"
+      },
+      "id": "8300aa00-0083-4000-a000-0000000060",
+      "name": "Parse Matter Creation Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        800
+      ],
+      "notes": "Reads Clio's response to confirm the matter was actually created before marking the row complete."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.ENGAGEMENT_PIPELINE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Engagement Pipeline",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "review_id": "={{ $json.review_id }}",
+            "status": "={{ $json.matter_created ? 'signed_matter_opened' : 'signed_matter_failed' }}",
+            "signed_at": "={{ $now.toISO() }}",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "matchingColumns": [
+            "review_id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000061",
+      "name": "Update Engagement Row As Signed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1792,
+        800
+      ],
+      "notes": "Marks the row signed and records the new matter ID, so staff can see at a glance which clients are now active matters."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $vars.FIRM_ATTORNEY_EMAIL }}",
+        "subject": "={{ 'Engagement letter signed: ' + $json.full_name }}",
+        "text": "={{ $json.full_name + ' has signed their engagement letter. ' + ($json.matter_created ? ('A new matter has been opened in Clio (matter ID ' + $json.matter_id + ').') : 'The Clio matter could not be created automatically -- please open it manually.') }}",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000062",
+      "name": "Notify Staff Of Signed Engagement",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        800
+      ],
+      "notes": "Internal staff notification -- lets the team know the client relationship is now active and where to find the matter.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "id": "8300aa00-0083-4000-a000-0000000063",
+      "name": "Respond Signature Processed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2240,
+        800
+      ],
+      "notes": "Acknowledges the webhook call to DocuSign."
+    }
+  ],
+  "connections": {
+    "When Lead Qualified For Engagement": {
+      "main": [
+        [
+          {
+            "node": "Parse Qualified Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Qualified Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Fetch Existing Clio Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Existing Clio Contact": {
+      "main": [
+        [
+          {
+            "node": "Determine If Contact Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine If Contact Exists": {
+      "main": [
+        [
+          {
+            "node": "If Contact Exists In Clio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Contact Exists In Clio": {
+      "main": [
+        [
+          {
+            "node": "Use Existing Contact Id",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create New Clio Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Clio Contact": {
+      "main": [
+        [
+          {
+            "node": "Merge New Contact Id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge New Contact Id": {
+      "main": [
+        [
+          {
+            "node": "Fetch DocuSign User Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Existing Contact Id": {
+      "main": [
+        [
+          {
+            "node": "Fetch DocuSign User Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch DocuSign User Info": {
+      "main": [
+        [
+          {
+            "node": "Build Engagement Letter Envelope Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Engagement Letter Envelope Request": {
+      "main": [
+        [
+          {
+            "node": "Post Draft Envelope To DocuSign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Draft Envelope To DocuSign": {
+      "main": [
+        [
+          {
+            "node": "Parse Envelope Creation Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Envelope Creation Response": {
+      "main": [
+        [
+          {
+            "node": "Assign Review Id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assign Review Id": {
+      "main": [
+        [
+          {
+            "node": "Log Engagement For Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Engagement For Review": {
+      "main": [
+        [
+          {
+            "node": "Build Attorney Review Request Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Attorney Review Request Email": {
+      "main": [
+        [
+          {
+            "node": "Send Attorney Review Request Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attorney Decision Request Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Attorney Decision Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Attorney Decision Request": {
+      "main": [
+        [
+          {
+            "node": "If Attorney Decision Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Attorney Decision Valid": {
+      "main": [
+        [
+          {
+            "node": "Read Engagement Pipeline Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid Attorney Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Engagement Pipeline Log": {
+      "main": [
+        [
+          {
+            "node": "Find Matching Engagement Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Matching Engagement Row": {
+      "main": [
+        [
+          {
+            "node": "If Engagement Row Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Engagement Row Found": {
+      "main": [
+        [
+          {
+            "node": "Fetch DocuSign Account Info For Send",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Engagement Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch DocuSign Account Info For Send": {
+      "main": [
+        [
+          {
+            "node": "Transition Envelope To Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transition Envelope To Sent": {
+      "main": [
+        [
+          {
+            "node": "Parse Envelope Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Envelope Send Response": {
+      "main": [
+        [
+          {
+            "node": "Update Engagement Row As Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Engagement Row As Sent": {
+      "main": [
+        [
+          {
+            "node": "Respond Attorney Decision Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DocuSign Signature Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse DocuSign Signature Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse DocuSign Signature Event": {
+      "main": [
+        [
+          {
+            "node": "If Envelope Fully Signed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Envelope Fully Signed": {
+      "main": [
+        [
+          {
+            "node": "Read Pipeline Log For Signature",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — Not A Completion Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip — Not A Completion Event": {
+      "main": [
+        [
+          {
+            "node": "Respond Skipped Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Pipeline Log For Signature": {
+      "main": [
+        [
+          {
+            "node": "Find Matching Signed Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Matching Signed Row": {
+      "main": [
+        [
+          {
+            "node": "If Signed Row Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Signed Row Found": {
+      "main": [
+        [
+          {
+            "node": "Create New Clio Matter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Signed Row Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Clio Matter": {
+      "main": [
+        [
+          {
+            "node": "Parse Matter Creation Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Matter Creation Response": {
+      "main": [
+        [
+          {
+            "node": "Update Engagement Row As Signed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Engagement Row As Signed": {
+      "main": [
+        [
+          {
+            "node": "Notify Staff Of Signed Engagement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Staff Of Signed Engagement": {
+      "main": [
+        [
+          {
+            "node": "Respond Signature Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "When Lead Qualified For Engagement": [
+      {
+        "json": {
+          "headers": {},
+          "params": {},
+          "query": {},
+          "body": {
+            "full_name": "Jordan Casey",
+            "email": "jordan.casey@example.com",
+            "phone": "555-201-4488",
+            "practice_area": "Estate Planning",
+            "case_details": "Married couple, two minor children, needs a revocable living trust and pour-over will.",
+            "attorney_email": "attorney@example.com"
+          }
+        }
+      }
+    ],
+    "Attorney Decision Request Trigger": [
+      {
+        "json": {
+          "headers": {},
+          "params": {},
+          "query": {
+            "review_id": "ENGL-1700000000000",
+            "action": "approve"
+          },
+          "body": {}
+        }
+      }
+    ],
+    "DocuSign Signature Webhook": [
+      {
+        "json": {
+          "headers": {},
+          "params": {},
+          "query": {},
+          "body": {
+            "event": "envelope-completed",
+            "data": {
+              "envelopeId": "11111111-2222-3333-4444-555555555555"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}
