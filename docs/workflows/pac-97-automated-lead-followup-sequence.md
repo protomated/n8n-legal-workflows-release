@@ -26,7 +26,7 @@ Get value in under 15 minutes. Leads go quiet after the first inquiry because no
 - A Google account with Sheets access
 - An email account with SMTP access (for sending)
 - The same inbox's IMAP access (for detecting replies)
-- An inquiry form (JotForm, Typeform, Fluent Forms, or similar) that can POST to a webhook
+- An inquiry form (JotForm, Typeform, Fluent Forms, or similar) that can POST to a webhook — see `sample-jotform-template.json` in this pack for the exact field list to recreate
 
 ---
 
@@ -61,6 +61,7 @@ Copy the Sheet's ID from its URL — the long string between `/d/` and `/edit`.
 | `GUARDRAIL_WORKFLOW_ID` | The numeric ID of the Bar-Compliance Guardrail workflow |
 | `LEAD_FOLLOWUP_SHEET_ID` | The Google Sheet ID from Step 1 |
 | `FOLLOW_UP_STAGES` *(optional)* | Semicolon-separated `day_offset|stage_label` pairs — defaults to `1|day1;3|day3;7|day7` |
+| `FIRM_BOOKING_URL` *(optional)* | Your scheduling link (Calendly or similar) — adds a "Schedule a call" button to the acknowledgment and follow-up emails; omitted cleanly if not set |
 
 ---
 

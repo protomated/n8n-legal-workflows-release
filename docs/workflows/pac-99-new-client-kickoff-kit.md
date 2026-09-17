@@ -9,7 +9,7 @@ Get value in under 15 minutes. The moment a client is marked signed, this workfl
 
 ## Before you start: this is scoped to complement, not duplicate, the Client Onboarding Sequence (K7)
 
-**This assumes your welcome-email day sequence is already handled elsewhere.** If you haven't deployed the Client Onboarding Sequence template (`pac-64-client-onboarding-sequence.json`) yet, deploy that first — it already covers the Day 0/1/3/7 welcome, what-to-expect, and document-checklist emails. This kit is deliberately scoped to what that template doesn't do: the Drive matter folder, the Calendly kickoff link, and a master onboarding log.
+**This can run entirely on its own, or alongside the Client Onboarding Sequence template.** The immediate kickoff email here includes a short, practice-area-specific document checklist so this kit is fully self-contained as a standalone download. If you've also deployed the Client Onboarding Sequence (`pac-64-client-onboarding-sequence.json`), that template sends its own generic document-checklist email on Day 3 — **to avoid sending a client two different checklists, either turn off its Day-3 email or set its `FIRM_ONBOARDING_CHECKLIST` variable to something that doesn't overlap with this kit's immediate one.** Everything else — the Day 0/1/7 welcome, what-to-expect, and billing-explainer emails — is unique to that template and has no overlap with this kit.
 
 **This never touches legal work** (ABA Op. 512) — folder creation, scheduling links, and task creation are pure administrative setup.
 

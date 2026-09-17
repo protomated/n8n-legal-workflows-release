@@ -1,0 +1,687 @@
+{
+  "name": "Immigration Case Status Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Immigration Case Status Tracker\n\n### How it works\n\n1. Runs daily. Polls USCIS's public case-status lookup for every open case in your tracker sheet.\n2. When a case's status changes, sends the client a plain-English update (no legal interpretation of what it means) through the compliance guardrail.\n3. Separately, watches for cases with a Request for Evidence: tracks the response deadline (87 days by default) and alerts staff as it approaches -- this alert goes to staff, never the client.\n4. Every case's row is updated with the latest status regardless of whether an email was sent, so the sheet is always the source of truth.\n\n**Verify the USCIS endpoint and status-parsing pattern before deploying.** USCIS's public case-status page is not a documented, versioned API -- it's an HTML page not intended for programmatic use, and its markup can change without notice. Test a real receipt number live and confirm `USCIS_STATUS_REGEX` still extracts the status correctly before turning this on for real clients.\n\n**This only ever reports status -- it never interprets what a status means for the case, predicts outcomes, or gives legal advice** (ABA Op. 512).\n\n### Setup steps\n\n- [ ] Create the case tracker sheet (see deploy guide for exact columns).\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) if not already deployed.\n- [ ] Verify the USCIS case-status endpoint and regex live with a real receipt number (see deploy guide) -- do this BEFORE activating.\n- [ ] Set the required n8n Variables: FIRM_NAME, FIRM_FROM_EMAIL, FIRM_ATTORNEY_EMAIL, GUARDRAIL_WORKFLOW_ID, IMMIGRATION_CASE_TRACKER_SHEET_ID.\n- [ ] Optionally tune RFE_RESPONSE_WINDOW_DAYS, RFE_ALERT_LEAD_DAYS, USCIS_CASE_STATUS_ENDPOINT, USCIS_STATUS_REGEX.\n- [ ] Activate the workflow.",
+        "width": 640,
+        "height": 900
+      },
+      "id": "1010aa00-0101-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -740,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Poll status and update clients\n\nChecks every open case's status daily and emails the client only when something actually changed -- through the compliance guardrail, since this reaches a client.",
+        "width": 2200,
+        "height": 300,
+        "color": 7
+      },
+      "id": "1010aa00-0101-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## RFE deadline alerts — a second, independent branch\n\nAlerts staff (never the client) as a Request for Evidence response deadline approaches.",
+        "width": 1200,
+        "height": 260,
+        "color": 7
+      },
+      "id": "1010aa00-0101-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "1010aa00-0101-4000-a000-0000000010",
+      "name": "Poll USCIS Case Status Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Runs once a day (default 6am) -- matches the 24-hour poll interval this template is designed around. Polling more often provides no benefit since USCIS itself doesn't update case status faster than daily."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.IMMIGRATION_CASE_TRACKER_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Case Tracker",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "1010aa00-0101-4000-a000-0000000011",
+      "name": "Read Case Tracker Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "One row per case your firm is tracking. Feeds both the daily status poll and the RFE deadline check below."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_open",
+              "operator": {
+                "type": "boolean",
+                "operation": "notEqual",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.closed === true || $json.closed === 'TRUE' }}",
+              "rightValue": true
+            }
+          ]
+        }
+      },
+      "id": "1010aa00-0101-4000-a000-0000000012",
+      "name": "Filter To Active Cases",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        -160
+      ],
+      "notes": "Skips cases already marked closed/approved/denied in the tracker sheet -- no reason to keep polling USCIS for a resolved case."
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.USCIS_CASE_STATUS_ENDPOINT || 'https://egov.uscis.gov/casestatus/mycasestatus.do' }}",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "appReceiptNum",
+              "value": "={{ $json.receipt_number }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "1010aa00-0101-4000-a000-0000000013",
+      "name": "Poll USCIS Case Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        -160
+      ],
+      "notes": "USCIS's public case-status lookup -- no API key, but also not a documented/versioned API. Verify this endpoint still responds this way with a real receipt number before relying on it."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// USCIS's case-status page is HTML, not JSON -- this pulls the status text out with a\n// configurable regex since the exact markup isn't a stable, documented contract. Verify\n// USCIS_STATUS_REGEX still matches live before trusting this in production.\nconst row = $('Filter To Active Cases').item.json;\nconst res = $json;\nconst html = typeof res === 'string' ? res : (res.data || res.body || JSON.stringify(res));\nconst pattern = new RegExp($vars.USCIS_STATUS_REGEX || '<h1[^>]*>([^<]+)</h1>', 'i');\nconst match = String(html).match(pattern);\nconst statusText = match ? match[1].replace(/\\s+/g, ' ').trim() : '';\nreturn { json: { ...row, current_status_text: statusText, lookup_succeeded: !!statusText } };"
+      },
+      "id": "1010aa00-0101-4000-a000-0000000014",
+      "name": "Parse USCIS Status From Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -160
+      ],
+      "notes": "Reads the case row by name, not $json, since the USCIS response in between replaces $json with the raw page text."
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $json;\nconst RFE_WINDOW_DAYS = Number($vars.RFE_RESPONSE_WINDOW_DAYS) || 87;\nconst now = new Date();\nconst nowIso = now.toISOString();\n\nif (!row.lookup_succeeded) {\n  return { json: { ...row, status_changed: false, lookup_failed: true, last_checked_at: nowIso } };\n}\n\nconst newStatus = row.current_status_text;\nconst statusChanged = !!newStatus && newStatus !== row.last_status;\nconst isRfe = /request\\s+for\\s+evidence|\\bRFE\\b/i.test(newStatus);\nconst alreadyTrackingRfe = !!row.rfe_issued_at && row.rfe_resolved !== true && row.rfe_resolved !== 'TRUE';\nconst rfeNewlyIssued = isRfe && !alreadyTrackingRfe;\nconst rfeNowResolved = !isRfe && alreadyTrackingRfe;\n\nreturn { json: {\n  ...row,\n  status_changed: statusChanged,\n  lookup_failed: false,\n  new_status: newStatus,\n  rfe_issued_at: rfeNewlyIssued ? nowIso : (row.rfe_issued_at || ''),\n  rfe_deadline: rfeNewlyIssued ? new Date(now.getTime() + RFE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) : (row.rfe_deadline || ''),\n  rfe_resolved: rfeNowResolved ? true : (row.rfe_resolved === true || row.rfe_resolved === 'TRUE'),\n  last_checked_at: nowIso,\n} };"
+      },
+      "id": "1010aa00-0101-4000-a000-0000000015",
+      "name": "Determine Status Change And RFE",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -160
+      ],
+      "notes": "Compares the freshly polled status against the sheet's last known status, and separately tracks whether this case just entered or exited a Request for Evidence."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_changed",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.status_changed }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "1010aa00-0101-4000-a000-0000000016",
+      "name": "If Status Changed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        -160
+      ],
+      "notes": "Only emails the client when the status actually moved -- a daily poll finding no change stays silent."
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst row = $json;\nconst FIRM_NAME = $vars.FIRM_NAME || 'our firm';\nconst subject = `Update on your immigration case (${row.receipt_number})`;\nconst message = `Hi ${row.client_name}, there's an update on your case (receipt number ${row.receipt_number}).\\n\\nCurrent USCIS status: ${row.new_status}\\n\\nThis is a status report only -- it isn't legal advice about what this means for your case. If you have questions about what this update means, please reach out to ${FIRM_NAME} directly.`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Case update</div>\n      <div style=\\\"color:#ffffff;font-size:18px;font-weight:700;margin-top:4px;\\\">Receipt ${escapeHtml(row.receipt_number)}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"font-size:16px;font-weight:600;color:#0f172a;margin-bottom:12px;\\\">${escapeHtml(row.new_status)}</div>\n      <div style=\\\"color:#64748b;font-size:13px;line-height:1.6;\\\">This is a status report only -- it isn't legal advice about what this means for your case. If you have questions, please reach out to ${escapeHtml(FIRM_NAME)} directly.</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...row, recipient: row.client_email, subject, message, email_html: emailHtml } };"
+      },
+      "id": "1010aa00-0101-4000-a000-0000000017",
+      "name": "Build Plain-English Client Status Update Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        -260
+      ],
+      "notes": "Reports the status only -- deliberately does not interpret, predict, or advise on what the status means for the case (ABA Op. 512)."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $vars.GUARDRAIL_WORKFLOW_ID }}",
+          "mode": "expression"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "channel": "email",
+            "recipient": "={{ $json.recipient }}",
+            "message": "={{ $json.message }}",
+            "template_id": "immigration-case-status-update",
+            "matter_id": "={{ $json.matter_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1010aa00-0101-4000-a000-0000000018",
+      "name": "Check Compliance Before Status Update",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1792,
+        -260
+      ],
+      "notes": "Every client-facing update goes through the Bar-Compliance Guardrail for opt-out and disclaimer handling before it sends."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_approved",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "1010aa00-0101-4000-a000-0000000019",
+      "name": "If Update Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2016,
+        -260
+      ],
+      "notes": "The guardrail blocks the send if this client has opted out."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $('Build Plain-English Client Status Update Email').item.json.recipient }}",
+        "subject": "={{ $('Build Plain-English Client Status Update Email').item.json.subject }}",
+        "text": "={{ $('Build Plain-English Client Status Update Email').item.json.message }}",
+        "options": {},
+        "emailFormat": "html",
+        "html": "={{ $('Build Plain-English Client Status Update Email').item.json.email_html }}"
+      },
+      "id": "1010aa00-0101-4000-a000-0000000020",
+      "name": "Send Client Status Update Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        -320
+      ],
+      "notes": "Reads the email content by name, not $json, since the guardrail call in between replaces $json with its own response.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "1010aa00-0101-4000-a000-0000000021",
+      "name": "Skip Update Email For Opted-Out Client",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        -200
+      ],
+      "notes": "This client has opted out -- the status is still recorded in the tracker, they just don't get emailed."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.IMMIGRATION_CASE_TRACKER_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Case Tracker",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "receipt_number": "={{ $('Determine Status Change And RFE').item.json.receipt_number }}",
+            "client_name": "={{ $('Determine Status Change And RFE').item.json.client_name }}",
+            "client_email": "={{ $('Determine Status Change And RFE').item.json.client_email }}",
+            "case_type": "={{ $('Determine Status Change And RFE').item.json.case_type }}",
+            "matter_id": "={{ $('Determine Status Change And RFE').item.json.matter_id }}",
+            "last_status": "={{ $('Determine Status Change And RFE').item.json.status_changed ? $('Determine Status Change And RFE').item.json.new_status : $('Determine Status Change And RFE').item.json.last_status }}",
+            "last_status_at": "={{ $('Determine Status Change And RFE').item.json.status_changed ? $('Determine Status Change And RFE').item.json.last_checked_at : $('Determine Status Change And RFE').item.json.last_status_at }}",
+            "rfe_issued_at": "={{ $('Determine Status Change And RFE').item.json.rfe_issued_at }}",
+            "rfe_deadline": "={{ $('Determine Status Change And RFE').item.json.rfe_deadline }}",
+            "rfe_resolved": "={{ $('Determine Status Change And RFE').item.json.rfe_resolved }}",
+            "closed": "={{ $('Determine Status Change And RFE').item.json.closed || false }}",
+            "last_checked_at": "={{ $('Determine Status Change And RFE').item.json.last_checked_at }}"
+          },
+          "matchingColumns": [
+            "receipt_number"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "1010aa00-0101-4000-a000-0000000022",
+      "name": "Update Case Tracker Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2464,
+        -160
+      ],
+      "notes": "Always updates the row with the latest poll result, whether or not the status changed or the client email actually sent -- the sheet stays the source of truth either way."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ALERT_LEAD_DAYS = Number($vars.RFE_ALERT_LEAD_DAYS) || 10;\nconst today = new Date();\nconst rows = $input.all().map(i => i.json);\n\nreturn rows.filter(r => {\n  if (!r.rfe_deadline) return false;\n  if (r.rfe_resolved === true || r.rfe_resolved === 'TRUE') return false;\n  const deadline = new Date(r.rfe_deadline + 'T00:00:00Z');\n  const daysUntil = Math.ceil((deadline - today) / (24 * 60 * 60 * 1000));\n  return daysUntil <= ALERT_LEAD_DAYS;\n}).map(r => {\n  const deadline = new Date(r.rfe_deadline + 'T00:00:00Z');\n  const daysUntil = Math.ceil((deadline - today) / (24 * 60 * 60 * 1000));\n  return { json: { ...r, days_until_deadline: daysUntil } };\n});"
+      },
+      "id": "1010aa00-0101-4000-a000-0000000030",
+      "name": "Compute Approaching RFE Deadlines",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        320
+      ],
+      "notes": "Flags any unresolved RFE whose 87-day (default) response deadline is within RFE_ALERT_LEAD_DAYS -- a missed RFE deadline can mean automatic denial, so this never silently skips one."
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $json;\nconst subject = `RFE deadline approaching: ${row.client_name} (${row.receipt_number})`;\nconst urgency = row.days_until_deadline <= 0 ? 'PAST DUE' : `${row.days_until_deadline} day(s) remaining`;\nconst message = `${row.client_name}'s Request for Evidence response is due ${row.rfe_deadline} (${urgency}).\\n\\nReceipt number: ${row.receipt_number}\\nCase type: ${row.case_type || 'not set'}\\n\\nThis is a deadline tracked from the tracker sheet's own dates -- confirm the actual RFE letter's stated deadline before relying on this alone.`;\nreturn { json: { recipient: $vars.FIRM_ATTORNEY_EMAIL, subject, message } };"
+      },
+      "id": "1010aa00-0101-4000-a000-0000000031",
+      "name": "Build RFE Deadline Alert Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        320
+      ],
+      "notes": "Internal staff alert only -- an RFE deadline is calculated from a fixed response window, never a legal determination of the actual filing deadline."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "1010aa00-0101-4000-a000-0000000032",
+      "name": "Send RFE Deadline Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        896,
+        320
+      ],
+      "notes": "Goes to firm staff, not the client -- no compliance guardrail wrap needed.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Poll USCIS Case Status Daily": {
+      "main": [
+        [
+          {
+            "node": "Read Case Tracker Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Case Tracker Sheet": {
+      "main": [
+        [
+          {
+            "node": "Filter To Active Cases",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Compute Approaching RFE Deadlines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter To Active Cases": {
+      "main": [
+        [
+          {
+            "node": "Poll USCIS Case Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll USCIS Case Status": {
+      "main": [
+        [
+          {
+            "node": "Parse USCIS Status From Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse USCIS Status From Response": {
+      "main": [
+        [
+          {
+            "node": "Determine Status Change And RFE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Status Change And RFE": {
+      "main": [
+        [
+          {
+            "node": "If Status Changed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Status Changed": {
+      "main": [
+        [
+          {
+            "node": "Build Plain-English Client Status Update Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Case Tracker Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Plain-English Client Status Update Email": {
+      "main": [
+        [
+          {
+            "node": "Check Compliance Before Status Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Compliance Before Status Update": {
+      "main": [
+        [
+          {
+            "node": "If Update Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Update Approved": {
+      "main": [
+        [
+          {
+            "node": "Send Client Status Update Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Update Email For Opted-Out Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Client Status Update Email": {
+      "main": [
+        [
+          {
+            "node": "Update Case Tracker Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Update Email For Opted-Out Client": {
+      "main": [
+        [
+          {
+            "node": "Update Case Tracker Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Approaching RFE Deadlines": {
+      "main": [
+        [
+          {
+            "node": "Build RFE Deadline Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build RFE Deadline Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Send RFE Deadline Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Read Case Tracker Sheet": [
+      {
+        "json": {
+          "receipt_number": "MSC2190012345",
+          "client_name": "Amara Chen",
+          "client_email": "amara.chen@example.com",
+          "case_type": "I-485",
+          "matter_id": "MATTER-2001",
+          "last_status": "Case Was Received",
+          "last_status_at": "2026-08-01T00:00:00.000Z",
+          "rfe_issued_at": "",
+          "rfe_deadline": "",
+          "rfe_resolved": false,
+          "closed": false,
+          "last_checked_at": "2026-09-16T06:00:00.000Z"
+        }
+      },
+      {
+        "json": {
+          "receipt_number": "MSC2190067890",
+          "client_name": "Diego Ramirez",
+          "client_email": "diego.ramirez@example.com",
+          "case_type": "I-130",
+          "matter_id": "MATTER-2002",
+          "last_status": "Request For Evidence Was Sent",
+          "last_status_at": "2026-07-01T00:00:00.000Z",
+          "rfe_issued_at": "2026-07-01T00:00:00.000Z",
+          "rfe_deadline": "2026-09-26",
+          "rfe_resolved": false,
+          "closed": false,
+          "last_checked_at": "2026-09-16T06:00:00.000Z"
+        }
+      },
+      {
+        "json": {
+          "receipt_number": "MSC2190011111",
+          "client_name": "Priya Nair",
+          "client_email": "priya.nair@example.com",
+          "case_type": "N-400",
+          "matter_id": "MATTER-2003",
+          "last_status": "Case Was Approved",
+          "last_status_at": "2026-06-01T00:00:00.000Z",
+          "rfe_issued_at": "",
+          "rfe_deadline": "",
+          "rfe_resolved": false,
+          "closed": true,
+          "last_checked_at": "2026-06-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "Poll USCIS Case Status": [
+      {
+        "json": {
+          "data": "<html><body><div class=\"current-status-sec\"><h1>Case Was Approved</h1><p>On September 16, 2026, we approved this case.</p></div></body></html>"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}
