@@ -110,11 +110,11 @@
               "id": "c_open",
               "operator": {
                 "type": "boolean",
-                "operation": "notEqual",
+                "operation": "true",
                 "singleValue": true
               },
-              "leftValue": "={{ $json.closed === true || $json.closed === 'TRUE' }}",
-              "rightValue": true
+              "leftValue": "={{ $json.closed !== true && $json.closed !== 'TRUE' }}",
+              "rightValue": ""
             }
           ]
         }
