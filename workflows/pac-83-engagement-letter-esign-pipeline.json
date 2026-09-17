@@ -737,7 +737,7 @@
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ '<!DOCTYPE html><html><body style=\"font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center;\"><h2>' + ($json.sent_ok ? '✅ Sent for signature' : '⚠️ Could not send') + '</h2><p>' + $json.full_name + ($json.sent_ok ? ' has been sent the engagement letter for signature.' : ' -- DocuSign error: ' + $json.send_error) + '</p></body></html>' }}",
+        "responseBody": "={{ '<!DOCTYPE html><html><body style=\"font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center;\"><h2>' + ($('Parse Envelope Send Response').item.json.sent_ok ? '✅ Sent for signature' : '⚠️ Could not send') + '</h2><p>' + $('Parse Envelope Send Response').item.json.full_name + ($('Parse Envelope Send Response').item.json.sent_ok ? ' has been sent the engagement letter for signature.' : ' -- DocuSign error: ' + $('Parse Envelope Send Response').item.json.send_error) + '</p></body></html>' }}",
         "options": {}
       },
       "id": "8300aa00-0083-4000-a000-0000000042",
@@ -748,7 +748,7 @@
         2240,
         400
       ],
-      "notes": "Confirms to the attorney whether the letter was actually sent to the client."
+      "notes": "Confirms to the attorney whether the letter was actually sent to the client. Reads from 'Parse Envelope Send Response' by name, not $json, since the Google Sheets write in between replaces $json with only the columns it wrote."
     },
     {
       "parameters": {
@@ -1028,8 +1028,8 @@
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
         "toEmail": "={{ $vars.FIRM_ATTORNEY_EMAIL }}",
-        "subject": "={{ 'Engagement letter signed: ' + $json.full_name }}",
-        "text": "={{ $json.full_name + ' has signed their engagement letter. ' + ($json.matter_created ? ('A new matter has been opened in Clio (matter ID ' + $json.matter_id + ').') : 'The Clio matter could not be created automatically -- please open it manually.') }}",
+        "subject": "={{ 'Engagement letter signed: ' + $('Parse Matter Creation Response').item.json.full_name }}",
+        "text": "={{ $('Parse Matter Creation Response').item.json.full_name + ' has signed their engagement letter. ' + ($('Parse Matter Creation Response').item.json.matter_created ? ('A new matter has been opened in Clio (matter ID ' + $('Parse Matter Creation Response').item.json.matter_id + ').') : 'The Clio matter could not be created automatically -- please open it manually.') }}",
         "options": {}
       },
       "id": "8300aa00-0083-4000-a000-0000000062",
@@ -1040,7 +1040,7 @@
         2016,
         800
       ],
-      "notes": "Internal staff notification -- lets the team know the client relationship is now active and where to find the matter.",
+      "notes": "Internal staff notification -- lets the team know the client relationship is now active and where to find the matter. Reads from 'Parse Matter Creation Response' by name, not $json, since the Google Sheets write in between replaces $json with only the columns it wrote.",
       "credentials": {
         "smtp": {
           "id": "1",
