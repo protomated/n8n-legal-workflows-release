@@ -47,8 +47,9 @@ Get value in under 15 minutes. A trust account going negative is a serious compl
 | `CLIO_BASE_URL` | Same value as your other Clio-integrated templates |
 | `FIRM_NAME` | Your law firm name |
 | `FIRM_FROM_EMAIL` | Sender address for all alert emails |
-| `FIRM_TRUST_ACCOUNTING_EMAIL` | Who receives daily balance alerts and the weekly rollup |
-| `FIRM_PARTNER_EMAIL` | Who receives immediate negative-balance escalations |
+| `FIRM_EMAIL` | General fallback recipient — used if `FIRM_TRUST_ACCOUNTING_EMAIL` or `FIRM_PARTNER_EMAIL` below isn't set |
+| `FIRM_TRUST_ACCOUNTING_EMAIL` *(optional)* | Who receives daily balance alerts and the weekly rollup — falls back to `FIRM_EMAIL` if not set |
+| `FIRM_PARTNER_EMAIL` *(optional)* | Who receives immediate negative-balance escalations — falls back to `FIRM_EMAIL` if not set |
 | `GUARDRAIL_WORKFLOW_ID` | The numeric ID of the Bar-Compliance Guardrail workflow |
 | `LOW_BALANCE_THRESHOLD` *(optional)* | Balance below which a matter is flagged "low" — defaults to 500 |
 | `ALERT_COOLDOWN_DAYS` *(optional)* | How many days before an unresolved balance re-alerts — defaults to 7 |
