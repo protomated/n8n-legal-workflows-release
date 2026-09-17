@@ -1,0 +1,782 @@
+{
+  "name": "Workflow Backup to GitHub",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Workflow/Asset Backup to GitHub\n\n### How it works\n\n1. Runs daily. Pulls every workflow currently in this n8n instance via its own REST API, and pulls every n8n Variable (your firm's configuration values).\n2. Commits each workflow as its own JSON file, and all variables as one file, to a GitHub repository you control -- updating the existing file if one is already there, so history/version tracking comes for free through Git.\n3. If anything fails to back up, staff get an alert email naming exactly what failed -- a silent backup failure is worse than no backup at all.\n\n**Credentials are never backed up.** n8n's own API already strips credential secrets from workflow exports, and this workflow does not touch the credentials API at all -- only workflow definitions and variables.\n\n### Setup steps\n\n- [ ] Create a private GitHub repository to hold the backups (e.g. `yourfirm/n8n-backups`).\n- [ ] Generate an n8n API key from this same instance's Settings -> n8n API, and configure the 'n8n API (self)' credential with header name `X-N8N-API-KEY`.\n- [ ] Generate a GitHub Personal Access Token with `Contents: write` scope on the backup repo, and configure the 'GitHub API (backup PAT)' credential with header name `Authorization` and value `Bearer <token>`.\n- [ ] Set the required n8n Variables: N8N_INSTANCE_URL, GITHUB_BACKUP_REPO, FIRM_STAFF_EMAIL.\n- [ ] Activate the workflow.",
+        "width": 620,
+        "height": 640
+      },
+      "id": "5600aa00-0056-4000-a000-0000000001",
+      "name": "📖 Workflow doc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -740,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Back up every workflow\n\nFetches every workflow from this n8n instance and commits each one as its own JSON file to GitHub, updating in place if it already exists.",
+        "width": 1780,
+        "height": 300,
+        "color": 7
+      },
+      "id": "5600aa00-0056-4000-a000-0000000002",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Back up variables (configuration)\n\nFetches every n8n Variable and commits them all as a single JSON file to GitHub -- never the credentials themselves.",
+        "width": 1420,
+        "height": 300,
+        "color": 7
+      },
+      "id": "5600aa00-0056-4000-a000-0000000003",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Summary and failure alert\n\nWaits for both backup branches to finish, then alerts staff only if something actually failed.",
+        "width": 1420,
+        "height": 260,
+        "color": 7
+      },
+      "id": "5600aa00-0056-4000-a000-0000000004",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "5600aa00-0056-4000-a000-0000000010",
+      "name": "Run Daily Backup",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Runs once a day, off-hours by default (3am). Adjust the cron expression to whatever time suits your firm."
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.N8N_INSTANCE_URL }}/api/v1/workflows",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "250"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5600aa00-0056-4000-a000-0000000011",
+      "name": "Fetch All Workflows From n8n",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        -160
+      ],
+      "notes": "Calls this SAME n8n instance's own REST API -- N8N_INSTANCE_URL should point right back at this instance. A limit of 250 covers a solo/small firm's full workflow count in one page; raise it if you have more.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "n8n API (self)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "5600aa00-0056-4000-a000-0000000012",
+      "name": "Split Out Workflow List",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -160
+      ],
+      "notes": "One item per workflow currently in this n8n instance."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const wf = $json;\nconst safeName = (wf.name || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');\nconst path = `workflows/${safeName}-${wf.id}.json`;\nconst content = Buffer.from(JSON.stringify(wf, null, 2), 'utf-8').toString('base64');\nconst message = `Backup: ${wf.name} (${new Date().toISOString()})`;\nreturn { json: {\n  path, content, message,\n  owner_repo: $vars.GITHUB_BACKUP_REPO,\n  branch: $vars.GITHUB_BACKUP_BRANCH || 'main',\n  workflow_name: wf.name,\n  workflow_id: wf.id,\n} };"
+      },
+      "id": "5600aa00-0056-4000-a000-0000000013",
+      "name": "Build GitHub File For Workflow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -160
+      ],
+      "notes": "One backup file per workflow, named from the workflow's own name and ID so it stays stable even if you rename it later."
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner_repo }}/contents/{{ $json.path }}",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ref",
+              "value": "={{ $json.branch }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5600aa00-0056-4000-a000-0000000014",
+      "name": "Fetch Existing Workflow File SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        -160
+      ],
+      "notes": "GitHub requires the current file's SHA to update it in place -- a 404 here just means this workflow has never been backed up before.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2",
+          "name": "GitHub API (backup PAT)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const build = $('Build GitHub File For Workflow').item.json;\nconst res = $json;\nconst sha = (res && res.sha) ? res.sha : null;\nreturn { json: { ...build, existing_sha: sha } };"
+      },
+      "id": "5600aa00-0056-4000-a000-0000000015",
+      "name": "Parse Existing Workflow File SHA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -160
+      ],
+      "notes": "Reads the file-build data by name, not $json, since the GitHub lookup in between replaces $json with its own response."
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner_repo }}/contents/{{ $json.path }}",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json.message, content: $json.content, branch: $json.branch, ...($json.existing_sha ? { sha: $json.existing_sha } : {}) }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5600aa00-0056-4000-a000-0000000016",
+      "name": "Commit Workflow To GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        -160
+      ],
+      "notes": "Creates the file if it's new, or updates it in place (via the SHA) if it already exists -- Git keeps the version history either way.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2",
+          "name": "GitHub API (backup PAT)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const build = $('Parse Existing Workflow File SHA').item.json;\nconst res = $json;\nconst success = !!(res && res.content && res.content.sha);\nreturn { json: {\n  workflow_name: build.workflow_name,\n  workflow_id: build.workflow_id,\n  success,\n  error: success ? '' : (res && res.message ? res.message : 'Unknown GitHub error'),\n} };"
+      },
+      "id": "5600aa00-0056-4000-a000-0000000017",
+      "name": "Parse Workflow Commit Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        -160
+      ],
+      "notes": "Reads the pre-commit data by name, not $json, since the GitHub commit call in between replaces $json with its own response. A failed commit here is surfaced, never silently ignored."
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "workflow_results",
+        "options": {}
+      },
+      "id": "5600aa00-0056-4000-a000-0000000018",
+      "name": "Aggregate All Workflow Backup Results",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        -160
+      ],
+      "notes": "Collects every workflow's backup result into one list so the summary step can check for any failures across the whole set."
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.N8N_INSTANCE_URL }}/api/v1/variables",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "250"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5600aa00-0056-4000-a000-0000000020",
+      "name": "Fetch All n8n Variables",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        240
+      ],
+      "notes": "Backs up your firm's configuration values (the same N8N Variables used across every template in this catalog) -- never credentials, which n8n's API does not expose.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "n8n API (self)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const body = $input.first().json;\nconst variables = body.data || [];\nconst path = 'variables-backup.json';\nconst content = Buffer.from(JSON.stringify(variables, null, 2), 'utf-8').toString('base64');\nconst message = `Backup: n8n variables (${new Date().toISOString()})`;\nreturn { json: {\n  path, content, message,\n  owner_repo: $vars.GITHUB_BACKUP_REPO,\n  branch: $vars.GITHUB_BACKUP_BRANCH || 'main',\n  variable_count: variables.length,\n} };"
+      },
+      "id": "5600aa00-0056-4000-a000-0000000021",
+      "name": "Build GitHub File For Variables",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        240
+      ],
+      "notes": "All variables go in a single file -- there's no reason to split configuration values across multiple files the way workflows are split."
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner_repo }}/contents/{{ $json.path }}",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ref",
+              "value": "={{ $json.branch }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5600aa00-0056-4000-a000-0000000022",
+      "name": "Fetch Existing Variables File SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        240
+      ],
+      "notes": "A 404 here just means variables have never been backed up before.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2",
+          "name": "GitHub API (backup PAT)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const build = $('Build GitHub File For Variables').item.json;\nconst res = $json;\nconst sha = (res && res.sha) ? res.sha : null;\nreturn { json: { ...build, existing_sha: sha } };"
+      },
+      "id": "5600aa00-0056-4000-a000-0000000023",
+      "name": "Parse Existing Variables File SHA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        240
+      ],
+      "notes": "Reads the file-build data by name, not $json, since the GitHub lookup in between replaces $json with its own response."
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner_repo }}/contents/{{ $json.path }}",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json.message, content: $json.content, branch: $json.branch, ...($json.existing_sha ? { sha: $json.existing_sha } : {}) }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5600aa00-0056-4000-a000-0000000024",
+      "name": "Commit Variables To GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        240
+      ],
+      "notes": "Creates the file if it's new, or updates it in place if it already exists.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2",
+          "name": "GitHub API (backup PAT)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const build = $('Parse Existing Variables File SHA').item.json;\nconst res = $json;\nconst success = !!(res && res.content && res.content.sha);\nreturn { json: {\n  variable_count: build.variable_count,\n  success,\n  error: success ? '' : (res && res.message ? res.message : 'Unknown GitHub error'),\n} };"
+      },
+      "id": "5600aa00-0056-4000-a000-0000000025",
+      "name": "Parse Variables Commit Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        240
+      ],
+      "notes": "Reads the pre-commit data by name, not $json, since the GitHub commit call in between replaces $json with its own response."
+    },
+    {
+      "parameters": {
+        "numberInputs": 2
+      },
+      "id": "5600aa00-0056-4000-a000-0000000030",
+      "name": "Merge Workflow And Variable Backup Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        2016,
+        40
+      ],
+      "notes": "Waits for both the workflow backups and the variables backup to finish before building one combined summary."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all().map(i => i.json);\nconst workflowResultsItem = items.find(i => Array.isArray(i.workflow_results));\nconst variablesItem = items.find(i => 'variable_count' in i);\nconst workflowResults = workflowResultsItem ? workflowResultsItem.workflow_results : [];\nconst failedWorkflows = workflowResults.filter(r => !r.success);\nconst variablesOk = variablesItem ? !!variablesItem.success : false;\nconst anyFailed = failedWorkflows.length > 0 || !variablesOk;\nreturn { json: {\n  total_workflows: workflowResults.length,\n  failed_workflow_count: failedWorkflows.length,\n  failed_workflow_names: failedWorkflows.map(r => r.workflow_name).join(', '),\n  variables_backed_up: variablesItem ? variablesItem.variable_count : 0,\n  variables_ok: variablesOk,\n  variables_error: variablesItem ? variablesItem.error : '',\n  any_failed: anyFailed,\n  backed_up_at: new Date().toISOString(),\n} };"
+      },
+      "id": "5600aa00-0056-4000-a000-0000000031",
+      "name": "Build Backup Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        40
+      ],
+      "notes": "One combined view of the whole backup run -- how many workflows succeeded, whether variables backed up, and exactly what failed if anything did."
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_failed",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.any_failed }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "5600aa00-0056-4000-a000-0000000032",
+      "name": "If Any Backup Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2464,
+        40
+      ],
+      "notes": "Staff only get emailed when something actually needs attention -- a fully successful daily backup stays silent."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst subject = 'n8n backup: one or more items failed';\nconst lines = [];\nif (d.failed_workflow_count > 0) lines.push(`${d.failed_workflow_count} workflow(s) failed to back up: ${d.failed_workflow_names}`);\nif (!d.variables_ok) lines.push(`Variables backup failed: ${d.variables_error}`);\nconst message = `${lines.join('\\n')}\\n\\n${d.total_workflows - d.failed_workflow_count} of ${d.total_workflows} workflows backed up successfully.\\n\\nCheck the GitHub backup repository and the n8n execution log for details.`;\nreturn { json: { recipient: $vars.FIRM_STAFF_EMAIL, subject, message } };"
+      },
+      "id": "5600aa00-0056-4000-a000-0000000033",
+      "name": "Build Backup Failure Alert Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        -40
+      ],
+      "notes": "Names exactly what failed -- staff shouldn't have to dig through execution logs to find out."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "5600aa00-0056-4000-a000-0000000034",
+      "name": "Send Backup Failure Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        -40
+      ],
+      "notes": "Internal alert only -- a failed backup is an ops problem for staff, not something a client ever sees.",
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Email account (SMTP)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "5600aa00-0056-4000-a000-0000000035",
+      "name": "Skip — No Backup Failures",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        120
+      ],
+      "notes": "Everything backed up cleanly -- nothing further to do today."
+    }
+  ],
+  "connections": {
+    "Run Daily Backup": {
+      "main": [
+        [
+          {
+            "node": "Fetch All Workflows From n8n",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch All n8n Variables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Workflows From n8n": {
+      "main": [
+        [
+          {
+            "node": "Split Out Workflow List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Workflow List": {
+      "main": [
+        [
+          {
+            "node": "Build GitHub File For Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build GitHub File For Workflow": {
+      "main": [
+        [
+          {
+            "node": "Fetch Existing Workflow File SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Existing Workflow File SHA": {
+      "main": [
+        [
+          {
+            "node": "Parse Existing Workflow File SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Existing Workflow File SHA": {
+      "main": [
+        [
+          {
+            "node": "Commit Workflow To GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Commit Workflow To GitHub": {
+      "main": [
+        [
+          {
+            "node": "Parse Workflow Commit Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Workflow Commit Result": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Workflow Backup Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Workflow Backup Results": {
+      "main": [
+        [
+          {
+            "node": "Merge Workflow And Variable Backup Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All n8n Variables": {
+      "main": [
+        [
+          {
+            "node": "Build GitHub File For Variables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build GitHub File For Variables": {
+      "main": [
+        [
+          {
+            "node": "Fetch Existing Variables File SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Existing Variables File SHA": {
+      "main": [
+        [
+          {
+            "node": "Parse Existing Variables File SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Existing Variables File SHA": {
+      "main": [
+        [
+          {
+            "node": "Commit Variables To GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Commit Variables To GitHub": {
+      "main": [
+        [
+          {
+            "node": "Parse Variables Commit Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Variables Commit Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Workflow And Variable Backup Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Workflow And Variable Backup Results": {
+      "main": [
+        [
+          {
+            "node": "Build Backup Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Backup Summary": {
+      "main": [
+        [
+          {
+            "node": "If Any Backup Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Any Backup Failed": {
+      "main": [
+        [
+          {
+            "node": "Build Backup Failure Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip — No Backup Failures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Backup Failure Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Send Backup Failure Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Run Daily Backup": [
+      {
+        "json": {}
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}
