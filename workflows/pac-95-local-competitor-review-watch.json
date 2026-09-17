@@ -4,50 +4,130 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Local Competitor & Review Watch\n\n### How it works\n\n1. Runs weekly. For each configured competitor (by their Google Place ID), pulls their current Google review count and rating.\n2. Compares against last week's snapshot to compute review velocity (new reviews since last check) and rating movement.\n3. Drafts a plain-English digest of what moved, compliance-checked and logged through the Bar-Compliance Guardrail, and emails it.\n4. Logs this week's snapshot so next week has something to compare against.\n5. Separately, a monthly rollup reports the longer-horizon trend per competitor, not just week-over-week movement.\n\n**This tracks review count and rating only -- it does not track search ranking or ad presence.** Both require paid SEO/ad-intelligence APIs (SEMrush, Ahrefs, SpyFu, or similar) that aren't free or generically available the way Google's Places API is. If ranking/ad tracking matters to a firm, that's the Done-for-You upsell path, not something this free template can honestly promise.\n\n**This monitors public review data only -- it never contacts a competitor, scrapes anything beyond Google's own public API, or makes any legal or ethical judgment about a competitor's marketing.** Nothing here touches legal work (ABA Op. 512).\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first -- the weekly digest goes through it per this template's ticket.\n- [ ] Set up a Google Cloud project with the Places API enabled and billing configured (Google provides a monthly free credit that covers light use of this template).\n- [ ] Find each competitor's Google Place ID -- search 'Google Place ID Finder' or use the Places API's Find Place request with the competitor's business name.\n- [ ] Create a Google Sheet with a 'Competitor Watch Log' tab -- see the deploy guide for exact columns.\n- [ ] Configure Google Sheets OAuth2 and SMTP credentials.\n- [ ] Set the required n8n Variables: GOOGLE_PLACES_API_KEY, COMPETITOR_PLACE_IDS, FIRM_NAME, FIRM_FROM_EMAIL, FIRM_MARKETING_EMAIL, GUARDRAIL_WORKFLOW_ID, COMPETITOR_LOG_SHEET_ID.\n- [ ] Activate the workflow.\n\n### Customization\n\nCOMPETITOR_PLACE_IDS is the entire tracking surface -- edit that n8n Variable, not the code, to add or remove competitors.",
-        "width": 540,
-        "height": 1040
+        "content": "## Local Competitor & Review Watch\n\n### How it works\n\n1. Scheduled weekly trigger checks if competitor watch is configured and fetches competitor place details via Google Places API.\n2. Processes and compares current competitor review data with previous snapshots, generating a digest.\n3. Sends a compliance-checked email with the competitor watch digest, or an opt-out notice if needed.\n4. Separately, a monthly scheduled trigger computes competitor trends over the last month using logged data.\n5. Builds and sends a monthly competitor trend email based on analyzed monthly data.\n\n### Setup steps\n\n- [ ] Configure Google Places API credentials for place details HTTP requests.\n- [ ] Set up Google Sheets credentials with access to competitor snapshots and logs.\n- [ ] Configure email sending credentials for competitor watch and trend emails.\n- [ ] Adjust scheduling settings for weekly and monthly triggers as desired.\n\n### Customization\n\nModify competitor place IDs in the 'Build Competitor List' node to track different competitors. Customize email content in 'Build Competitor Watch Email' and 'Build Monthly Trend Email' nodes to reflect desired messaging.",
+        "width": 480,
+        "height": 896
       },
-      "id": "9500aa00-0095-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -740,
-        -460
-      ]
+        -608,
+        -272
+      ],
+      "id": "ee01dbe6-fd65-4de9-a3ed-c7c29b2867b3",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Check competitors, compare, and draft the weekly digest\n\nPulls each configured competitor's current review count and rating, compares against last week's snapshot, and drafts a plain-English digest of what moved.",
-        "width": 1750,
-        "height": 280,
+        "content": "## Weekly trigger and conditions\n\nInitial weekly schedule trigger that checks if competitors are configured and branches processing accordingly.",
+        "width": 416,
+        "height": 320,
         "color": 7
       },
-      "id": "9500aa00-0095-4000-a000-0000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -160
+      ],
+      "id": "bb26cee3-6542-4a18-b639-642f8089f5bf",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Monthly competitor trend rollup — a second, independent branch\n\nReports the longer-horizon trend per competitor over the trailing month, not just week-over-week movement.",
-        "width": 1150,
-        "height": 240,
+        "content": "## Fetch and parse competitor data\n\nBuilds the list of competitor place IDs, fetches their details from Google Places API, and parses the API response.",
+        "width": 640,
+        "height": 304,
         "color": 7
       },
-      "id": "9500aa00-0095-4000-a000-0000000003",
-      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -208
+      ],
+      "id": "ac8df76d-988b-4c3f-9e7d-4e5ebe4566e3",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Compare competitor snapshots\n\nReads the last competitor snapshot from Google Sheets and computes movement compared to the latest fetched data.",
+        "width": 416,
+        "height": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -240
+      ],
+      "id": "92ce373d-cc18-4223-880e-1d9bf5ba0aa0",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Generate and send weekly digest\n\nDrafts the weekly competitor watch digest or a setup-needed notice and builds the watch email for compliance checks and sending.",
+        "width": 1984,
+        "height": 512,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        128
+      ],
+      "id": "ed58db1c-239f-4c09-9c71-d9129bea5303",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Email sending and opt-out handling\n\nSends the competitor watch email or skips sending if the recipient opted out.",
+        "width": 240,
+        "height": 512,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        -272
+      ],
+      "id": "345f1642-446c-47c5-b115-37818bcfee8b",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Log competitor snapshots\n\nLogs the latest competitor snapshot data to Google Sheets for record keeping and later monthly trend calculation.",
+        "width": 240,
+        "height": 400,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        272
+      ],
+      "id": "522c9ddd-c3da-40e8-bf36-11ba3ef5809d",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Monthly trend analysis and email\n\nSeparate monthly scheduled workflow segment reading full competitor logs, computing monthly trends, building and sending monthly trend emails.",
+        "width": 1088,
+        "height": 304,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        620
-      ]
+        672
+      ],
+      "id": "788ce8b5-6837-4d13-bf41-f9ac9bbe8d73",
+      "name": "Sticky Note7"
     },
     {
       "parameters": {
@@ -61,7 +141,7 @@
         }
       },
       "id": "9500aa00-0095-4000-a000-0000000010",
-      "name": "Check Competitor Watch Weekly",
+      "name": "Every Monday at 8am Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -96,7 +176,7 @@
         "options": {}
       },
       "id": "9500aa00-0095-4000-a000-0000000011",
-      "name": "If Competitors Configured",
+      "name": "If Competitors Are Configured",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -110,7 +190,7 @@
         "jsCode": "// COMPETITOR_PLACE_IDS format: 'Firm Name|place_id;Firm Name Two|place_id2'.\nconst entries = ($vars.COMPETITOR_PLACE_IDS || '').split(';').map(s => s.trim()).filter(Boolean);\nreturn entries.map(entry => {\n  const [firm_name, place_id] = entry.split('|').map(s => (s || '').trim());\n  return { json: { firm_name: firm_name || place_id, place_id } };\n});"
       },
       "id": "9500aa00-0095-4000-a000-0000000012",
-      "name": "Build Competitor List",
+      "name": "Build Competitor Place ID List",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -150,7 +230,7 @@
         }
       },
       "id": "9500aa00-0095-4000-a000-0000000013",
-      "name": "Fetch Competitor Place Details",
+      "name": "Fetch Google Place Details",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -161,10 +241,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Places API returns { status, result: { name, rating, user_ratings_total } } on success, or a\n// non-OK status (e.g. INVALID_REQUEST, NOT_FOUND) if the place_id is wrong -- surfaced as a\n// skipped competitor rather than crashing the whole run.\nconst context = $('Build Competitor List').item.json;\nconst res = $json;\nif (!res || res.status !== 'OK' || !res.result) {\n  return { json: { firm_name: context.firm_name, place_id: context.place_id, fetch_failed: true, fetch_error: res && res.status ? res.status : 'unknown error' } };\n}\n\nreturn { json: {\n  firm_name: context.firm_name,\n  place_id: context.place_id,\n  rating: Number(res.result.rating) || 0,\n  review_count: Number(res.result.user_ratings_total) || 0,\n  fetch_failed: false,\n} };"
+        "jsCode": "// Places API returns { status, result: { name, rating, user_ratings_total } } on success, or a\n// non-OK status (e.g. INVALID_REQUEST, NOT_FOUND) if the place_id is wrong -- surfaced as a\n// skipped competitor rather than crashing the whole run.\nconst context = $('Build Competitor Place ID List').item.json;\nconst res = $json;\nif (!res || res.status !== 'OK' || !res.result) {\n  return { json: { firm_name: context.firm_name, place_id: context.place_id, fetch_failed: true, fetch_error: res && res.status ? res.status : 'unknown error' } };\n}\n\nreturn { json: {\n  firm_name: context.firm_name,\n  place_id: context.place_id,\n  rating: Number(res.result.rating) || 0,\n  review_count: Number(res.result.user_ratings_total) || 0,\n  fetch_failed: false,\n} };"
       },
       "id": "9500aa00-0095-4000-a000-0000000014",
-      "name": "Parse Place Details Response",
+      "name": "Parse Place Details API Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -189,7 +269,7 @@
         "options": {}
       },
       "id": "9500aa00-0095-4000-a000-0000000015",
-      "name": "Read Last Competitor Snapshot",
+      "name": "Read Latest Competitor Snapshot",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
@@ -200,10 +280,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Compares this week's fetched review count/rating against each competitor's own most recent\n// prior snapshot (by place_id), computing velocity since last check. A competitor with no prior\n// snapshot (first time tracked) reports zero movement rather than a misleading comparison.\nconst current = $('Parse Place Details Response').all().map(i => i.json);\nconst priorRows = $input.all().map(i => i.json);\n\nconst priorByPlaceId = {};\nfor (const row of priorRows) {\n  const existing = priorByPlaceId[row.place_id];\n  if (!existing || new Date(row.checked_at) > new Date(existing.checked_at)) {\n    priorByPlaceId[row.place_id] = row;\n  }\n}\n\nreturn current.map(c => {\n  if (c.fetch_failed) return { json: c };\n  const prior = priorByPlaceId[c.place_id];\n  const review_count_change = prior ? c.review_count - Number(prior.review_count || 0) : 0;\n  const rating_change = prior ? Number((c.rating - Number(prior.rating || 0)).toFixed(2)) : 0;\n  return { json: { ...c, review_count_change, rating_change, has_prior_snapshot: !!prior } };\n});"
+        "jsCode": "// Compares this week's fetched review count/rating against each competitor's own most recent\n// prior snapshot (by place_id), computing velocity since last check. A competitor with no prior\n// snapshot (first time tracked) reports zero movement rather than a misleading comparison.\nconst current = $('Parse Place Details API Response').all().map(i => i.json);\nconst priorRows = $input.all().map(i => i.json);\n\nconst priorByPlaceId = {};\nfor (const row of priorRows) {\n  const existing = priorByPlaceId[row.place_id];\n  if (!existing || new Date(row.checked_at) > new Date(existing.checked_at)) {\n    priorByPlaceId[row.place_id] = row;\n  }\n}\n\nreturn current.map(c => {\n  if (c.fetch_failed) return { json: c };\n  const prior = priorByPlaceId[c.place_id];\n  const review_count_change = prior ? c.review_count - Number(prior.review_count || 0) : 0;\n  const rating_change = prior ? Number((c.rating - Number(prior.rating || 0)).toFixed(2)) : 0;\n  return { json: { ...c, review_count_change, rating_change, has_prior_snapshot: !!prior } };\n});"
       },
       "id": "9500aa00-0095-4000-a000-0000000016",
-      "name": "Compute Competitor Movement",
+      "name": "Calculate Weekly Competitor Movement",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -217,12 +297,12 @@
         "jsCode": "// Drafts a plain-English digest of what moved this week. Runs once for the whole batch.\nconst competitors = $input.all().map(i => i.json);\n\nconst lines = competitors.map(c => {\n  if (c.fetch_failed) return `- ${c.firm_name}: could not fetch this week (${c.fetch_error})`;\n  const reviewNote = c.has_prior_snapshot\n    ? (c.review_count_change > 0 ? `+${c.review_count_change} new review(s)` : 'no new reviews')\n    : 'first time tracked, no comparison yet';\n  const ratingNote = c.has_prior_snapshot && c.rating_change !== 0\n    ? ` — rating ${c.rating_change > 0 ? 'up' : 'down'} ${Math.abs(c.rating_change)}`\n    : '';\n  return `- ${c.firm_name}: ${c.rating.toFixed(1)}★ (${c.review_count} total) — ${reviewNote}${ratingNote}`;\n}).join('\\n');\n\nreturn [{ json: {\n  competitor_count: competitors.length,\n  digest_content: lines || '(no competitors configured)',\n  competitors,\n} }];"
       },
       "id": "9500aa00-0095-4000-a000-0000000017",
-      "name": "Draft Competitor Watch Digest",
+      "name": "Draft Weekly Competitor Digest",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1568,
-        -80
+        240
       ],
       "notes": "One line per competitor, noting review velocity and rating movement since last check."
     },
@@ -231,12 +311,12 @@
         "jsCode": "return [{ json: { competitor_count: 0, digest_content: '(no competitors configured yet -- set COMPETITOR_PLACE_IDS in n8n Variables)', competitors: [] } }];"
       },
       "id": "9500aa00-0095-4000-a000-0000000018",
-      "name": "Draft Setup-Needed Notice",
+      "name": "Draft Setup Needed Notification",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         448,
-        160
+        480
       ],
       "notes": "Fires only when COMPETITOR_PLACE_IDS is empty."
     },
@@ -245,12 +325,12 @@
         "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $json;\nconst subject = `Weekly competitor watch — ${d.competitor_count} tracked`;\nconst message = `This week's competitor review/rating movement:\\n\\n${d.digest_content}\\n\\nTracks Google review count and rating only -- not search ranking or ad presence.`;\n\nconst rows = (d.competitors && d.competitors.length)\n  ? d.competitors.map(c => c.fetch_failed\n      ? `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(c.firm_name)}</td><td colspan=\\\"2\\\" style=\\\"padding:8px 10px;font-size:13px;color:#dc2626;border-bottom:1px solid #e2e8f0;\\\">Could not fetch (${escapeHtml(c.fetch_error)})</td></tr>`\n      : `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(c.firm_name)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;\\\">${c.rating.toFixed(1)}★ (${c.review_count})</td><td style=\\\"padding:8px 10px;font-size:13px;border-bottom:1px solid #e2e8f0;color:${c.review_count_change > 0 ? '#16a34a' : '#64748b'};\\\">${c.has_prior_snapshot ? (c.review_count_change > 0 ? '+' + c.review_count_change : '—') : 'new'}</td></tr>`\n    ).join('')\n  : `<tr><td colspan=\\\"3\\\" style=\\\"padding:8px 10px;font-size:13px;color:#64748b;\\\">No competitors configured yet.</td></tr>`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Weekly competitor watch</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${d.competitor_count} competitor(s) tracked</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\">\n        <thead><tr><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Firm</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Rating (reviews)</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Change</th></tr></thead>\n        <tbody>${rows}</tbody>\n      </table>\n      <div style=\\\"color:#64748b;font-size:12px;margin-top:16px;\\\">Tracks Google review count and rating only — not search ranking or ad presence.</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.FIRM_MARKETING_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
       },
       "id": "9500aa00-0095-4000-a000-0000000019",
-      "name": "Build Competitor Watch Email",
+      "name": "Build Weekly Competitor Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1792,
-        0
+        320
       ],
       "notes": "Falls back the recipient to FIRM_FROM_EMAIL if FIRM_MARKETING_EMAIL isn't set."
     },
@@ -278,12 +358,12 @@
         "options": {}
       },
       "id": "9500aa00-0095-4000-a000-0000000020",
-      "name": "Check Compliance Before Digest Email",
+      "name": "Execute Compliance Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
         2016,
-        0
+        320
       ],
       "notes": "This template inherits OPS1 per its ticket, even though the recipient is firm staff, not a client -- the opt-out/disclaimer checks are effectively inert here, but the audit log entry is still valuable for consistency."
     },
@@ -318,22 +398,22 @@
       "typeVersion": 2.3,
       "position": [
         2240,
-        0
+        320
       ],
       "notes": "Mirrors the guardrail's approved/opted-out result."
     },
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $('Build Competitor Watch Email').item.json.recipient }}",
-        "subject": "={{ $('Build Competitor Watch Email').item.json.subject }}",
-        "text": "={{ $('Build Competitor Watch Email').item.json.message }}",
+        "toEmail": "={{ $('Build Weekly Competitor Email').item.json.recipient }}",
+        "subject": "={{ $('Build Weekly Competitor Email').item.json.subject }}",
+        "text": "={{ $('Build Weekly Competitor Email').item.json.message }}",
         "options": {},
         "emailFormat": "html",
-        "html": "={{ $('Build Competitor Watch Email').item.json.email_html }}"
+        "html": "={{ $('Build Weekly Competitor Email').item.json.email_html }}"
       },
       "id": "9500aa00-0095-4000-a000-0000000022",
-      "name": "Send Competitor Watch Email",
+      "name": "Send Weekly Competitor Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
@@ -351,7 +431,7 @@
     {
       "parameters": {},
       "id": "9500aa00-0095-4000-a000-0000000023",
-      "name": "Skip — Recipient Opted Out",
+      "name": "Skip Email - Recipient Opted Out",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -388,12 +468,12 @@
         "options": {}
       },
       "id": "9500aa00-0095-4000-a000-0000000024",
-      "name": "Log Competitor Snapshots",
+      "name": "Append Competitor Snapshots To Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        1568,
-        260
+        2464,
+        512
       ],
       "notes": "One row per competitor, every week -- this is the history next week's comparison reads from. Runs in parallel with the digest email, not gated behind it."
     },
@@ -409,12 +489,12 @@
         }
       },
       "id": "9500aa00-0095-4000-a000-0000000030",
-      "name": "Check Monthly Competitor Trend",
+      "name": "Monthly Competitor Trend Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
         0,
-        760
+        816
       ],
       "notes": "Runs monthly, the 1st at 8am by default."
     },
@@ -434,12 +514,12 @@
         "options": {}
       },
       "id": "9500aa00-0095-4000-a000-0000000031",
-      "name": "Read Full Competitor Log",
+      "name": "Read Full Competitor Log Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
         224,
-        760
+        816
       ],
       "notes": "Reads every logged snapshot for every competitor, across all weeks."
     },
@@ -448,12 +528,12 @@
         "jsCode": "// For each competitor, compares their oldest snapshot in the trailing month against their\n// most recent one, giving a longer-horizon trend rather than just week-over-week movement.\nconst rows = $input.all().map(i => i.json);\nconst TREND_LOOKBACK_DAYS = Number($vars.COMPETITOR_TREND_LOOKBACK_DAYS || 30);\nconst cutoff = Date.now() - TREND_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;\n\nconst byPlaceId = {};\nfor (const row of rows) {\n  const checkedAt = new Date(row.checked_at).getTime();\n  if (Number.isNaN(checkedAt) || checkedAt < cutoff) continue;\n  if (!byPlaceId[row.place_id]) byPlaceId[row.place_id] = [];\n  byPlaceId[row.place_id].push({ ...row, checked_at_ms: checkedAt });\n}\n\nconst trends = [];\nfor (const [place_id, snapshots] of Object.entries(byPlaceId)) {\n  snapshots.sort((a, b) => a.checked_at_ms - b.checked_at_ms);\n  const oldest = snapshots[0];\n  const newest = snapshots[snapshots.length - 1];\n  trends.push({\n    firm_name: newest.firm_name,\n    review_count_trend: Number(newest.review_count) - Number(oldest.review_count),\n    rating_trend: Number((Number(newest.rating) - Number(oldest.rating)).toFixed(2)),\n    current_rating: Number(newest.rating),\n    current_review_count: Number(newest.review_count),\n  });\n}\n\nreturn [{ json: { competitor_count: trends.length, trends } }];"
       },
       "id": "9500aa00-0095-4000-a000-0000000032",
-      "name": "Compute Monthly Competitor Trend",
+      "name": "Calculate Monthly Competitor Trend",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         448,
-        760
+        816
       ],
       "notes": "COMPETITOR_TREND_LOOKBACK_DAYS controls the window — defaults to 30."
     },
@@ -462,12 +542,12 @@
         "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst d = $json;\nconst subject = `Monthly competitor trend — ${d.competitor_count} tracked`;\nlet message;\nlet bodyHtml;\nif (d.competitor_count === 0) {\n  message = 'No competitor snapshots logged in the trailing month yet.';\n  bodyHtml = `<div style=\\\"color:#334155;font-size:14px;\\\">No competitor snapshots logged in the trailing month yet.</div>`;\n} else {\n  const lines = d.trends.map(t => `- ${t.firm_name}: ${t.current_rating.toFixed(1)}★ (${t.current_review_count}), reviews ${t.review_count_trend >= 0 ? '+' : ''}${t.review_count_trend} this month, rating ${t.rating_trend >= 0 ? '+' : ''}${t.rating_trend}`).join('\\n');\n  message = `Trailing-month trend for ${d.competitor_count} competitor(s):\\n\\n${lines}`;\n  const rows = d.trends.map(t => `<tr><td style=\\\"padding:8px 10px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;\\\">${escapeHtml(t.firm_name)}</td><td style=\\\"padding:8px 10px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;\\\">${t.current_rating.toFixed(1)}★ (${t.current_review_count})</td><td style=\\\"padding:8px 10px;font-size:13px;border-bottom:1px solid #e2e8f0;color:${t.review_count_trend > 0 ? '#16a34a' : '#64748b'};\\\">${t.review_count_trend >= 0 ? '+' : ''}${t.review_count_trend}</td></tr>`).join('');\n  bodyHtml = `<table style=\\\"width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\\\">\n    <thead><tr><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Firm</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Current</th><th style=\\\"padding:8px 10px;font-size:12px;color:#64748b;text-align:left;background:#f8fafc;\\\">Reviews this month</th></tr></thead>\n    <tbody>${rows}</tbody></table>`;\n}\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:#0f172a;padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">Monthly competitor trend</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${d.competitor_count} competitor(s) tracked</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">${bodyHtml}</div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...d, recipient: $vars.FIRM_MARKETING_EMAIL || $vars.FIRM_FROM_EMAIL, subject, message, email_html: emailHtml } };"
       },
       "id": "9500aa00-0095-4000-a000-0000000033",
-      "name": "Build Monthly Trend Email",
+      "name": "Build Monthly Competitor Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         672,
-        760
+        816
       ],
       "notes": "Internal marketing summary — no guardrail wrap needed, matching this catalog's other trend rollups."
     },
@@ -482,12 +562,12 @@
         "html": "={{ $json.email_html }}"
       },
       "id": "9500aa00-0095-4000-a000-0000000034",
-      "name": "Send Monthly Trend Email",
+      "name": "Send Monthly Competitor Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
         896,
-        760
+        816
       ],
       "notes": "Internal, firm-wide summary — no guardrail wrap needed.",
       "credentials": {
@@ -500,7 +580,7 @@
   ],
   "active": false,
   "pinData": {
-    "Fetch Competitor Place Details": [
+    "Fetch Google Place Details": [
       {
         "json": {
           "status": "OK",
@@ -512,7 +592,7 @@
         }
       }
     ],
-    "Read Last Competitor Snapshot": [
+    "Read Latest Competitor Snapshot": [
       {
         "json": {
           "place_id": "ChIJ_rival_place_id",
@@ -523,7 +603,7 @@
         }
       }
     ],
-    "Read Full Competitor Log": [
+    "Read Full Competitor Log Sheet": [
       {
         "json": {
           "place_id": "ChIJ_rival_place_id",
@@ -548,129 +628,129 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Check Competitor Watch Weekly": {
+    "Every Monday at 8am Trigger": {
       "main": [
         [
           {
-            "node": "If Competitors Configured",
+            "node": "If Competitors Are Configured",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Competitors Configured": {
+    "If Competitors Are Configured": {
       "main": [
         [
           {
-            "node": "Build Competitor List",
+            "node": "Build Competitor Place ID List",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Draft Setup-Needed Notice",
+            "node": "Draft Setup Needed Notification",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Competitor List": {
+    "Build Competitor Place ID List": {
       "main": [
         [
           {
-            "node": "Fetch Competitor Place Details",
+            "node": "Fetch Google Place Details",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Competitor Place Details": {
+    "Fetch Google Place Details": {
       "main": [
         [
           {
-            "node": "Parse Place Details Response",
+            "node": "Parse Place Details API Response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Place Details Response": {
+    "Parse Place Details API Response": {
       "main": [
         [
           {
-            "node": "Read Last Competitor Snapshot",
+            "node": "Read Latest Competitor Snapshot",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Last Competitor Snapshot": {
+    "Read Latest Competitor Snapshot": {
       "main": [
         [
           {
-            "node": "Compute Competitor Movement",
+            "node": "Calculate Weekly Competitor Movement",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Competitor Movement": {
+    "Calculate Weekly Competitor Movement": {
       "main": [
         [
           {
-            "node": "Draft Competitor Watch Digest",
+            "node": "Draft Weekly Competitor Digest",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Log Competitor Snapshots",
+            "node": "Append Competitor Snapshots To Sheets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Draft Competitor Watch Digest": {
+    "Draft Weekly Competitor Digest": {
       "main": [
         [
           {
-            "node": "Build Competitor Watch Email",
+            "node": "Build Weekly Competitor Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Draft Setup-Needed Notice": {
+    "Draft Setup Needed Notification": {
       "main": [
         [
           {
-            "node": "Build Competitor Watch Email",
+            "node": "Build Weekly Competitor Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Competitor Watch Email": {
+    "Build Weekly Competitor Email": {
       "main": [
         [
           {
-            "node": "Check Compliance Before Digest Email",
+            "node": "Execute Compliance Workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Compliance Before Digest Email": {
+    "Execute Compliance Workflow": {
       "main": [
         [
           {
@@ -685,58 +765,58 @@
       "main": [
         [
           {
-            "node": "Send Competitor Watch Email",
+            "node": "Send Weekly Competitor Email",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Skip — Recipient Opted Out",
+            "node": "Skip Email - Recipient Opted Out",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Monthly Competitor Trend": {
+    "Monthly Competitor Trend Trigger": {
       "main": [
         [
           {
-            "node": "Read Full Competitor Log",
+            "node": "Read Full Competitor Log Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Full Competitor Log": {
+    "Read Full Competitor Log Sheet": {
       "main": [
         [
           {
-            "node": "Compute Monthly Competitor Trend",
+            "node": "Calculate Monthly Competitor Trend",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Monthly Competitor Trend": {
+    "Calculate Monthly Competitor Trend": {
       "main": [
         [
           {
-            "node": "Build Monthly Trend Email",
+            "node": "Build Monthly Competitor Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Monthly Trend Email": {
+    "Build Monthly Competitor Email": {
       "main": [
         [
           {
-            "node": "Send Monthly Trend Email",
+            "node": "Send Monthly Competitor Email",
             "type": "main",
             "index": 0
           }

@@ -4,66 +4,130 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Trust/IOLTA Balance Alerts\n\n### How it works\n\n1. Runs daily. Pulls every open matter's trust balance from Clio.\n2. Tiers each matter: negative (a serious compliance event), low (below your configured replenishment threshold), or healthy.\n3. Alerts the firm's trust accounting contact for anything negative or low -- once per tier change or after a cooldown, not every single day for the same unresolved balance.\n4. A negative balance ALSO immediately escalates to the managing partner, regardless of cooldown -- this is the one alert that should never wait.\n5. Separately, a weekly rollup reports every open matter's trust balance (not just alert-worthy ones), for accounting's own review.\n\n**This only ever reports and alerts on balances already recorded in Clio -- it never moves money, adjusts a ledger, or makes any accounting decision.** Nothing here touches legal work (ABA Op. 512); it's operational balance monitoring only.\n\n### Before you start: confirm the trust_balance field for your Clio setup\n\nThis assumes `trust_balance` is a valid requestable field on Clio's Matters endpoint. Confirm this live before deploying -- if your Clio API version or plan doesn't expose it this way, the fallback is aggregating `/trust_line_items.json` per matter yourself (summing debits/credits), which isn't built here since the exact ledger structure varies by how each firm's trust accounts are configured in Clio.\n\n### Setup steps\n\n- [ ] Set up the Bar-Compliance Guardrail (NTC-33) first -- this template inherits OPS1 per its ticket, even though every recipient is firm staff, not a client.\n- [ ] Configure a Clio OAuth2 credential (reuse if already deployed).\n- [ ] Set the required n8n Variables: CLIO_BASE_URL, FIRM_NAME, FIRM_TRUST_ACCOUNTING_EMAIL, FIRM_PARTNER_EMAIL, GUARDRAIL_WORKFLOW_ID.\n- [ ] Optionally tune LOW_BALANCE_THRESHOLD and ALERT_COOLDOWN_DAYS.\n- [ ] Activate the workflow.\n\n### Customization\n\nLOW_BALANCE_THRESHOLD is the entire tiering surface for the 'low balance' warning -- edit that n8n Variable, not the code. A negative balance is always its own tier regardless of this setting.",
-        "width": 520,
-        "height": 1020
+        "content": "## Trust/IOLTA Balance Alerts\n\n### How it works\n\n1. The workflow runs daily and weekly scheduled triggers to check trust and IOLTA balances for open matters.\n2. It fetches matter data from an external system and processes trust balances to determine alert tiers.\n3. Alert-worthy trust balances trigger email alerts after compliance checks and potential partner escalations are logged and notified.\n4. Negative balances cause escalations with separate email notifications for partners.\n5. Weekly trust health rollup gathers summary data across all matters and sends accounting review emails.\n\n### Setup steps\n\n- [ ] Configure credentials for Clio API in the HTTP request nodes for data fetching.\n- [ ] Set up email sending credentials for the emailSend nodes to deliver alerts.\n- [ ] Ensure the sub-workflows invoked for compliance checks and escalation logging are present and properly configured.\n\n### Customization\n\nCustomize alert thresholds and email content in the respective code nodes for tier computation and email building steps to suit organizational policies.",
+        "width": 480,
+        "height": 896
       },
-      "id": "9300aa00-0093-4000-a000-0000000001",
-      "name": "📖 Workflow doc",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -740,
-        -460
-      ]
+        -608,
+        -352
+      ],
+      "id": "b37b7712-a10a-4f21-ae55-b3fd1c52ed37",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Check balances, tier, and alert\n\nPulls every open matter's trust balance, tiers it, and alerts on anything negative or low -- with a cooldown so the same unresolved balance doesn't re-alert every single day.",
-        "width": 1750,
-        "height": 280,
+        "content": "## Daily trigger and data fetch\n\nDaily scheduled trigger initiates the workflow and fetches open matters with trust balances from Clio API.",
+        "width": 416,
+        "height": 320,
         "color": 7
       },
-      "id": "9300aa00-0093-4000-a000-0000000002",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -200
-      ]
+        -160
+      ],
+      "id": "5edac55e-187b-436e-9479-d86b89fa8049",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## Immediate partner escalation for negative balances\n\nA negative trust balance is a serious compliance event -- this branch always fires regardless of the cooldown above.",
-        "width": 900,
-        "height": 240,
+        "content": "## Trust balance processing\n\nProcesses fetched matter data to split records, compute trust balance alert tiers, and filter alert-worthy matters.",
+        "width": 640,
+        "height": 304,
         "color": 7
       },
-      "id": "9300aa00-0093-4000-a000-0000000003",
-      "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1600,
-        -200
-      ]
+        400,
+        -128
+      ],
+      "id": "af6ece5e-4e82-4622-a76b-8e834fafd308",
+      "name": "Sticky Note2"
     },
     {
       "parameters": {
-        "content": "## Weekly trust health rollup — a second, independent branch\n\nReports every open matter's trust balance, not just the alert-worthy ones, for accounting's own periodic review.",
-        "width": 1150,
-        "height": 240,
+        "content": "## Trust alert preparation and compliance\n\nBuilds trust alert emails and runs compliance checks before final approval for sending alerts.",
+        "width": 640,
+        "height": 304,
         "color": 7
       },
-      "id": "9300aa00-0093-4000-a000-0000000004",
-      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -208
+      ],
+      "id": "9161bcc8-cbd6-4f4c-a158-e8e08791ec16",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Send or skip trust alert email\n\nSends trust balance alert emails if approved or skips if recipients opted out.",
+        "width": 240,
+        "height": 512,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        -352
+      ],
+      "id": "2f718f81-e6b2-454d-aff5-855252fd988d",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Negative balance escalation process\n\nHandles matters with negative trust balances by building escalation emails, logging for audit, and sending partner escalation emails or skipping escalation.",
+        "width": 864,
+        "height": 432,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        192
+      ],
+      "id": "3dfc8343-70e1-4d13-8f9b-f4f7019946a1",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Weekly trigger and data fetch\n\nWeekly scheduled trigger starts the trust health rollup process and fetches all matters for summary.",
+        "width": 416,
+        "height": 320,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        620
-      ]
+        608
+      ],
+      "id": "7e3db0da-747e-496e-8528-4b0a7785d713",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Weekly trust health summary and email\n\nComputes weekly trust health summary, builds the summary email, and sends it to accounting for review.",
+        "width": 640,
+        "height": 304,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        624
+      ],
+      "id": "2f24ceb0-df17-4697-b0db-baf1e87f9716",
+      "name": "Sticky Note7"
     },
     {
       "parameters": {
@@ -77,7 +141,7 @@
         }
       },
       "id": "9300aa00-0093-4000-a000-0000000010",
-      "name": "Check Trust Balances Daily",
+      "name": "When Daily at 7am",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -135,7 +199,7 @@
         "jsCode": "// Splits Clio's { data: [...] } envelope into one item per matter.\nconst matters = ($json.data || []);\nreturn matters.map(m => ({ json: m }));"
       },
       "id": "9300aa00-0093-4000-a000-0000000012",
-      "name": "Split Matter Records",
+      "name": "Split Matters Into Items",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -149,7 +213,7 @@
         "jsCode": "// Tiers each matter's trust balance and decides whether today's run should actually alert on\n// it -- once per tier change or after a cooldown, not every single day for the same\n// unresolved balance. A matter improving back to healthy clears its alert history so a future\n// dip alerts fresh rather than staying silenced by an old cooldown.\nconst matters = $input.all().map(i => i.json);\nconst LOW_BALANCE_THRESHOLD = Number($vars.LOW_BALANCE_THRESHOLD || 500);\nconst ALERT_COOLDOWN_DAYS = Number($vars.ALERT_COOLDOWN_DAYS || 7);\nconst cooldownMs = ALERT_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.lastAlerted) staticData.lastAlerted = {};\n\nconst results = [];\nfor (const m of matters) {\n  const balance = Number(m.trust_balance);\n  if (Number.isNaN(balance)) continue; // no trust balance data for this matter -- skip, not an error\n\n  let tier;\n  if (balance < 0) tier = 'negative';\n  else if (balance < LOW_BALANCE_THRESHOLD) tier = 'low';\n  else tier = 'healthy';\n\n  if (tier === 'healthy') {\n    delete staticData.lastAlerted[m.id];\n    continue;\n  }\n\n  const prior = staticData.lastAlerted[m.id];\n  const tierWorsened = !!prior && prior.tier === 'low' && tier === 'negative';\n  const cooldownExpired = !prior || (Date.now() - new Date(prior.at).getTime()) >= cooldownMs;\n  const shouldAlert = !prior || tierWorsened || cooldownExpired;\n\n  if (shouldAlert) staticData.lastAlerted[m.id] = { tier, at: new Date().toISOString() };\n\n  results.push({ ...m, trust_balance: balance, alert_tier: tier, should_alert: shouldAlert });\n}\n\nreturn results.map(r => ({ json: r }));"
       },
       "id": "9300aa00-0093-4000-a000-0000000013",
-      "name": "Compute Trust Balance Alert Tier",
+      "name": "Calculate Trust Balance Alert Tier",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -163,7 +227,7 @@
         "jsCode": "return $input.all().filter(i => i.json.should_alert);"
       },
       "id": "9300aa00-0093-4000-a000-0000000014",
-      "name": "Filter To Alert-Worthy Matters",
+      "name": "Filter Matters For Alerts",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -177,7 +241,7 @@
         "jsCode": "function escapeHtml(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nconst m = $json;\nconst tierLabel = m.alert_tier === 'negative' ? 'NEGATIVE BALANCE' : 'LOW BALANCE';\nconst accentColor = m.alert_tier === 'negative' ? '#dc2626' : '#ea580c';\nconst subject = `Trust balance alert: ${m.display_number} — ${tierLabel}`;\nconst message = `${tierLabel} on matter ${m.display_number} (${m.description || ''}).\\n\\nCurrent trust balance: $${m.trust_balance.toFixed(2)}\\nClient: ${m.client ? m.client.name : '(unknown)'}\\nResponsible attorney: ${m.responsible_attorney ? m.responsible_attorney.name : '(unassigned)'}\\n\\nThis is a balance report only -- no funds have been moved and no accounting action has been taken automatically.`;\n\nconst emailHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"></head>\n<body style=\\\"font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;margin:0;padding:32px 16px;\\\">\n  <div style=\\\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\\\">\n    <div style=\\\"background:${accentColor};padding:24px 32px;\\\">\n      <div style=\\\"color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;opacity:0.9;\\\">${tierLabel}</div>\n      <div style=\\\"color:#ffffff;font-size:20px;font-weight:700;margin-top:4px;\\\">${escapeHtml(m.display_number)}</div>\n    </div>\n    <div style=\\\"padding:28px 32px;\\\">\n      <div style=\\\"font-size:24px;font-weight:700;color:${accentColor};margin-bottom:12px;\\\">$${m.trust_balance.toFixed(2)}</div>\n      <div style=\\\"font-size:13px;color:#64748b;margin-bottom:4px;\\\">${escapeHtml(m.description || '')}</div>\n      <div style=\\\"font-size:13px;color:#64748b;\\\">Client: ${escapeHtml(m.client ? m.client.name : '(unknown)')}</div>\n      <div style=\\\"font-size:13px;color:#64748b;margin-bottom:16px;\\\">Responsible attorney: ${escapeHtml(m.responsible_attorney ? m.responsible_attorney.name : '(unassigned)')}</div>\n      <div style=\\\"color:#64748b;font-size:12px;\\\">This is a balance report only — no funds have been moved and no accounting action has been taken automatically.</div>\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn { json: { ...m, recipient: $vars.FIRM_TRUST_ACCOUNTING_EMAIL || $vars.FIRM_EMAIL, subject, message, email_html: emailHtml } };"
       },
       "id": "9300aa00-0093-4000-a000-0000000015",
-      "name": "Build Trust Balance Alert Email",
+      "name": "Build Alert Email For Trust Balance",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -210,7 +274,7 @@
         "options": {}
       },
       "id": "9300aa00-0093-4000-a000-0000000016",
-      "name": "Check Compliance Before Trust Alert",
+      "name": "Run Compliance Workflow For Alert",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
@@ -245,7 +309,7 @@
         }
       },
       "id": "9300aa00-0093-4000-a000-0000000017",
-      "name": "If Trust Alert Approved",
+      "name": "If Alert Is Approved",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -257,12 +321,12 @@
     {
       "parameters": {
         "fromEmail": "={{ $vars.FIRM_FROM_EMAIL }}",
-        "toEmail": "={{ $('Build Trust Balance Alert Email').item.json.recipient }}",
-        "subject": "={{ $('Build Trust Balance Alert Email').item.json.subject }}",
-        "text": "={{ $('Build Trust Balance Alert Email').item.json.message }}",
+        "toEmail": "={{ $('Build Alert Email For Trust Balance').item.json.recipient }}",
+        "subject": "={{ $('Build Alert Email For Trust Balance').item.json.subject }}",
+        "text": "={{ $('Build Alert Email For Trust Balance').item.json.message }}",
         "options": {},
         "emailFormat": "html",
-        "html": "={{ $('Build Trust Balance Alert Email').item.json.email_html }}"
+        "html": "={{ $('Build Alert Email For Trust Balance').item.json.email_html }}"
       },
       "id": "9300aa00-0093-4000-a000-0000000018",
       "name": "Send Trust Balance Alert Email",
@@ -283,7 +347,7 @@
     {
       "parameters": {},
       "id": "9300aa00-0093-4000-a000-0000000019",
-      "name": "Skip — Recipient Opted Out",
+      "name": "Skip Alert For Opted-Out Recipient",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -317,12 +381,12 @@
         }
       },
       "id": "9300aa00-0093-4000-a000-0000000020",
-      "name": "If Balance Is Negative",
+      "name": "If Trust Balance Is Negative",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
         1120,
-        260
+        384
       ],
       "notes": "Only a negative balance triggers immediate partner escalation -- a low (but still positive) balance only goes to the accounting alert above."
     },
@@ -336,7 +400,7 @@
       "typeVersion": 2,
       "position": [
         1344,
-        200
+        336
       ],
       "notes": "Escalates directly to the managing partner -- a negative trust balance never waits for the accounting alert's cooldown logic. Falls back to FIRM_EMAIL if FIRM_PARTNER_EMAIL isn't set, so the guardrail call never fails on a missing recipient."
     },
@@ -364,12 +428,12 @@
         "options": {}
       },
       "id": "9300aa00-0093-4000-a000-0000000022",
-      "name": "Log Partner Escalation For Audit",
+      "name": "Run Audit Workflow For Escalation",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
         1568,
-        200
+        336
       ],
       "notes": "Fire-and-forget audit logging -- this goes to the firm's own managing partner, so the guardrail's approval result is deliberately ignored, same internal-notification pattern used elsewhere in this catalog."
     },
@@ -389,7 +453,7 @@
       "typeVersion": 2,
       "position": [
         1792,
-        200
+        336
       ],
       "notes": "Reaches back to 'Build Partner Escalation Email' by name, not $json, since the guardrail call in between replaces $json with its own response.",
       "credentials": {
@@ -407,7 +471,7 @@
       "typeVersion": 1,
       "position": [
         1344,
-        340
+        464
       ],
       "notes": "Not a negative balance -- no partner escalation needed, the accounting alert above already covers a low balance."
     },
@@ -423,7 +487,7 @@
         }
       },
       "id": "9300aa00-0093-4000-a000-0000000030",
-      "name": "Check Weekly Trust Health Rollup",
+      "name": "When Weekly Monday at 8am",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
@@ -461,7 +525,7 @@
         }
       },
       "id": "9300aa00-0093-4000-a000-0000000031",
-      "name": "Fetch All Matters For Trust Rollup",
+      "name": "Fetch All Matters For Weekly Rollup",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -481,7 +545,7 @@
         "jsCode": "// Summarizes every open matter's trust balance for accounting's own periodic review --\n// descriptive only, not just the alert-worthy subset the daily check surfaces.\nconst matters = ($json.data || []);\nconst LOW_BALANCE_THRESHOLD = Number($vars.LOW_BALANCE_THRESHOLD || 500);\n\nlet negativeCount = 0, lowCount = 0, healthyCount = 0, totalNegativeExposure = 0;\nconst negativeMatters = [];\nfor (const m of matters) {\n  const balance = Number(m.trust_balance);\n  if (Number.isNaN(balance)) continue;\n  if (balance < 0) {\n    negativeCount++;\n    totalNegativeExposure += balance;\n    negativeMatters.push({ display_number: m.display_number, trust_balance: balance });\n  } else if (balance < LOW_BALANCE_THRESHOLD) {\n    lowCount++;\n  } else {\n    healthyCount++;\n  }\n}\n\nreturn [{ json: {\n  total_matters: matters.length,\n  negative_count: negativeCount,\n  low_count: lowCount,\n  healthy_count: healthyCount,\n  total_negative_exposure: totalNegativeExposure,\n  negative_matters: negativeMatters,\n} }];"
       },
       "id": "9300aa00-0093-4000-a000-0000000032",
-      "name": "Compute Weekly Trust Health Summary",
+      "name": "Calculate Weekly Trust Health Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -541,7 +605,7 @@
               "id": 2001,
               "display_number": "2026-0012",
               "description": "Doe v. Acme Corp",
-              "trust_balance": -150.0,
+              "trust_balance": -150,
               "client": {
                 "name": "Jane Doe",
                 "email": "jane.doe@example.com"
@@ -556,7 +620,7 @@
               "id": 2002,
               "display_number": "2026-0013",
               "description": "Smith Estate Planning",
-              "trust_balance": 250.0,
+              "trust_balance": 250,
               "client": {
                 "name": "John Smith",
                 "email": "john.smith@example.com"
@@ -571,7 +635,7 @@
               "id": 2003,
               "display_number": "2026-0014",
               "description": "Reyes Custody Matter",
-              "trust_balance": 3500.0,
+              "trust_balance": 3500,
               "client": {
                 "name": "Casey Reyes",
                 "email": "casey.reyes@example.com"
@@ -586,24 +650,24 @@
         }
       }
     ],
-    "Fetch All Matters For Trust Rollup": [
+    "Fetch All Matters For Weekly Rollup": [
       {
         "json": {
           "data": [
             {
               "id": 2001,
               "display_number": "2026-0012",
-              "trust_balance": -150.0
+              "trust_balance": -150
             },
             {
               "id": 2002,
               "display_number": "2026-0013",
-              "trust_balance": 250.0
+              "trust_balance": 250
             },
             {
               "id": 2003,
               "display_number": "2026-0014",
-              "trust_balance": 3500.0
+              "trust_balance": 3500
             }
           ]
         }
@@ -614,7 +678,7 @@
   "nodeGroups": [],
   "staticData": null,
   "connections": {
-    "Check Trust Balances Daily": {
+    "When Daily at 7am": {
       "main": [
         [
           {
@@ -629,74 +693,74 @@
       "main": [
         [
           {
-            "node": "Split Matter Records",
+            "node": "Split Matters Into Items",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Split Matter Records": {
+    "Split Matters Into Items": {
       "main": [
         [
           {
-            "node": "Compute Trust Balance Alert Tier",
+            "node": "Calculate Trust Balance Alert Tier",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Trust Balance Alert Tier": {
+    "Calculate Trust Balance Alert Tier": {
       "main": [
         [
           {
-            "node": "Filter To Alert-Worthy Matters",
+            "node": "Filter Matters For Alerts",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter To Alert-Worthy Matters": {
+    "Filter Matters For Alerts": {
       "main": [
         [
           {
-            "node": "Build Trust Balance Alert Email",
+            "node": "Build Alert Email For Trust Balance",
             "type": "main",
             "index": 0
           },
           {
-            "node": "If Balance Is Negative",
+            "node": "If Trust Balance Is Negative",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Trust Balance Alert Email": {
+    "Build Alert Email For Trust Balance": {
       "main": [
         [
           {
-            "node": "Check Compliance Before Trust Alert",
+            "node": "Run Compliance Workflow For Alert",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Compliance Before Trust Alert": {
+    "Run Compliance Workflow For Alert": {
       "main": [
         [
           {
-            "node": "If Trust Alert Approved",
+            "node": "If Alert Is Approved",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Trust Alert Approved": {
+    "If Alert Is Approved": {
       "main": [
         [
           {
@@ -707,14 +771,14 @@
         ],
         [
           {
-            "node": "Skip — Recipient Opted Out",
+            "node": "Skip Alert For Opted-Out Recipient",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If Balance Is Negative": {
+    "If Trust Balance Is Negative": {
       "main": [
         [
           {
@@ -736,14 +800,14 @@
       "main": [
         [
           {
-            "node": "Log Partner Escalation For Audit",
+            "node": "Run Audit Workflow For Escalation",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Partner Escalation For Audit": {
+    "Run Audit Workflow For Escalation": {
       "main": [
         [
           {
@@ -754,29 +818,29 @@
         ]
       ]
     },
-    "Check Weekly Trust Health Rollup": {
+    "When Weekly Monday at 8am": {
       "main": [
         [
           {
-            "node": "Fetch All Matters For Trust Rollup",
+            "node": "Fetch All Matters For Weekly Rollup",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch All Matters For Trust Rollup": {
+    "Fetch All Matters For Weekly Rollup": {
       "main": [
         [
           {
-            "node": "Compute Weekly Trust Health Summary",
+            "node": "Calculate Weekly Trust Health Summary",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compute Weekly Trust Health Summary": {
+    "Calculate Weekly Trust Health Summary": {
       "main": [
         [
           {
