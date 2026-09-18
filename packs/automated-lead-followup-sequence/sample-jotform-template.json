@@ -1,0 +1,36 @@
+{
+  "form_title": "New Client Inquiry",
+  "note": "This is a field specification, not a one-click JotForm import file -- JotForm doesn't support importing a form from a plain JSON file. Recreate these fields in JotForm's drag-and-drop Form Builder (about 3 minutes), matching the field names below exactly, then wire the form's Settings -> Integrations -> Webhooks to this workflow's 'When Lead Form Is Submitted' Production URL. The same field list works in Typeform, Fluent Forms, or any form tool that can POST to a webhook.",
+  "fields": [
+    {
+      "field_name": "name",
+      "jotform_type": "Full Name",
+      "label": "Full Name",
+      "required": true
+    },
+    {
+      "field_name": "email",
+      "jotform_type": "Email",
+      "label": "Email Address",
+      "required": true
+    },
+    {
+      "field_name": "phone",
+      "jotform_type": "Phone Number",
+      "label": "Phone Number",
+      "required": false
+    },
+    {
+      "field_name": "practice_area",
+      "jotform_type": "Dropdown",
+      "label": "What can we help you with?",
+      "required": true,
+      "options": [
+        "Family Law",
+        "Estate Planning",
+        "Other"
+      ],
+      "note": "Option text is matched case-insensitively by the workflow. Add more options for your firm's practice areas -- anything not explicitly matched falls back to general-purpose copy, so nothing breaks if you add a new one here without also updating the workflow."
+    }
+  ]
+}
