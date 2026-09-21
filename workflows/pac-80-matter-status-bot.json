@@ -250,7 +250,7 @@
           "parameters": [
             {
               "name": "query",
-              "value": "={{ $json.from_number }}"
+              "value": "={{ $json.from_number.replace(/\\D/g, '').slice(-10) }}"
             },
             {
               "name": "fields",
@@ -275,7 +275,7 @@
         448,
         0
       ],
-      "notes": "Clio's own contact search handles partial/formatted phone matching reasonably well; verify against a real number on first live test since exact matching behavior can vary by how numbers are stored."
+      "notes": "Searches on the digits-only national number (e.g. 2539049372), not the raw +1-formatted number -- Clio's query search doesn't reliably match across the +1 prefix and punctuation differences, confirmed live: a saved contact wasn't found until this was fixed."
     },
     {
       "parameters": {
