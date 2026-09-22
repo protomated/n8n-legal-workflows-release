@@ -249,12 +249,12 @@
         "queryParameters": {
           "parameters": [
             {
-              "name": "query",
-              "value": "={{ $json.from_number.replace(/\\D/g, '').slice(-10) }}"
-            },
-            {
               "name": "fields",
               "value": "id,name,type,phone_numbers{number}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
             }
           ]
         },
@@ -275,7 +275,7 @@
         448,
         0
       ],
-      "notes": "Searches on the digits-only national number (e.g. 2539049372), not the raw +1-formatted number -- Clio's query search doesn't reliably match across the +1 prefix and punctuation differences, confirmed live: a saved contact wasn't found until this was fixed."
+      "notes": "Fetches every contact and matches by phone number entirely in the next code node -- confirmed live that Clio's own query search parameter does not reliably search phone numbers (returned zero records even with a real, saved contact), so this no longer relies on it. Same pattern already used in the Conflict-Check Engine (PAC-77)."
     },
     {
       "parameters": {
@@ -570,12 +570,12 @@
         "queryParameters": {
           "parameters": [
             {
-              "name": "query",
-              "value": "={{ $json.from_email }}"
-            },
-            {
               "name": "fields",
               "value": "id,name,email_addresses{address}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
             }
           ]
         },
@@ -596,7 +596,7 @@
         448,
         900
       ],
-      "notes": "Same contact search as the SMS branch, keyed on email instead of phone."
+      "notes": "Fetches every contact and matches by email entirely in the next code node -- same fix as the SMS branch, since Clio's own query search parameter was confirmed live to not reliably search contacts by phone, and email search reliability through that same parameter wasn't verified either. Same pattern already used in the Conflict-Check Engine (PAC-77)."
     },
     {
       "parameters": {
