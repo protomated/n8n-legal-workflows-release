@@ -1,6 +1,6 @@
-# Deploy Guide: AI Intake Qualifier
+# Deploy Guide: Rules-Based Intake Qualifier
 
-**Template:** PTPAC-81 — C7: AI Intake Qualifier (routing)
+**Template:** PTPAC-81 — C7: Rules-Based Intake Qualifier (routing)
 **Pillar:** Convert
 **Replaces:** Smith.ai AI, Intaker
 
