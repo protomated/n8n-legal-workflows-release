@@ -16,7 +16,7 @@ This free bundle catches the calls you miss, filters serious inquiries from tire
 ## What's included
 
 1. **Missed-Call Instant Text-Back** (`missed-call-text-back.json`) — The moment your firm misses a call, the caller instantly receives a text letting them know you'll be in touch, and your team gets an email alert — so a missed call becomes a warm follow-up instead of a lead who's already dialing the next firm.
-2. **AI Intake Qualifier** (`ai-intake-qualifier.json`) — Scores every new inquiry against your firm's own practice areas and urgency signals, replies appropriately based on fit, and immediately alerts an attorney for the highest-fit leads — so attorney time goes to real cases, not screening calls.
+2. **Rules-Based Intake Qualifier** (`ai-intake-qualifier.json`) — Scores every new inquiry against your firm's own practice areas and urgency signals, replies appropriately based on fit, and immediately alerts an attorney for the highest-fit leads — so attorney time goes to real cases, not screening calls.
 3. **Unbilled-Time Catcher** (`unbilled-time-catcher.json`) — Cross-references your calendar against logged time entries so client calls and case-status check-ins that never made it onto an invoice get caught and flagged before the bill goes out, instead of quietly writing off billable time.
 4. **Review Request Engine** (`review-request-engine.json`) — Automatically requests a review from clients after a matter closes well, with built-in rating-gating so a client who indicates they're unhappy is never funneled toward your public Google profile in the first place.
 
