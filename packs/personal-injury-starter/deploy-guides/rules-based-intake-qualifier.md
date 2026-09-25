@@ -46,7 +46,7 @@ Copy the Sheet's ID from its URL — the long string between `/d/` and `/edit`.
 
 ## Step 2 — Import the workflow and add credentials (5 min)
 
-1. Open your n8n canvas, press `Ctrl+V` (or `Cmd+V`), and paste the contents of `pac-81-ai-intake-qualifier.json`. Do not activate it yet.
+1. Open your n8n canvas, press `Ctrl+V` (or `Cmd+V`), and paste the contents of `pac-81-rules-based-intake-qualifier.json`. Do not activate it yet.
 2. Google Sheets credential: **Credentials → New → Google Sheets OAuth2**.
 3. Email credential: **Credentials → New → SMTP**.
 
